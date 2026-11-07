@@ -35,5 +35,6 @@ Every architecture decision is proposed with 3 alternatives (pros, cons, recomme
 
 - `docs/PROMPT.md` — engineering prompt and project phases
 - `docs/architecture.md` — architecture overview, ADR index, open items
+- `docs/jetson-setup.md` — uv + LeRobot SDK install on the Xavier, arm verification and calibration
 - `docs/adr/` — Architecture Decision Records (0001–0018)
 - `docs/architecture-flow.svg` / `.png` — data-flow diagram
