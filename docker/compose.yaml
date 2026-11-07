@@ -1,0 +1,88 @@
+# Cell stack — five containers, one per domain (ADR-0003).
+# Host network (ADR-0002: FastDDS, domain 42, LAN-visible), ipc: host (ADR-0005:
+# /dev/shm shared — the host tmpfs is 7.3 GB on the Xavier, no tuning needed).
+# SDK strategy (hybrid, ADR-0006/0007): arm bind-mounts the host LeRobot venv;
+# cams installs the depthai<3 wheel in-container; perception/control use the
+# image's own rclpy; web carries no SDK.
+
+services:
+  arm:
+    image: dustynv/ros:humble-ros-base-l4t-r35.4.1
+    container_name: so100-arm
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+    volumes:
+      # Host LeRobot venv (py3.12) + the uv-managed CPython it symlinks to + calibration.
+      - /home/maju/lerobot/.venv:/home/maju/lerobot/.venv:ro
+      - /home/maju/.local/share/uv/python:/home/maju/.local/share/uv/python:ro
+      - /home/maju/.cache/huggingface/lerobot:/home/maju/.cache/huggingface/lerobot
+    command: ["sleep", "infinity"]
+
+  cams:
+    build:
+      context: ..
+      dockerfile: docker/cams.Dockerfile
+    image: so100-cams:latest
+    container_name: so100-cams
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    volumes:
+      # OAK devices (VID 03e7) + the cgroup rule below (ADR-0007).
+      - /dev/bus/usb:/dev/bus/usb
+      - ./ws:/opt/ws
+      - ../tools:/opt/tools:ro
+    device_cgroup_rules:
+      - "c 189:* rmw"
+    command: ["sleep", "infinity"]
+
+  perception:
+    image: dustynv/ros:humble-ros-base-l4t-r35.4.1
+    container_name: so100-perception
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    volumes:
+      - ./ws:/opt/ws
+    command: ["sleep", "infinity"]
+
+  control:
+    image: dustynv/ros:humble-ros-base-l4t-r35.4.1
+    container_name: so100-control
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    volumes:
+      - ./ws:/opt/ws
+    command: ["sleep", "infinity"]
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+    image: so100-web:latest
+    container_name: so100-web
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    volumes:
+      - ./web:/srv/web
+    command: ["bash", "-c", "python3 -m http.server 80 --directory /srv/web"]

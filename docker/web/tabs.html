@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SO-100 cell — web interface</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+  nav { display: flex; gap: 0.5em; padding: 0.5em; background: #1c2733; }
+  nav button { padding: 0.5em 1em; border: 0; border-radius: 4px; background: #2e3d4e; color: #d8e1ec; cursor: pointer; }
+  nav button.active { background: #4a90d9; color: #fff; }
+  iframe { flex: 1; border: 0; background: #10151c; display: none; }
+  iframe.active { display: block; }
+</style>
+</head>
+<body>
+<nav>
+  <button class="active" data-tab="rviz">RViz</button>
+  <button data-tab="graph">rqt_graph</button>
+  <button data-tab="term">Terminal</button>
+</nav>
+<iframe class="active" data-pane="rviz"></iframe>
+<iframe data-pane="graph"></iframe>
+<iframe data-pane="term"></iframe>
+<script>
+  // Tab URLs are filled at provisioning time with the Xavier's LAN address.
+  const TAB_URLS = {
+    rviz:   "http://__HOST__:6080/vnc.html?autoconnect=true",
+    graph:  "http://__HOST__:6081/vnc.html?autoconnect=true",
+    term:   "http://__HOST__:7681",
+  };
+  document.querySelectorAll("nav button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll("iframe").forEach((f) => f.classList.remove("active"));
+      btn.classList.add("active");
+      const pane = document.querySelector(`iframe[data-pane="${btn.dataset.tab}"]`);
+      pane.classList.add("active");
+      if (!pane.src) pane.src = TAB_URLS[btn.dataset.tab];
+    });
+  });
+</script>
+</body>
+</html>

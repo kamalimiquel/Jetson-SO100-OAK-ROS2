@@ -1,0 +1,2 @@
+# Per-container node workspaces (mounted at /opt/ws). Node sources land in the
+# control phase; kept as a mount point from day one.
