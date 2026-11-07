@@ -14,18 +14,22 @@
 </head>
 <body>
 <nav>
-  <button class="active" data-tab="rviz">RViz</button>
-  <button data-tab="graph">rqt_graph</button>
+  <button class="active" data-tab="view3d">3D view</button>
+  <button data-tab="graph">Graph</button>
   <button data-tab="term">Terminal</button>
 </nav>
-<iframe class="active" data-pane="rviz"></iframe>
+<iframe class="active" data-pane="view3d"></iframe>
 <iframe data-pane="graph"></iframe>
 <iframe data-pane="term"></iframe>
 <script>
-  // Tab URLs are filled at provisioning time with the Xavier's LAN address.
+  // __HOST__ is replaced with the Xavier's LAN address at provisioning time.
+  // Foxglove Studio runs in the browser and auto-connects to the bridge via
+  // the ds.url parameter; the Graph tab opens the same studio (use its
+  // Rosgraph panel once — the layout is remembered per browser).
+  const STUDIO = "https://studio.foxglove.dev/?ds=foxglove-websocket&ds.url=ws%3A%2F%2F__HOST__%3A8765";
   const TAB_URLS = {
-    rviz:   "http://__HOST__:6080/vnc.html?autoconnect=true",
-    graph:  "http://__HOST__:6081/vnc.html?autoconnect=true",
+    view3d: STUDIO,
+    graph:  STUDIO,
     term:   "http://__HOST__:7681",
   };
   document.querySelectorAll("nav button").forEach((btn) => {

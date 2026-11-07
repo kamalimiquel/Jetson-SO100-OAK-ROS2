@@ -18,6 +18,8 @@ A web interface with three tabs: RViz, rqt_graph, and a terminal into the Xavier
 
 **The noVNC-tabs + ttyd pattern**: RViz2 and rqt_graph headless via noVNC, terminal via ttyd (a shell **inside** the ROS2 container, not SSH to the host), unified by a small static tabbed page.
 
+*Amended 2026-11-07:* literal RViz2 turned out infeasible on Ubuntu 20.04 (no humble debs for focal — the apt repo only carries foxy), and a from-source RViz+OGRE build is a multi-hour endeavor with bad history on this board. The user re-chose **alternative 2 of this ADR**: Foxglove Studio in the browser over a foxglove_bridge WebSocket (ws://xavier:8765), plus the ttyd terminal tab. Tabs: 3D view | Graph (Foxglove Rosgraph panel) | Terminal (ttyd).
+
 ## Consequences
 
 - The `web` domain runs: RViz2 (noVNC), rqt_graph (noVNC), ttyd, and a static page embedding all three.

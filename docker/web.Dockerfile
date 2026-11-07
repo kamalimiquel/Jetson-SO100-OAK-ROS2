@@ -1,21 +1,36 @@
-# web service — 3-tab interface (ADR-0018): RViz2 (noVNC), rqt_graph (noVNC),
-# terminal (ttyd inside the ROS2 environment), plus the tabs page on port 80.
-FROM dustynv/ros:humble-ros-base-l4t-r35.4.1
+# web service — browser tabs (ADR-0014/0018, amended 2026-11-07):
+#   tab "3D"       -> Foxglove Studio (browser) over foxglove_bridge ws://:8765
+#   tab "Graph"    -> same, Foxglove's Rosgraph panel
+#   tab "Terminal" -> ttyd :7681 (shell inside the ROS2 environment)
+#   tabs page      -> :80
+# Literal RViz2 is infeasible on focal (ROS2 ships no humble debs for Ubuntu
+# 20.04 — the apt repo only carries foxy) — user chose the Foxglove route.
 
-# Renew the expired ROS apt key (EXPKEYSIG), then install the GUI stack.
-# The image's ROS is source-built in /opt/ros/humble/install; the apt packages
-# (rviz2, rqt_graph) land in the standard /opt/ros/humble layout — both are
-# humble on focal, so they coexist; source the apt setup first, then install/.
+# ---- build stage: compile foxglove_bridge against the image's source-built ROS
+FROM dustynv/ros:humble-ros-base-l4t-r35.4.1 AS builder
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         | gpg --batch --yes --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl xvfb x11vnc websockify novnc mesa-utils libgl1-mesa-dri \
-        ros-humble-rviz2 ros-humble-rqt-graph \
+        git python3-pip libwebsocketpp-dev libasio-dev libzstd-dev nlohmann-json3-dev \
+    && pip3 install colcon-common-extensions \
+    && git clone --depth 1 --branch 0.8.2 https://github.com/foxglove/ros-foxglove-bridge.git /opt/src/foxglove_bridge \
+    && cd /opt/src/foxglove_bridge \
+    && . /opt/ros/humble/install/setup.bash \
+    && colcon build --packages-select foxglove_bridge --install-base /opt/foxglove_ws \
+    && rm -rf /opt/src /var/lib/apt/lists/*
+
+# ---- runtime stage
+FROM dustynv/ros:humble-ros-base-l4t-r35.4.1
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+        | gpg --batch --yes --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends curl \
     && curl -L -o /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.aarch64 \
     && chmod +x /usr/local/bin/ttyd \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=builder /opt/foxglove_ws /opt/foxglove_ws
 COPY web/entry.sh /entry.sh
 RUN chmod +x /entry.sh
 

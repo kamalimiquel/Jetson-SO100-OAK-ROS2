@@ -18,6 +18,8 @@ The Windows 11 PC must visualize the arm's position and camera images. The Xavie
 
 **View the noVNC stream (RViz2 from ADR-0014) in Chromium on the Windows PC.** No ROS2 installation on Windows for visualization.
 
+*Amended 2026-11-07:* the RViz2 stream is replaced by **Foxglove Studio in the browser** (user chose alternative 2 of the re-opened decision): noVNC/Chromium dropped, the browser connects over WebSocket to the foxglove_bridge in the web container. Reason: ros-humble-*.deb packages do not exist for Ubuntu 20.04 (the ROS apt repo only ships foxy for focal), so headless RViz2 would require a multi-hour from-source build of RViz + OGRE on the Xavier. Foxglove delivers the same URDF/TF/images/pointcloud view from the browser.
+
 ## Consequences
 
 - Visualization needs zero ROS2/DDS setup on Windows: Chromium connects over LAN HTTP/WebSocket to the noVNC port of the RViz container.

@@ -109,7 +109,7 @@ The Xavier runs the whole cell as **five Docker containers, one per job** (ADR-0
 | `so100-cams` | reads both OAK-D cameras | its own depthai SDK (wheel, py3.12) + the computer's USB ports, so it can open the cameras |
 | `so100-perception` | will turn images into grasp requests | plain ROS2 Humble image + a shared workspace folder |
 | `so100-control` | will run the joint API + episode recording | plain ROS2 Humble image + the same shared workspace |
-| `so100-web` | the browser tabs (RViz2, rqt_graph, terminal) | headless RViz2 + rqt_graph streamed via noVNC (ports 6080/6081), a terminal via ttyd (7681), tabs page on port 80 |
+| `so100-web` | the browser tabs (3D view, graph, terminal) | foxglove_bridge (ws://:8765) + ttyd (7681) + tabs page (port 80); 3D renders client-side in Foxglove Studio |
 
 ### How to create the containers
 
@@ -155,7 +155,7 @@ Notes (traps we hit — read before changing the stack):
 
 ## Windows PC setup — teleop + visualization
 
-Visualization needs nothing but Chromium (ADR-0015): open http://<xavier-ip>:6080/vnc.html once the RViz stream is up. Teleoperation with the F710 needs the native client (ADR-0017).
+Visualization needs nothing but a browser (ADR-0015, amended): open http://<xavier-ip>/ — tabs are 3D view and Graph (Foxglove Studio, connects itself to ws://<xavier-ip>:8765) and a Terminal (ttyd). Teleoperation with the F710 needs the native client (ADR-0017).
 
 **One-time setup:**
 1. ROS2 Humble (runtime only): the official Windows zip (ros2-humble-*-win64) from docs.ros.org → unpack to C:\dev\ros2_humble.
