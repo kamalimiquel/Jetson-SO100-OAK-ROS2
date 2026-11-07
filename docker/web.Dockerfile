@@ -15,7 +15,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         git python3-pip libwebsocketpp-dev libasio-dev libzstd-dev nlohmann-json3-dev libcurl4-openssl-dev \
     && pip3 install colcon-common-extensions \
     && mkdir -p /opt/src && cd /opt/src \
-    && git clone --depth 1 --branch 0.8.2 https://github.com/foxglove/ros-foxglove-bridge.git foxglove_bridge \
+    && git clone --depth 1 --branch 0.7.4 https://github.com/foxglove/ros-foxglove-bridge.git foxglove_bridge \
     && git clone --depth 1 --branch humble https://github.com/ros/resource_retriever.git resource_retriever \
     && . /opt/ros/humble/install/setup.bash \
     && colcon build --packages-select libcurl_vendor resource_retriever foxglove_bridge --install-base /opt/foxglove_ws \
