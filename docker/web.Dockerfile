@@ -3,7 +3,9 @@
 # carries the servers + the tabs page.
 FROM dustynv/ros:humble-ros-base-l4t-r35.4.1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/sources.list.d/*ros* \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
         curl xvfb x11vnc websockify novnc \
     && curl -L -o /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.aarch64 \
     && chmod +x /usr/local/bin/ttyd \
