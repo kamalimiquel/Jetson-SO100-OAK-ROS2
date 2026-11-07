@@ -99,19 +99,59 @@ The result is written to `~/.cache/huggingface/lerobot/calibration/robots/so_fol
 5. **Bindings from source:** `depthai-python` tag v2.33.0.0, default add_subdirectory mode, with its PIC toolchain line changed to `set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)` (the plain `set()` never reaches Hunter's external projects), Python pointed at the uv 3.12 headers, and a clean `~/.hunter` before configuring. **Install:** copy the built `depthai.cpython-312-aarch64-linux-gnu.so` over the wheel's module in `site-packages/`. The module statically links depthai-core (self-contained) and only needs libusb at runtime via rpath into `~/.hunter` — keep that tree on the host.
 6. **USB3 check:** both OAKs must appear under a 5000M hub in `lsusb -t`; ~2–3 fps at 1080p+720p means the link fell back to USB2.
 
-## Container stack — compose on the Xavier
+## Container stack — how the Xavier runs the robot
 
-Five containers, one per domain (ADR-0003): `arm`, `cams`, `perception`, `control`, `web`. All run on host network + `ipc: host` (ADR-0002/0005) with `ROS_DOMAIN_ID=42` and FastDDS; `/dev/shm` is the host tmpfs (7.3 GB — no tuning needed). SDK strategy (ADR-0006/0007): arm bind-mounts the host LeRobot venv; cams installs the `depthai<3` wheel in-container (uv py3.12); perception/control use the image's own rclpy; web carries noVNC + ttyd + the tabs page.
+The Xavier runs the whole cell as **five Docker containers, one per job** (ADR-0003). A container is a little boxed Linux with exactly what its job needs — nothing more. All five are started by docker compose, they share the Xavier's network and memory with the host (host network + `ipc: host`), and they talk to each other in ROS2 on domain 42 with FastDDS.
 
-Provision (on the Jetson, as the docker-group user): `SUDO_PASSWORD=… bash scripts/provision-jetson.sh` — idempotent: compose v2 plugin (user-level, no sudo), OAK udev rule, image builds, stack up, tabs page filled with the LAN IP (port 80).
+| Container | Job | What's inside |
+|---|---|---|
+| `so100-arm` | talks to the arm | the LeRobot SDK (shared read-only from the host venv) + the arm's USB port (`/dev/ttyACM0`) + its calibration file |
+| `so100-cams` | reads both OAK-D cameras | its own depthai SDK (wheel, py3.12) + the computer's USB ports, so it can open the cameras |
+| `so100-perception` | will turn images into grasp requests | plain ROS2 Humble image + a shared workspace folder |
+| `so100-control` | will run the joint API + episode recording | plain ROS2 Humble image + the same shared workspace |
+| `so100-web` | the browser tabs (RViz, rqt_graph, terminal) | noVNC + ttyd + the tabs page, served on port 80 |
+
+### How to create the containers
+
+**The short way — the provisioning script (recommended).** Copy the `docker/` and `scripts/` folders onto the Xavier (e.g. into `~/so100/`), then run:
+
+```bash
+SUDO_PASSWORD=<your password> bash scripts/provision-jetson.sh
+```
+
+The script is safe to run again and again. It: installs the compose v2 plugin if missing (into your user, no sudo), makes sure the camera udev rule exists, builds the two custom images (cams, web), starts all five containers, and writes the Xavier's address into the tabs page. When it finishes, all five containers are running — `docker ps` shows them. The tabs page is then at http://<xavier-ip>/ (port 80).
+
+**The manual way — one container at a time.** From the `docker/` folder on the Xavier:
+
+1. `so100-arm` — ready-made image, nothing to build:
+   ```bash
+   docker compose up -d arm
+   ```
+2. `so100-cams` — builds its own image first (installs uv + the depthai wheel, a few minutes), then starts it:
+   ```bash
+   docker compose up -d --build cams
+   ```
+3. `so100-perception` — ready-made image:
+   ```bash
+   docker compose up -d perception
+   ```
+4. `so100-control` — ready-made image:
+   ```bash
+   docker compose up -d control
+   ```
+5. `so100-web` — builds its own image (installs noVNC + ttyd, a few minutes), then starts it:
+   ```bash
+   docker compose up -d --build web
+   ```
+
+**Day-to-day:** `docker ps` shows the five `so100-*` containers; the containers come back up by themselves after a Xavier reboot (`restart: unless-stopped`). Open a shell inside one with `docker exec -it so100-arm bash`. To use ROS2 commands inside a shell, source the ROS environment first: `bash -c "source /opt/ros/humble/install/setup.bash && ros2 topic list"`.
 
 Verified 2026-11-07: talker→listener across arm→control; arm bus 6/6 inside its container; OAK capture 1/1 inside cams; tabs page + ttyd live.
 
-Notes:
-- `ros2` in `docker exec` needs the image source: `bash -c "source /opt/ros/humble/install/setup.bash && ros2 …"` (the entrypoint only applies to `docker run`).
+Notes (traps we hit — read before changing the stack):
 - Compose v2 is required — v1 rejects `device_cgroup_rules` with a misleading error.
 - dusty images ship an expired ROS apt key: `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles.
-- Docker auto-creates missing bind-mount sources root-owned — pre-create them (the provision script does).
+- Docker auto-creates missing bind-mount folders root-owned — pre-create them (the provision script does).
 
 ## How we work
 
