@@ -55,13 +55,15 @@ def build_pipeline() -> dai.Pipeline:
 
 
 def _k(raw):
-    """depthai getDefaultIntrinsics returns [[fx, fy, cx, cy]] (nested) — unwrap."""
+    """depthai getDefaultIntrinsics nests the [fx, fy, cx, cy] vector — unwrap."""
     if not raw:
         return None
-    first = raw[0]
-    if isinstance(first, (list, tuple)):
-        return [float(x) for x in first]
-    return [float(x) for x in raw]
+    while isinstance(raw, (list, tuple)) and len(raw) == 1:
+        raw = raw[0]
+    try:
+        return [float(x) for x in raw]
+    except TypeError:
+        return None
 
 
 def camera_info(fx, fy, cx, cy, w, h, frame_id):
