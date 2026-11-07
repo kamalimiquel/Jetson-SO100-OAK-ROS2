@@ -9,16 +9,14 @@ sudo_cmd() { echo "${SUDO_PASSWORD:?set SUDO_PASSWORD first}" | sudo -S -p "" "$
 echo "== docker =="
 docker --version || { echo "docker missing: install docker.io + nvidia-container-toolkit first"; exit 1; }
 
-if command -v docker-compose >/dev/null 2>&1; then
-  COMPOSE=(docker-compose)
-elif docker compose version >/dev/null 2>&1; then
-  COMPOSE=(docker compose)
-else
-  echo "== installing docker-compose (v1, from Ubuntu repos) =="
-  sudo_cmd apt-get update -qq
-  sudo_cmd apt-get install -y -qq docker-compose
-  COMPOSE=(docker-compose)
+if ! docker compose version >/dev/null 2>&1; then
+  echo "== installing compose v2 plugin (user-level, no sudo) =="
+  mkdir -p ~/.docker/cli-plugins
+  curl -L -o ~/.docker/cli-plugins/docker-compose \
+    https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64
+  chmod +x ~/.docker/cli-plugins/docker-compose
 fi
+COMPOSE=(docker compose)
 
 echo "== udev: OAK rule (VID 03e7) =="
 if [ ! -f /etc/udev/rules.d/80-oak.rules ]; then
