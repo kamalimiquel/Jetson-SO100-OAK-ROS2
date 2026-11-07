@@ -19,6 +19,14 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
 - [x] Phase 8: architecture doc + diagram, v0.1 tag
 - [ ] Implementation on the hardware (see `docs/architecture.md` → open items)
 
+## Implementation status
+
+- [x] Arm: LeRobot SDK (`~/lerobot/.venv`, py3.12) + calibration on the Xavier; all 6 motors verified over the bus (ADR-0006 amended — no adapter flash needed)
+- [ ] depthai-core from source on the NX (ADR-0007)
+- [ ] Compose file + provisioning script for the five services
+- [ ] ChArUco board + easy_handeye for both cameras (ADR-0011)
+- [ ] Windows: ROS2 Humble + VS Build Tools + SDL2 + firewall, F710 client, GPU check (ADR-0015…0017)
+
 ## How we work
 
 Every architecture decision is proposed with 3 alternatives (pros, cons, recommended), chosen by the user, and recorded as an ADR in `docs/adr/`. The full workflow lives in `docs/PROMPT.md`.

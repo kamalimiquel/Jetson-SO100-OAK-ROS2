@@ -59,7 +59,7 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 
 ## Open items before implementation (v0.1)
 
-- [x] Configure the SO-100 motors (`lerobot-setup-motors`: unique IDs + baudrate in servo EEPROM) and run LeRobot calibration. (ADR-0006 amended: the CH9102 adapter has no firmware to flash. IDs already 1–6; calibration pending.)
+- [x] Configure the SO-100 motors (`lerobot-setup-motors`: unique IDs + baudrate in servo EEPROM) and run LeRobot calibration. (ADR-0006 amended: the CH9102 adapter has no firmware to flash. IDs already 1–6; calibrated on the Xavier as id `so100_cell`.)
 - Build `depthai-core` from source on the NX.
 - Compose file + provisioning script for the five services.
 - Print ChArUco board and run easy_handeye for both cameras.
