@@ -85,4 +85,3 @@ services:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
       - ./web:/srv/web
-    command: ["bash", "-c", "python3 -m http.server 80 --directory /srv/web"]
