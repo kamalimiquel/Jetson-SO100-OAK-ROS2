@@ -16,6 +16,6 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN uv venv /opt/oak/.venv --python 3.12 \
     && uv pip install --python /opt/oak/.venv/bin/python "depthai<3" opencv-python-headless
 
-# Probe entrypoint (USB access comes from compose: /dev/bus/usb + cgroup rule).
-ENTRYPOINT ["/bin/bash", "-c"]
-CMD ["/opt/oak/.venv/bin/python /opt/ws/tools/oak_cams_probe.py"]
+# Probe command for standalone runs (compose overrides it). USB access comes
+# from compose: /dev/bus/usb + cgroup rule.
+CMD ["/opt/oak/.venv/bin/python", "/opt/tools/oak_cams_probe.py"]
