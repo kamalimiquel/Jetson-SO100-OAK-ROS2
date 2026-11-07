@@ -7,7 +7,7 @@ FROM dustynv/ros:humble-ros-base-l4t-r35.4.1
 # (rviz2, rqt_graph) land in the standard /opt/ros/humble layout — both are
 # humble on focal, so they coexist; source the apt setup first, then install/.
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-        | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
+        | gpg --batch --yes --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         curl xvfb x11vnc websockify novnc mesa-utils libgl1-mesa-dri \

@@ -109,7 +109,7 @@ The Xavier runs the whole cell as **five Docker containers, one per job** (ADR-0
 | `so100-cams` | reads both OAK-D cameras | its own depthai SDK (wheel, py3.12) + the computer's USB ports, so it can open the cameras |
 | `so100-perception` | will turn images into grasp requests | plain ROS2 Humble image + a shared workspace folder |
 | `so100-control` | will run the joint API + episode recording | plain ROS2 Humble image + the same shared workspace |
-| `so100-web` | the browser tabs (RViz, rqt_graph, terminal) | noVNC + ttyd + the tabs page, served on port 80 |
+| `so100-web` | the browser tabs (RViz2, rqt_graph, terminal) | headless RViz2 + rqt_graph streamed via noVNC (ports 6080/6081), a terminal via ttyd (7681), tabs page on port 80 |
 
 ### How to create the containers
 
