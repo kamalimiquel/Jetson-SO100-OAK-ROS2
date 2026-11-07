@@ -23,7 +23,8 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
 
 - [x] Arm: LeRobot SDK (`~/lerobot/.venv`, py3.12) + calibration on the Xavier; all 6 motors verified over the bus (ADR-0006 amended — no adapter flash needed)
 - [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier; USB3 + wrist-Lite wiring check pending
-- [ ] Compose file + provisioning script for the five services
+- [x] Compose file + provisioning script for the five services
+- [x] Web interface: foxglove_bridge (ws://:8765) + ttyd terminal + 3-tab page on the Xavier (ADR-0014/0015/0018 amended — Foxglove instead of literal RViz2, infeasible on focal)
 - [ ] ChArUco board + easy_handeye for both cameras (ADR-0011)
 - [ ] Windows: ROS2 Humble + VS Build Tools + SDL2 + firewall, F710 client, GPU check (ADR-0015…0017)
 
