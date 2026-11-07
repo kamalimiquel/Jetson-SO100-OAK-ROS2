@@ -12,12 +12,13 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         | gpg --batch --yes --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        git python3-pip libwebsocketpp-dev libasio-dev libzstd-dev nlohmann-json3-dev \
+        git python3-pip libwebsocketpp-dev libasio-dev libzstd-dev nlohmann-json3-dev libcurl4-openssl-dev \
     && pip3 install colcon-common-extensions \
-    && git clone --depth 1 --branch 0.8.2 https://github.com/foxglove/ros-foxglove-bridge.git /opt/src/foxglove_bridge \
-    && cd /opt/src/foxglove_bridge \
+    && mkdir -p /opt/src && cd /opt/src \
+    && git clone --depth 1 --branch 0.8.2 https://github.com/foxglove/ros-foxglove-bridge.git foxglove_bridge \
+    && git clone --depth 1 --branch humble https://github.com/ros/resource_retriever.git resource_retriever \
     && . /opt/ros/humble/install/setup.bash \
-    && colcon build --packages-select foxglove_bridge --install-base /opt/foxglove_ws \
+    && colcon build --packages-select resource_retriever foxglove_bridge --install-base /opt/foxglove_ws \
     && rm -rf /opt/src /var/lib/apt/lists/*
 
 # ---- runtime stage
