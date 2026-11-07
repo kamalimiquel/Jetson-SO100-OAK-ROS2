@@ -153,6 +153,25 @@ Notes (traps we hit — read before changing the stack):
 - dusty images ship an expired ROS apt key: `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles.
 - Docker auto-creates missing bind-mount folders root-owned — pre-create them (the provision script does).
 
+## Windows PC setup — teleop + visualization
+
+Visualization needs nothing but Chromium (ADR-0015): open http://<xavier-ip>:6080/vnc.html once the RViz stream is up. Teleoperation with the F710 needs the native client (ADR-0017).
+
+**One-time setup:**
+1. ROS2 Humble (runtime only): the official Windows zip (ros2-humble-*-win64) from docs.ros.org → unpack to C:\dev\ros2_humble.
+2. Visual Studio Build Tools 2022 with the "Desktop development with C++" workload.
+3. SDL2 dev: SDL2-devel-2.30.x-VC.zip from libsdl.org → C:\dev\SDL2.
+4. F710: back switch to X (XInput), plug the receiver in.
+5. Firewall (elevated prompt): run windows/firewall-allow.cmd — opens UDP 7400–7450 for DDS on the private profile (the classic silent-failure point).
+
+**Build + run:** windows/build.cmd produces build\Release\f710_teleop.exe. Run it with the ROS2 environment active (call C:\dev\ros2_humble\local_setup.bat first).
+
+**Controls:** joint-step mode by default — D-pad L/R selects joint 0–5, left stick Y steps it, LB/RB = gripper close/open. START toggles cartesian-feel (left stick = pan/lift, right stick = elbow/wrist, triggers = gripper). X records the trajectory, B replays it.
+
+**Safety:** the client publishes nothing until /joint_states arrives and starts from the arm's real position; deltas are clamped per tick and targets per joint limits — the Jetson bridge enforces the real limits regardless.
+
+**GPU check (Isaac Sim viability):** run windows/check-gpu.cmd — needs an NVIDIA RTX-class GPU and driver ≥ 535 for Isaac Sim.
+
 ## How we work
 
 Every architecture decision is proposed with 3 alternatives (pros, cons, recommended), chosen by the user, and recorded as an ADR in `docs/adr/`. The full workflow lives in `docs/PROMPT.md`.
