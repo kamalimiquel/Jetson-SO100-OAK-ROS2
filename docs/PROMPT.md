@@ -77,9 +77,9 @@ Status: DONE — ADR-0004 (hybrid 1+2), ADR-0005 (`--ipc=host`).
 ### Phase 3 — Drivers
 **3a. SO-100 arm** (3 alternatives):
 1. **phosphobot** (Rust, HTTP server on :8000) + rclpy bridge to ROS2: mature and self-contained, web/gamepad teleop included, per-arm calibration. Note: pybullet and pyrealsense2 don't build/run on the Jetson — follow the `so100-phosphobot` skill recipe (uv, py3.12, no pyrealsense2, `dialout` group, udev rule for ttyACM*).
-2. **LeRobot (SO-ARM100)**: firmware + Python SDK (Feetech bus). Training ecosystem, but Python and less real-time control; requires reflashing the arm. CHOSEN.
+2. **LeRobot (SO-ARM100)**: Python SDK (Feetech bus) + one-time motor setup. Training ecosystem, but Python and less real-time control; requires one-time motor ID/baud setup (`lerobot-setup-motors`). CHOSEN.
 3. Custom C++ driver (Feetech SCS protocol, SCServo SDK) + ros2_control `hardware_interface`: maximum control and pure C++, more work. Medium-term goal if the project demands it.
-Status: DONE — ADR-0006 (LeRobot firmware + SDK, rclpy bridge).
+Status: DONE — ADR-0006 (LeRobot SDK + rclpy bridge; amended: no adapter flash, `lerobot-setup-motors` instead).
 **3b. OAK-D POE via USB-C** (3 alternatives):
 1. **rclpy bridge with `depthai<3`** (color + depth + camera_info): the pinned-wheel route. ⚠️ the C++ `depthai_ros_driver` does NOT build today: the depthai 2.x pip wheel no longer ships headers or `depthaiConfig.cmake`.
 2. **`depthai-core` built from source + custom node**: full control; the serious route. CHOSEN (node in Python, ADR-0007).
