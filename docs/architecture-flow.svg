@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1050" font-family="DejaVu Sans, sans-serif">
+  <rect width="1500" height="1050" fill="#0b1220"/>
+  <text x="40" y="46" fill="#e8edf5" font-size="24" font-weight="bold">Jetson-SO100-OAK-ROS2 — data flow</text>
+  <text x="40" y="70" fill="#8892a6" font-size="13">ROS2 Humble · FastDDS · domain 42 · Docker (one container per domain) · v0.1 · starting from zero</text>
+
+  <!-- lanes -->
+  <rect x="40"  y="100" width="340" height="900" fill="none" stroke="#263042" stroke-width="1"/>
+  <rect x="400" y="100" width="640" height="900" fill="none" stroke="#263042" stroke-width="1"/>
+  <rect x="1060" y="100" width="400" height="900" fill="none" stroke="#263042" stroke-width="1"/>
+
+  <!-- lane headers -->
+  <rect x="40"  y="100" width="340" height="34" fill="#1a2436"/>
+  <rect x="400" y="100" width="640" height="34" fill="#1a2436"/>
+  <rect x="1060" y="100" width="400" height="34" fill="#1a2436"/>
+  <text x="52"  y="123" fill="#e8edf5" font-size="15" font-weight="bold">DEVICES</text>
+  <text x="412" y="123" fill="#e8edf5" font-size="15" font-weight="bold">JETSON XAVIER NX 16 GB — Docker</text>
+  <text x="1072" y="123" fill="#e8edf5" font-size="15" font-weight="bold">WINDOWS 11 HOME PC</text>
+
+  <!-- DEVICES -->
+  <rect x="60"  y="180" width="300" height="64" fill="#3a2b16" stroke="#d99036" rx="8"/>
+  <text x="76"  y="205" fill="#ffd9a0" font-size="14" font-weight="bold">SO-100 arm (6 axes)</text>
+  <text x="76"  y="226" fill="#c9b189" font-size="11">Feetech ST3215 bus · ttyACM0 · VID 1a86</text>
+
+  <rect x="60"  y="380" width="300" height="64" fill="#3a2b16" stroke="#d99036" rx="8"/>
+  <text x="76"  y="405" fill="#ffd9a0" font-size="14" font-weight="bold">OAK-D POE (scene, fixed)</text>
+  <text x="76"  y="426" fill="#c9b189" font-size="11">USB-C · stereo depth · eye-to-hand</text>
+
+  <rect x="60"  y="580" width="300" height="64" fill="#3a2b16" stroke="#d99036" rx="8"/>
+  <text x="76"  y="605" fill="#ffd9a0" font-size="14" font-weight="bold">OAK-D Lite (wrist)</text>
+  <text x="76"  y="626" fill="#c9b189" font-size="11">USB-C · stereo depth · eye-in-hand</text>
+
+  <!-- JETSON containers -->
+  <rect x="420" y="180" width="280" height="64" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="436" y="205" fill="#aab6c9" font-size="13" font-weight="bold">arm — LeRobot SDK bridge</text>
+  <text x="436" y="224" fill="#7c8798" font-size="11">joint cmd + state ↔ ROS2</text>
+
+  <rect x="420" y="380" width="280" height="64" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="436" y="405" fill="#aab6c9" font-size="13" font-weight="bold">cams — custom depthai node</text>
+  <text x="436" y="424" fill="#7c8798" font-size="11">depthai-core · scene + wrist pipelines</text>
+
+  <rect x="420" y="600" width="280" height="56" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="436" y="622" fill="#aab6c9" font-size="13" font-weight="bold">perception</text>
+  <text x="436" y="640" fill="#7c8798" font-size="11">segmentation → GraspGen request</text>
+
+  <rect x="420" y="740" width="280" height="56" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="436" y="762" fill="#aab6c9" font-size="13" font-weight="bold">control</text>
+  <text x="436" y="780" fill="#7c8798" font-size="11">joint API · rosbag2 episodes</text>
+
+  <rect x="740" y="180" width="280" height="64" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="756" y="205" fill="#aab6c9" font-size="13" font-weight="bold">web — RViz2 + rqt_graph</text>
+  <text x="756" y="224" fill="#7c8798" font-size="11">headless · noVNC :6080/:6081</text>
+  <rect x="740" y="252" width="280" height="44" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="756" y="271" fill="#aab6c9" font-size="12" font-weight="bold">web — ttyd terminal</text>
+  <text x="756" y="287" fill="#7c8798" font-size="10">shell in ROS2 container :7681</text>
+  <rect x="740" y="304" width="280" height="40" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="756" y="321" fill="#aab6c9" font-size="12" font-weight="bold">web — tabs page</text>
+  <text x="756" y="336" fill="#7c8798" font-size="10">RViz | rqt_graph | SSH</text>
+
+  <rect x="740" y="824" width="280" height="52" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="756" y="846" fill="#aab6c9" font-size="13" font-weight="bold">Docker engine (host)</text>
+  <text x="756" y="864" fill="#7c8798" font-size="11">--ipc=host · --network=host · nvidia runtime</text>
+
+  <!-- WINDOWS -->
+  <rect x="1080" y="180" width="360" height="56" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="1096" y="202" fill="#aab6c9" font-size="13" font-weight="bold">Chromium — noVNC tabs</text>
+  <text x="1096" y="220" fill="#7c8798" font-size="11">RViz · rqt_graph · ttyd over LAN HTTP</text>
+
+  <rect x="1080" y="580" width="360" height="56" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="1096" y="602" fill="#aab6c9" font-size="13" font-weight="bold">GraspGen server</text>
+  <text x="1096" y="620" fill="#7c8798" font-size="11">client-server :5556 · SE(3) grasps · GPU</text>
+
+  <rect x="1080" y="680" width="360" height="56" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="1096" y="702" fill="#aab6c9" font-size="13" font-weight="bold">F710 C++ client</text>
+  <text x="1096" y="720" fill="#7c8798" font-size="11">rclcpp + SDL2 · joint targets over DDS</text>
+
+  <rect x="1080" y="780" width="360" height="56" fill="#1c2333" stroke="#4a5568" rx="8"/>
+  <text x="1096" y="802" fill="#aab6c9" font-size="13" font-weight="bold">Training</text>
+  <text x="1096" y="820" fill="#7c8798" font-size="11">MuJoCo (SO-ARM100) + Isaac Sim · LeRobot datasets</text>
+
+  <!-- arrows -->
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4da6ff"/>
+    </marker>
+    <marker id="al" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8892a6"/>
+    </marker>
+  </defs>
+
+  <!-- SO-100 → arm -->
+  <line x1="360" y1="212" x2="418" y2="212" stroke="#8892a6" stroke-width="2" marker-end="url(#al)"/>
+  <text x="300" y="256" fill="#8892a6" font-size="10">USB serial ttyACM0</text>
+  <text x="300" y="268" fill="#8892a6" font-size="10">joints ~50-100 Hz</text>
+
+  <!-- OAK-D scene → cams -->
+  <line x1="360" y1="412" x2="418" y2="412" stroke="#8892a6" stroke-width="2" marker-end="url(#al)"/>
+  <text x="300" y="372" fill="#8892a6" font-size="10">USB3</text>
+  <text x="300" y="384" fill="#8892a6" font-size="10">1080p/30 + 720p/30</text>
+
+  <!-- OAK-D Lite → cams -->
+  <line x1="360" y1="612" x2="418" y2="420" stroke="#8892a6" stroke-width="2" marker-end="url(#al)"/>
+  <text x="300" y="656" fill="#8892a6" font-size="10">USB3</text>
+  <text x="300" y="668" fill="#8892a6" font-size="10">wrist color + depth</text>
+
+  <!-- cams → perception -->
+  <line x1="700" y1="444" x2="700" y2="598" stroke="#8892a6" stroke-width="2" marker-end="url(#al)"/>
+  <text x="714" y="530" fill="#8892a6" font-size="10">intra-process + SHM zero-copy</text>
+  <text x="714" y="542" fill="#8892a6" font-size="10">frames · camera_info · pointcloud</text>
+
+  <!-- perception → control -->
+  <line x1="560" y1="656" x2="560" y2="738" stroke="#8892a6" stroke-width="2" marker-end="url(#al)"/>
+  <text x="574" y="705" fill="#8892a6" font-size="10">DDS/SHM</text>
+  <text x="574" y="717" fill="#8892a6" font-size="10">segmented object point cloud</text>
+
+  <!-- control ↔ arm (vertical in lane gap) -->
+  <line x1="420" y1="768" x2="410" y2="768" stroke="#8892a6" stroke-width="2"/>
+  <line x1="410" y1="768" x2="410" y2="212" stroke="#8892a6" stroke-width="2"/>
+  <line x1="410" y1="212" x2="418" y2="212" stroke="#8892a6" stroke-width="2" marker-end="url(#al)"/>
+  <text x="290" y="540" fill="#8892a6" font-size="10">joint commands →</text>
+  <text x="290" y="552" fill="#8892a6" font-size="10">← joint_states (DDS)</text>
+
+  <!-- Jetson web → Windows Chromium (LAN) -->
+  <line x1="1020" y1="205" x2="1078" y2="206" stroke="#4da6ff" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="955" y="168" fill="#4da6ff" font-size="10">LAN HTTP/WebSocket</text>
+  <text x="955" y="180" fill="#4da6ff" font-size="10">noVNC :6080/:6081 · ttyd :7681</text>
+
+  <!-- perception → Windows GraspGen (LAN) -->
+  <line x1="700" y1="628" x2="1078" y2="606" stroke="#4da6ff" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="760" y="588" fill="#4da6ff" font-size="10">LAN client-server :5556</text>
+  <text x="760" y="600" fill="#4da6ff" font-size="10">→ point cloud · ← SE(3) grasps</text>
+
+  <!-- control → Windows F710 client (LAN) -->
+  <line x1="700" y1="768" x2="1078" y2="708" stroke="#4da6ff" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="760" y="740" fill="#4da6ff" font-size="10">LAN DDS domain 42</text>
+  <text x="760" y="752" fill="#4da6ff" font-size="10">← joint targets (F710) · → joint states</text>
+
+  <!-- control → Windows training (LAN) -->
+  <line x1="700" y1="796" x2="1078" y2="808" stroke="#4da6ff" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="790" y="776" fill="#4da6ff" font-size="10">LAN rosbags (SCP/SMB) → LeRobot dataset conversion</text>
+
+  <!-- legend -->
+  <rect x="40" y="880" width="1420" height="120" fill="#101828" stroke="#263042" rx="8"/>
+  <text x="60" y="908" fill="#e8edf5" font-size="13" font-weight="bold">LEGEND</text>
+  <rect x="60"  y="920" width="18" height="18" fill="#3a2b16" stroke="#d99036" rx="3"/>
+  <text x="88"  y="934" fill="#ffd9a0" font-size="12">orange — hardware, awaiting first bring-up</text>
+  <rect x="60"  y="946" width="18" height="18" fill="#1c2333" stroke="#4a5568" rx="3"/>
+  <text x="88"  y="960" fill="#aab6c9" font-size="12">gray — software, not yet built</text>
+  <line x1="480" y1="929" x2="520" y2="929" stroke="#4da6ff" stroke-width="2"/>
+  <text x="530" y="934" fill="#4da6ff" font-size="12">blue — LAN link (HTTP/WebSocket · DDS · SSH/SCP)</text>
+  <line x1="480" y1="955" x2="520" y2="955" stroke="#8892a6" stroke-width="2"/>
+  <text x="530" y="960" fill="#8892a6" font-size="12">gray — local link (USB / intra-host)</text>
+  <text x="60" y="1000" fill="#5d6a80" font-size="11">Architecture decisions: docs/adr/0001-0018 · v0.1 · starting from zero</text>
+</svg>
