@@ -54,6 +54,16 @@ def build_pipeline() -> dai.Pipeline:
     return p
 
 
+def _k(raw):
+    """depthai getDefaultIntrinsics returns [[fx, fy, cx, cy]] (nested) — unwrap."""
+    if not raw:
+        return None
+    first = raw[0]
+    if isinstance(first, (list, tuple)):
+        return [float(x) for x in first]
+    return [float(x) for x in raw]
+
+
 def camera_info(fx, fy, cx, cy, w, h, frame_id):
     info = CameraInfo()
     info.width = w
@@ -82,8 +92,8 @@ class OakNode(Node):
             qc = device.getOutputQueue("color", 2, False)
             qd = device.getOutputQueue("depth", 2, False)
             calib = device.readCalibration()  # CalibrationHandler (empty if no factory calib)
-            color_i = calib.getDefaultIntrinsics(dai.CameraBoardSocket.RGB) if calib else None
-            right_i = calib.getDefaultIntrinsics(dai.CameraBoardSocket.RIGHT) if calib else None
+            color_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RGB)) if calib else None
+            right_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RIGHT)) if calib else None
             color_ok = color_i is not None and color_i[0] > 0
             right_ok = right_i is not None and right_i[0] > 0
             self.get_logger().info(

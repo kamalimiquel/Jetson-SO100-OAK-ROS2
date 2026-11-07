@@ -5,6 +5,10 @@
 #  3. robot_state_publisher            -> TF for Foxglove from the URDF + joint states
 set -e
 
+# lerobot looks for its calibration under $HOME/.cache/huggingface — the
+# container runs as root, so point HOME at the mount (host maju home).
+export HOME=/home/maju
+
 /home/maju/lerobot/.venv/bin/python /opt/ws/arm/lerobot_joint_server.py &
 sleep 2
 python3 /opt/ws/arm/arm_bridge.py &
