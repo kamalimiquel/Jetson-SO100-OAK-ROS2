@@ -17,8 +17,9 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && mkdir -p /opt/src && cd /opt/src \
     && git clone --depth 1 --branch 0.8.2 https://github.com/foxglove/ros-foxglove-bridge.git foxglove_bridge \
     && git clone --depth 1 --branch humble https://github.com/ros/resource_retriever.git resource_retriever \
+    && git clone --depth 1 --branch humble https://github.com/ros/curl_vendor.git libcurl_vendor \
     && . /opt/ros/humble/install/setup.bash \
-    && colcon build --packages-select resource_retriever foxglove_bridge --install-base /opt/foxglove_ws \
+    && colcon build --packages-select libcurl_vendor resource_retriever foxglove_bridge --install-base /opt/foxglove_ws \
     && rm -rf /opt/src /var/lib/apt/lists/*
 
 # ---- runtime stage
