@@ -1,5 +1,6 @@
-# cams service — depthai SDK in-container (ADR-0007 fallback wheel, API-identical
-# to the source build), on a uv-managed py3.12 venv (the image's python3.8 is too old).
+# cams service — depthai wheel in-container (ADR-0007 fallback, API-identical to
+# the source build). Installed into the image's python3.8 (a cp38 aarch64 wheel
+# exists) so the camera node runs single-process with the image's rclpy.
 FROM dustynv/ros:humble-ros-base-l4t-r35.4.1
 
 # The dusty image ships a ROS apt repo whose key is expired (EXPKEYSIG) — any
@@ -7,15 +8,7 @@ FROM dustynv/ros:humble-ros-base-l4t-r35.4.1
 # packages here (ROS is baked into /opt/ros), so remove it.
 RUN rm -f /etc/apt/sources.list.d/*ros* \
     && apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && pip3 install --no-cache-dir "depthai==2.33.0.0" opencv-python-headless \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
-
-RUN uv venv /opt/oak/.venv --python 3.12 \
-    && uv pip install --python /opt/oak/.venv/bin/python "depthai<3" opencv-python-headless
-
-# Probe command for standalone runs (compose overrides it). USB access comes
-# from compose: /dev/bus/usb + cgroup rule.
-CMD ["/opt/oak/.venv/bin/python", "/opt/tools/oak_cams_probe.py"]
+CMD ["/bin/bash"]
