@@ -135,6 +135,7 @@ Document ports and users; LAN-exposed only.
 ## Cross-cutting rules
 
 - Chat, README, docs, commits and code comments are in **English** (explicit per-repo request).
+- Setup/how-to guides go **inline in the README** (user preference), not in separate `docs/` files; `docs/` keeps ADRs, architecture and this prompt.
 - The user prefers pasting credentials/tokens in the chat over running commands himself: run every command yourself, never ask him to. Credentials in 600-permission files, never in the repo.
 - Network: Xavier and Windows on the same LAN; common `ROS_DOMAIN_ID`; document the chosen RMW.
 - Security: no `--privileged` containers unless justified; LAN-only ports; no passwords in the repo.
