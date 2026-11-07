@@ -32,7 +32,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/foxglove_ws /opt/foxglove_ws
-COPY web/entry.sh /entry.sh
+COPY docker/web/entry.sh /entry.sh
 RUN chmod +x /entry.sh
 
 CMD ["/entry.sh"]
