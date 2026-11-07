@@ -61,7 +61,7 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 
 - [x] Configure the SO-100 motors (`lerobot-setup-motors`: unique IDs + baudrate in servo EEPROM) and run LeRobot calibration. (ADR-0006 amended: the CH9102 adapter has no firmware to flash. IDs already 1–6; calibrated on the Xavier as id `so100_cell`.)
 - [x] Build `depthai-core` from source on the NX. (v2.33.0 installed at `~/depthai` + bindings in `~/oak/.venv`; USB3/Lite link verification pending the owner's cabling.)
-- Compose file + provisioning script for the five services.
+- [x] Compose file + provisioning script for the five services. (docker/docker-compose.yaml + scripts/provision-jetson.sh deployed on the Xavier; five containers verified, see README "Container stack".)
 - Print ChArUco board and run easy_handeye for both cameras.
 - Windows: ROS2 Humble binary + VS Build Tools + SDL2, firewall rules for DDS.
 - Check the Windows PC GPU for Isaac Sim viability.

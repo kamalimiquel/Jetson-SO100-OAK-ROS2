@@ -34,11 +34,14 @@ df -h /dev/shm | tail -1
 
 echo "== stack =="
 cd "$(dirname "$0")/../docker"
+# Pre-create bind-mount sources: docker would otherwise auto-create them
+# root-owned and the deploy user could never write them again.
+mkdir -p ../tools ../ws
 "${COMPOSE[@]}" up -d --build
 
 echo "== tabs page: fill LAN address =="
 LAN_IP=$(hostname -I | awk '{print $1}')
-sed -i "s/__HOST__/${LAN_IP}/g" web/tabs.html
+sed -i "s/__HOST__/${LAN_IP}/g" web/index.html
 "${COMPOSE[@]}" restart web
 
 echo "== status =="
