@@ -173,6 +173,15 @@ Visualization needs nothing but a browser (ADR-0015, amended): open http://<xavi
 
 **GPU check (Isaac Sim viability):** run windows/check-gpu.cmd — needs an NVIDIA RTX-class GPU and driver ≥ 535 for Isaac Sim.
 
+## ROS2 nodes — what the containers publish
+
+| Node (container) | Topics | Notes |
+|---|---|---|
+| arm bridge + LeRobot joint server (arm) | /joint_states (50 Hz), /joint_targets, /robot_description (latched URDF) | robot_state_publisher emits /tf from the SO-100 URDF → Foxglove shows the arm animating |
+| oak_cams (cams) | /oak/scene/color/compressed (JPEG), /oak/scene/depth (16UC1), + /oak/gripper/* when the wrist Lite is connected | camera_info appears once factory calibration exists (Phase 4 easy_handeye); frame rate is USB2-limited until the cables are moved |
+
+The arm bridge is two processes: the LeRobot SDK needs py3.12 (venv) while the image's rclpy is py3.8, so the SDK serves loopback HTTP (:8002) and the bridge polls it — the same pattern as the old phosphobot bridge.
+
 ## How we work
 
 Every architecture decision is proposed with 3 alternatives (pros, cons, recommended), chosen by the user, and recorded as an ADR in `docs/adr/`. The full workflow lives in `docs/PROMPT.md`.
