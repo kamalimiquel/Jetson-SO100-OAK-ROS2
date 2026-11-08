@@ -51,7 +51,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         | gpg --batch --yes --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl xvfb x11vnc websockify novnc \
+        curl xvfb x11vnc websockify novnc sshpass openssh-client \
         libqt5core5a libqt5gui5 libqt5widgets5 libqt5svg5 libqt5x11extras5 \
         python3-pyqt5 python3-pyqtgraph python3-catkin-pkg \
         libgl1 libgl1-mesa-dri libzzip-0-13 libcppunit-1.15-0 \
@@ -62,6 +62,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
 COPY --from=builder /opt/rviz_ws /opt/rviz_ws
 COPY --from=rqtbuilder /opt/rqt_ws /opt/rqt_ws
 COPY docker/web/entry.sh /entry.sh
+COPY docker/web/shutdown_server.py /shutdown_server.py
 RUN chmod +x /entry.sh
 
 CMD ["/entry.sh"]

@@ -94,3 +94,5 @@ services:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
       - ./web:/srv/web
+      # maju password for the shutdown button (600 on host, never in the repo)
+      - /home/maju/.shutdown-secret:/run/secrets/shutdown-secret:ro
