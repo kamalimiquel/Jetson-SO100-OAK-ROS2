@@ -12,6 +12,9 @@ export HOME=/home/maju
 /home/maju/lerobot/.venv/bin/python /opt/ws/arm/lerobot_joint_server.py &
 sleep 2
 python3 /opt/ws/arm/arm_bridge.py &
-ros2 run robot_state_publisher robot_state_publisher &
+
+# robot_state_publisher ABORTS if /robot_description is empty at startup, and
+# it races the bridge's latched publish at boot — retry until it stays up.
+(until ros2 run robot_state_publisher robot_state_publisher; do echo "rsp: retrying in 2s"; sleep 2; done) &
 
 wait
