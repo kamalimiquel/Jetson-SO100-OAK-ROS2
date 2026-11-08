@@ -54,20 +54,6 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && colcon build --packages-select qt_gui qt_gui_py_common rqt_py_common rqt_gui rqt_gui_py rqt_graph --install-base /opt/rqt_ws \
     && rm -rf /opt/src /var/lib/apt/lists/*
 
-# ---- builder3: rosbridge (pure python — the MuJoCo twin transport, port 9090)
-FROM dustynv/ros:humble-ros-base-l4t-r35.4.1 AS rosbridgebuilder
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-        | gpg --batch --yes --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends git python3-pip \
-    && pip3 install colcon-common-extensions pymongo tornado twisted autobahn "mypy<1.5" \
-    && mkdir -p /opt/src && cd /opt/src \
-    && git clone --depth 1 --branch humble https://github.com/RobotWebTools/rosbridge_suite.git rosbridge_suite \
-    && git clone --depth 1 --branch humble https://github.com/ament/ament_lint.git ament_lint \
-    && . /opt/ros/humble/install/setup.bash \
-    && colcon build --install-base /opt/rosbridge_ws \
-    && rm -rf /opt/src /var/lib/apt/lists/*
-
 # ---- runtime: Xvfb + noVNC + ttyd + the Qt/OGRE runtime libs rviz2 needs
 FROM dustynv/ros:humble-ros-base-l4t-r35.4.1
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
@@ -79,14 +65,12 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         python3-pyqt5 python3-pyqtgraph python3-catkin-pkg \
         python3-pip \
         libgl1 libgl1-mesa-dri libzzip-0-13 libcppunit-1.15-0 \
-    && pip3 install pymongo tornado twisted autobahn \
     && curl -L -o /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.aarch64 \
     && chmod +x /usr/local/bin/ttyd \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/rviz_ws /opt/rviz_ws
 COPY --from=rqtbuilder /opt/rqt_ws /opt/rqt_ws
-COPY --from=rosbridgebuilder /opt/rosbridge_ws /opt/rosbridge_ws
 COPY docker/web/entry.sh /entry.sh
 COPY docker/web/shutdown_server.py /shutdown_server.py
 RUN chmod +x /entry.sh

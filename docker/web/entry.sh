@@ -18,9 +18,7 @@ python3 -m http.server 80 --directory /srv/web &
 source /opt/ros/humble/install/setup.bash
 [ -f /opt/rviz_ws/setup.bash ] && source /opt/rviz_ws/setup.bash
 [ -f /opt/rqt_ws/setup.bash ] && source /opt/rqt_ws/setup.bash
-[ -f /opt/rosbridge_ws/setup.bash ] && source /opt/rosbridge_ws/setup.bash
 DISPLAY=:0 ros2 run rviz2 rviz2 -d /srv/web/rviz.rviz &
 DISPLAY=:1 ros2 run rqt_graph rqt_graph &
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml &
 
 wait

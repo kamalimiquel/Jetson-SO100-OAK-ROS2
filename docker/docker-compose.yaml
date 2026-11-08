@@ -96,3 +96,19 @@ services:
       - ./web:/srv/web
       # maju password for the shutdown button (600 on host, never in the repo)
       - /home/maju/.shutdown-secret:/run/secrets/shutdown-secret:ro
+
+  # rosbridge (MuJoCo twin transport, WebSocket :9090). Standalone jammy image
+  # because rosbridge_suite humble needs Python >=3.9 and the cell images are
+  # focal/py3.8. DDS over host net reaches the cell containers (domain 42).
+  rosbridge:
+    build:
+      context: ..
+      dockerfile: docker/rosbridge.Dockerfile
+    image: so100-rosbridge:latest
+    container_name: so100-rosbridge
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
