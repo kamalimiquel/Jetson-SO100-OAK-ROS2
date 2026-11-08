@@ -13,8 +13,9 @@ export HOME=/home/maju
 sleep 2
 python3 /opt/ws/arm/arm_bridge.py &
 
-# robot_state_publisher ABORTS if /robot_description is empty at startup, and
-# it races the bridge's latched publish at boot — retry until it stays up.
-(until ros2 run robot_state_publisher robot_state_publisher; do echo "rsp: retrying in 2s"; sleep 2; done) &
+# robot_state_publisher reads the robot_description PARAMETER (not the topic)
+# in Humble — pass the URDF directly, with a retry for the boot race.
+URDF=$(cat /opt/ws/arm/urdf/so100.urdf)
+(until ros2 run robot_state_publisher robot_state_publisher --ros-args -p robot_description:="$URDF"; do echo "rsp: retrying in 2s"; sleep 2; done) &
 
 wait
