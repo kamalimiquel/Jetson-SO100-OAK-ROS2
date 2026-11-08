@@ -21,8 +21,7 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
-from sensor_msgs.msg import CameraInfo, CompressedImage, Image, Imu, PointCloud2
-from sensor_msgs_py import point_cloud2
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image, Imu, PointCloud2, PointField
 from std_msgs.msg import Header
 from tf2_ros import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
@@ -77,6 +76,26 @@ def _k(raw):
         return [float(x) for x in raw]
     except TypeError:
         return None
+
+
+def create_cloud_xyz32(header, pts_m):
+    """Minimal PointCloud2(xyz, float32) builder — the dusty image lacks
+    sensor_msgs_py, and this is all the helper would do anyway."""
+    msg = PointCloud2()
+    msg.header = header
+    msg.height = 1
+    msg.width = len(pts_m)
+    msg.fields = [
+        PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+    ]
+    msg.is_bigendian = False
+    msg.point_step = 12
+    msg.row_step = msg.point_step * msg.width
+    msg.is_dense = True
+    msg.data = np.ascontiguousarray(pts_m, dtype=np.float32).tobytes()
+    return msg
 
 
 def camera_info(fx, fy, cx, cy, w, h, frame_id):
@@ -218,7 +237,7 @@ class OakNode(Node):
                     header = Header()
                     header.stamp = self.get_clock().now().to_msg()
                     header.frame_id = f"{ns}_right_optical_frame"
-                    msg = point_cloud2.create_cloud_xyz32(header, pts_m)
+                    msg = create_cloud_xyz32(header, pts_m)
                     self._pub(f"/oak/{ns}/points", PointCloud2).publish(msg)
                     s["pcl_last"] = now
             if s["q_imu"] is not None:
