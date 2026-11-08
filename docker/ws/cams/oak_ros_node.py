@@ -57,12 +57,6 @@ def build_pipeline() -> dai.Pipeline:
     xconf = p.createXLinkOut()
     xconf.setStreamName("confidence")
     sd.confidenceMap.link(xconf.input)
-    pcl = p.createPointCloud()
-    pcl.setInitialConfig(dai.PointCloudProperties.SensorResolution.THE_720_P)
-    sd.depth.link(pcl.inputDepth)
-    xpcl = p.createXLinkOut()
-    xpcl.setStreamName("pcl")
-    pcl.pcl.link(xpcl.input)
     return p
 
 
@@ -126,7 +120,6 @@ class OakNode(Node):
             qc = device.getOutputQueue("color", 2, False)
             qd = device.getOutputQueue("depth", 2, False)
             qconf = device.getOutputQueue("confidence", 2, False)
-            qpcl = device.getOutputQueue("pcl", 2, False)
             calib = device.readCalibration()  # CalibrationHandler (empty if no factory calib)
             color_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RGB)) if calib else None
             right_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RIGHT)) if calib else None
@@ -138,9 +131,10 @@ class OakNode(Node):
             )
             self._publish_static_tfs(ns)
             stream = {
-                "ns": ns, "qc": qc, "qd": qd, "qconf": qconf, "qpcl": qpcl,
+                "ns": ns, "qc": qc, "qd": qd, "qconf": qconf,
                 "device": device,
                 "pcl_last": 0.0,
+                "cloud_warned": False,
                 "color_info": camera_info(
                     color_i[0], color_i[1], color_i[2], color_i[3],
                     1920, 1080, f"{ns}_color_optical_frame") if color_ok else None,
@@ -200,7 +194,6 @@ class OakNode(Node):
             color_frames = s["qc"].tryGetAll()
             depth_frames = s["qd"].tryGetAll()
             conf_frames = s["qconf"].tryGetAll()
-            pcl_frames = s["qpcl"].tryGetAll()
             if color_frames:
                 frame = color_frames[-1].getCvFrame()
                 ok, jpg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
@@ -229,17 +222,8 @@ class OakNode(Node):
                 msg.header.stamp = self.get_clock().now().to_msg()
                 msg.header.frame_id = f"{ns}_right_optical_frame"
                 self._pub(f"/oak/{ns}/confidence", Image).publish(msg)
-            if pcl_frames and now - s["pcl_last"] >= 1.0 / PCL_HZ:
-                pts = pcl_frames[-1].getPoints()  # Nx3 float32, millimetres
-                pts = pts[pts[:, 2] > 0]
-                if len(pts):
-                    pts_m = pts.astype(np.float32) / 1000.0
-                    header = Header()
-                    header.stamp = self.get_clock().now().to_msg()
-                    header.frame_id = f"{ns}_right_optical_frame"
-                    msg = create_cloud_xyz32(header, pts_m)
-                    self._pub(f"/oak/{ns}/points", PointCloud2).publish(msg)
-                    s["pcl_last"] = now
+            if depth_frames and now - s["pcl_last"] >= 1.0 / PCL_HZ:
+                self._publish_cloud(s, depth_frames[-1].getFrame(), now)
             if s["q_imu"] is not None:
                 for packet in s["q_imu"].tryGetAll():
                     for report in packet.packets:
@@ -263,6 +247,38 @@ class OakNode(Node):
                     if s["imu"]["acc"] is not None:
                         imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z = s["imu"]["acc"]
                     self._pub(f"/oak/{ns}/imu", Imu).publish(imu)
+
+    def _publish_cloud(self, s, depth, now):
+        """Host-side unprojection of the depth map. Requires intrinsics from
+        env (OAK_SCENE_FX/FY/CX/CY) — disabled until Phase 4 calibration
+        provides real values; depth units must be mm (factory calibration)."""
+        ns = s["ns"]
+        env = f"OAK_{ns.upper()}"
+        try:
+            fx = float(os.environ[f"{env}_FX"])
+            fy = float(os.environ[f"{env}_FY"])
+            cx = float(os.environ[f"{env}_CX"])
+            cy = float(os.environ[f"{env}_CY"])
+        except KeyError:
+            if not s["cloud_warned"]:
+                s["cloud_warned"] = True
+                self.get_logger().warn(
+                    f"{ns}: point cloud disabled — set {env}_FX/FY/CX/CY (Phase 4 calibration)"
+                )
+            return
+        h, w = depth.shape
+        uu, vv = np.meshgrid(np.arange(0, w, 2), np.arange(0, h, 2))
+        z = depth[::2, ::2].astype(np.float32) / 1000.0
+        valid = (z > 0.1) & (z < 5.0)
+        x = (uu - cx) * z / fx
+        y = (vv - cy) * z / fy
+        pts = np.stack([x[valid], y[valid], z[valid]], axis=1)
+        if len(pts):
+            header = Header()
+            header.stamp = self.get_clock().now().to_msg()
+            header.frame_id = f"{ns}_right_optical_frame"
+            self._pub(f"/oak/{ns}/points", PointCloud2).publish(create_cloud_xyz32(header, pts))
+            s["pcl_last"] = now
 
     def _pub(self, topic, cls):
         pub = getattr(self, "_pubcache", None)
