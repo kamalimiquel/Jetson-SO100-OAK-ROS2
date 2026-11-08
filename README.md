@@ -206,7 +206,10 @@ One node (/oak_cams), one depthai pipeline per device:
 |---|---|---|
 | /oak/scene/color/compressed | out | scene color as JPEG (CompressedImage) |
 | /oak/scene/depth | out | scene stereo depth, 16UC1 (mm once factory calibration exists) |
+| /oak/scene/confidence | out | stereo confidence map, 8UC1 (per-pixel depth certainty) |
 | /oak/scene/color/camera_info, /oak/scene/depth/camera_info | out | intrinsics — appear when calibration exists (Phase 4 easy_handeye) |
+| /oak/scene/imu | out | accel + gyro + rotation vector — only on units that carry an IMU (this POE unit has none) |
+| /oak/scene/points | out | point cloud (XYZ, meters) — computed host-side from depth; disabled until OAK_SCENE_FX/FY/CX/CY are set with Phase 4 intrinsics |
 | /oak/gripper/* | out | the same set for the wrist Lite, once it is plugged in |
 
 It also broadcasts /tf_static with the camera frame offsets (placeholders until easy_handeye).
