@@ -22,7 +22,7 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image, Imu, PointCloud2
-from sensor_msgs import point_cloud2
+from sensor_msgs_py import point_cloud2
 from std_msgs.msg import Header
 from tf2_ros import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
