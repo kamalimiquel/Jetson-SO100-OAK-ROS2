@@ -113,7 +113,10 @@ def main():
     sub.subscribe(on_message)
     print("subscribed to /joint_states — waiting for data...")
 
-    handle = viewer.launch(model, data)
+    # launch_passive (NOT launch — that one is blocking and steps its own
+    # physics): the passive viewer gives us a handle and we own every frame,
+    # so the sim is a pure kinematic mirror of the real arm.
+    handle = viewer.launch_passive(model, data)
     try:
         while handle.is_running():
             for i, angle in latest.items():
