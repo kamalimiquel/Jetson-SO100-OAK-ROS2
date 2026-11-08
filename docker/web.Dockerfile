@@ -62,7 +62,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && apt-get install -y --no-install-recommends git python3-pip \
     && pip3 install colcon-common-extensions pymongo tornado twisted autobahn \
     && mkdir -p /opt/src && cd /opt/src \
-    && git clone --depth 1 --branch humble https://github.com/ros-visualization/rosbridge_suite.git rosbridge_suite \
+    && git clone --depth 1 --branch humble https://github.com/RobotWebTools/rosbridge_suite.git rosbridge_suite \
     && . /opt/ros/humble/install/setup.bash \
     && colcon build --packages-select rosbridge_msgs rosbridge_library rosbridge_server rosapi --install-base /opt/rosbridge_ws \
     && rm -rf /opt/src /var/lib/apt/lists/*
