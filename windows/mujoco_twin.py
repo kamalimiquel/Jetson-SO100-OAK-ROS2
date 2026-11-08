@@ -19,10 +19,12 @@ import math
 import mujoco
 import roslibpy
 
-if not hasattr(mujoco, "viewer"):
+try:
+    from mujoco import viewer
+except ImportError:
     raise SystemExit(
-        "mujoco %s has no viewer module (4.x moved it into Studio). "
-        "Install the 3.x line:  pip install \"mujoco>=3,<4\"" % mujoco.__version__
+        "mujoco %s has no viewer module. The classic viewer exists in mujoco 3.x: "
+        "pip install \"mujoco>=3,<4\"" % mujoco.__version__
     )
 
 WANTED = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
@@ -73,17 +75,17 @@ def main():
     sub.subscribe(on_message)
     print("subscribed to /joint_states — waiting for data...")
 
-    viewer = mujoco.viewer.launch(model, data)
+    handle = viewer.launch(model, data)
     try:
-        while viewer.is_running():
+        while handle.is_running():
             for i, angle in latest.items():
                 data.qpos[i] = angle
             mujoco.mj_forward(model, data)
-            viewer.sync()
+            handle.sync()
     finally:
         sub.unsubscribe()
         client.terminate()
-        viewer.close()
+        handle.close()
 
 
 if __name__ == "__main__":
