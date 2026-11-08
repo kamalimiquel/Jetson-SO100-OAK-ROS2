@@ -3,7 +3,10 @@
 #   focal), shown headless via Xvfb + noVNC at :6080; ttyd terminal :7681;
 #   tabs page :80. Foxglove route removed.
 
-# ---- builder: rviz2 + its source-only deps against the image's source-built ROS
+# ---- builder: rviz2 + its source-only deps against the image's source-built ROS.
+# If docker/prebuilt/rviz_ws.tar.gz exists in the build context (produced on the
+# Jetson by the rviz-builder container — see README), it is extracted instead
+# of recompiling ~2.5h; the from-source recipe below stays as the fallback.
 FROM dustynv/ros:humble-ros-base-l4t-r35.4.1 AS builder
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         | gpg --batch --yes --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
@@ -15,17 +18,23 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         libgl1-mesa-dev libglu1-mesa-dev \
         libfreetype6-dev libzzip-dev libpng-dev libjpeg-dev libtiff-dev \
         libcppunit-dev doxygen graphviz zlib1g-dev pkg-config \
-    && pip3 install colcon-common-extensions \
-    && mkdir -p /opt/src && cd /opt/src \
-    && git clone --depth 1 --branch humble https://github.com/ros2/rviz.git rviz \
-    && git clone --depth 1 --branch humble https://github.com/ros-visualization/tango_icons_vendor.git tango_icons_vendor \
-    && git clone --depth 1 --branch humble https://github.com/ros-visualization/qt_gui_core.git qt_gui_core \
-    && git clone --depth 1 --branch humble https://github.com/ros-visualization/interactive_markers.git interactive_markers \
-    && git clone --depth 1 --branch humble https://github.com/ros-perception/laser_geometry.git laser_geometry \
-    && git clone --depth 1 --branch humble https://github.com/ros/resource_retriever.git resource_retriever \
-    && . /opt/ros/humble/install/setup.bash \
-    && colcon build --packages-up-to rviz2 --install-base /opt/rviz_ws \
-    && rm -rf /opt/src /var/lib/apt/lists/*
+    && pip3 install colcon-common-extensions
+COPY docker/prebuilt /opt/prebuilt
+RUN if [ -s /opt/prebuilt/rviz_ws.tar.gz ]; then \
+        echo "== using prebuilt rviz_ws ==" && tar xzf /opt/prebuilt/rviz_ws.tar.gz -C /; \
+    else \
+        echo "== building rviz2 from source ==" \
+        && mkdir -p /opt/src && cd /opt/src \
+        && git clone --depth 1 --branch humble https://github.com/ros2/rviz.git rviz \
+        && git clone --depth 1 --branch humble https://github.com/ros-visualization/tango_icons_vendor.git tango_icons_vendor \
+        && git clone --depth 1 --branch humble https://github.com/ros-visualization/qt_gui_core.git qt_gui_core \
+        && git clone --depth 1 --branch humble https://github.com/ros-visualization/interactive_markers.git interactive_markers \
+        && git clone --depth 1 --branch humble https://github.com/ros-perception/laser_geometry.git laser_geometry \
+        && git clone --depth 1 --branch humble https://github.com/ros/resource_retriever.git resource_retriever \
+        && . /opt/ros/humble/install/setup.bash \
+        && colcon build --packages-up-to rviz2 --install-base /opt/rviz_ws \
+        && rm -rf /opt/src; \
+    fi && rm -rf /var/lib/apt/lists/*
 
 # ---- builder2: rqt_graph stack (pure python — builds in minutes)
 FROM dustynv/ros:humble-ros-base-l4t-r35.4.1 AS rqtbuilder
