@@ -21,7 +21,8 @@ import roslibpy
 
 if not hasattr(mujoco, "viewer"):
     raise SystemExit(
-        "mujoco %s has no viewer module — upgrade:  pip install -U mujoco" % mujoco.__version__
+        "mujoco %s has no viewer module (4.x moved it into Studio). "
+        "Install the 3.x line:  pip install \"mujoco>=3,<4\"" % mujoco.__version__
     )
 
 WANTED = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
