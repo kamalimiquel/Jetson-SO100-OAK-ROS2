@@ -10,7 +10,8 @@ Usage (on the Windows PC):
     pip install roslibpy mujoco
     python windows\\mujoco_twin.py C:\\path\\to\\mujoco_menagerie\\trs_so_arm100\\scene.xml
 
-Optional: --host 192.168.1.185 --port 9090
+Optional: --host <xavier-ip> --port 9090 (default: the cell's current LAN address,
+kept for convenience — override when the Xavier gets a new IP).
 """
 
 import argparse

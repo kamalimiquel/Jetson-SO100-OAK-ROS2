@@ -193,7 +193,7 @@ Expected output: "OK - model loaded, 6 joints, simulated 200 steps". That proves
 
 ### MuJoCo twin — live mirror of the real arm (rosbridge WebSocket, ADR-0019)
 
-The Xavier's `so100-rosbridge` container serves a WebSocket at ws://192.168.1.185:9090 that forwards any ROS2 topic as JSON. The Windows PC mirrors the arm's /joint_states into MuJoCo:
+The Xavier's `so100-rosbridge` container serves a WebSocket at ws://<xavier-ip>:9090 that forwards any ROS2 topic as JSON. The Windows PC mirrors the arm's /joint_states into MuJoCo:
 
 1. Install the two Python libraries — **mind the versions** (MuJoCo 4.x moved the classic viewer into MuJoCo Studio; the twin uses the 3.x viewer):
    ```
