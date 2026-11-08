@@ -64,7 +64,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && mkdir -p /opt/src && cd /opt/src \
     && git clone --depth 1 --branch humble https://github.com/RobotWebTools/rosbridge_suite.git rosbridge_suite \
     && . /opt/ros/humble/install/setup.bash \
-    && colcon build --packages-select rosbridge_msgs rosbridge_library rosbridge_server rosapi --install-base /opt/rosbridge_ws \
+    && colcon build --packages-select rosbridge_test_msgs rosbridge_msgs rosbridge_library rosbridge_server rosapi --install-base /opt/rosbridge_ws \
     && rm -rf /opt/src /var/lib/apt/lists/*
 
 # ---- runtime: Xvfb + noVNC + ttyd + the Qt/OGRE runtime libs rviz2 needs
