@@ -182,7 +182,7 @@ The Xavier's web container runs rosbridge (WebSocket JSON on port 9090). The Win
 
 A MuJoCo window opens and the simulated arm follows the real one over the LAN (kinematic mirror — no physics, so nothing fights the real arm). Joint angles arrive in degrees and are converted to radians internally.
 
-The WebSocket endpoint runs as a sixth container, so100-rosbridge (jammy image, port 9090): rosbridge_suite humble needs Python >=3.9, which the focal cell images don't have. It starts with `docker compose up -d rosbridge` and its health check is `ros2 topic list` inside the container — it must see /joint_states.
+The WebSocket endpoint runs as a sixth container, so100-rosbridge (jammy image, port 9090): rosbridge_suite humble needs Python >=3.9, which the focal cell images don't have. It starts with `docker compose up -d rosbridge` and its health check is `ros2 topic list` inside the container — it must see /joint_states. It needs `ipc: host` like the rest of the stack: FastDDS shared-memory transport carries the data over /dev/shm, and without the host IPC namespace the container discovers topics but receives nothing.
 
 **One-time setup:**
 1. ROS2 Humble (runtime only): the official Windows zip (ros2-humble-*-win64) from docs.ros.org → unpack to C:\dev\ros2_humble.
