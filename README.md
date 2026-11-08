@@ -173,14 +173,49 @@ Visualization needs nothing but a browser (ADR-0015, amended): open http://<xavi
 
 **GPU check (Isaac Sim viability):** run windows/check-gpu.cmd — needs an NVIDIA RTX-class GPU and driver ≥ 535 for Isaac Sim.
 
-## ROS2 nodes — what the containers publish
+## ROS2 nodes — what each container runs and publishes
 
-| Node (container) | Topics | Notes |
+### so100-arm — the arm
+
+Three processes inside the container:
+
+1. **LeRobot joint server** (Python 3.12) — *not* a ROS node. The only process touching the arm's serial port: it reads the 6 motor positions and applies commanded angles, exposed as plain HTTP inside the container (port 8002). It exists because the LeRobot SDK needs Python ≥3.10 while the container's ROS2 libraries are built for Python 3.8 — the two halves talk over HTTP. API: `GET /read` (angles JSON), `GET /status`, `POST /write` (body `{"angles": [...]}`).
+   ```bash
+   docker exec so100-arm curl -s http://127.0.0.1:8002/read
+   ```
+2. **arm_bridge** (Python 3.8 + rclpy) — the ROS2 translator around that server.
+3. **robot_state_publisher** — computes the arm's 3D skeleton (TF) from the URDF and the joint angles. Humble reads the URDF from the `robot_description` **parameter** (passed at launch), not from the topic.
+
+Topics of this container, by node:
+
+| Topic | Node | Direction | What it carries |
+|---|---|---|---|
+| /joint_states | /arm_bridge | out, 50 Hz | the arm's real position: 6 joint names + angles in degrees |
+| /joint_targets | /arm_bridge | in | desired position: 6 angles — publishing here moves the arm |
+| /robot_description | /arm_bridge | out, latched | the arm's URDF (geometry description) |
+| /tf | /robot_state_publisher | out, ~17 Hz | the 3D transform of every moving link |
+| /tf_static | /robot_state_publisher | out | fixed transforms (offsets that never move) |
+
+**Utility:** this container alone turns the arm into a standard ROS2 device — anyone on domain 42 can see where it is (/joint_states), command it (/joint_targets) and render it in 3D (URDF + /tf), without ever knowing a serial port exists.
+
+### so100-cams — the cameras
+
+One node (/oak_cams), one depthai pipeline per device:
+
+| Topic | Direction | What it carries |
 |---|---|---|
-| arm bridge + LeRobot joint server (arm) | /joint_states (50 Hz), /joint_targets, /robot_description (latched URDF) | robot_state_publisher emits /tf from the SO-100 URDF → Foxglove shows the arm animating |
-| oak_cams (cams) | /oak/scene/color/compressed (JPEG), /oak/scene/depth (16UC1), + /oak/gripper/* when the wrist Lite is connected | camera_info appears once factory calibration exists (Phase 4 easy_handeye); frame rate is USB2-limited until the cables are moved |
+| /oak/scene/color/compressed | out | scene color as JPEG (CompressedImage) |
+| /oak/scene/depth | out | scene stereo depth, 16UC1 (mm once factory calibration exists) |
+| /oak/scene/color/camera_info, /oak/scene/depth/camera_info | out | intrinsics — appear when calibration exists (Phase 4 easy_handeye) |
+| /oak/gripper/* | out | the same set for the wrist Lite, once it is plugged in |
 
-The arm bridge is two processes: the LeRobot SDK needs py3.12 (venv) while the image's rclpy is py3.8, so the SDK serves loopback HTTP (:8002) and the bridge polls it — the same pattern as the old phosphobot bridge.
+It also broadcasts /tf_static with the camera frame offsets (placeholders until easy_handeye).
+
+### so100-web — the browser
+
+/foxglove_bridge (+ its internal /foxglove_bridge_component_manager) bridges everything to the browser over WebSocket (ws://xavier:8765).
+
+so100-perception and so100-control carry no nodes yet (grasp pipeline and joint API + rosbag2 come in later phases).
 
 ## How we work
 
