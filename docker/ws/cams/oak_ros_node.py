@@ -17,16 +17,20 @@ import os
 
 import cv2
 import depthai as dai
+import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
-from sensor_msgs.msg import CameraInfo, CompressedImage, Image
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image, Imu, PointCloud2
+from sensor_msgs import point_cloud2
+from std_msgs.msg import Header
 from tf2_ros import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 
 SCENE_MXID = os.environ.get("OAK_SCENE_MXID", "184430101111F90F00")
 GRIPPER_MXID = os.environ.get("OAK_GRIPPER_MXID", "")
 PUBLISH_HZ = 15.0
+PCL_HZ = 3.0  # point cloud throttle — 720p clouds are heavy over the LAN
 
 
 def build_pipeline() -> dai.Pipeline:
@@ -45,12 +49,21 @@ def build_pipeline() -> dai.Pipeline:
     right = p.createMonoCamera()
     right.setResolution(dai.MonoCameraProperties.SensorResolution.THE_720_P)
     right.setBoardSocket(dai.CameraBoardSocket.RIGHT)
-    stereo = p.createStereoDepth()
-    left.out.link(stereo.left)
-    right.out.link(stereo.right)
-    xdepth = p.createXLinkOut()
-    xdepth.setStreamName("depth")
-    stereo.depth.link(xdepth.input)
+    sd = p.createStereoDepth()
+    left.out.link(sd.left)
+    right.out.link(sd.right)
+    xd = p.createXLinkOut()
+    xd.setStreamName("depth")
+    sd.depth.link(xd.input)
+    xconf = p.createXLinkOut()
+    xconf.setStreamName("confidence")
+    sd.confidenceMap.link(xconf.input)
+    pcl = p.createPointCloud()
+    pcl.setInitialConfig(dai.PointCloudProperties.SensorResolution.THE_720_P)
+    sd.depth.link(pcl.inputDepth)
+    xpcl = p.createXLinkOut()
+    xpcl.setStreamName("pcl")
+    pcl.pcl.link(xpcl.input)
     return p
 
 
@@ -93,6 +106,8 @@ class OakNode(Node):
             device = dai.Device(pipe, info)
             qc = device.getOutputQueue("color", 2, False)
             qd = device.getOutputQueue("depth", 2, False)
+            qconf = device.getOutputQueue("confidence", 2, False)
+            qpcl = device.getOutputQueue("pcl", 2, False)
             calib = device.readCalibration()  # CalibrationHandler (empty if no factory calib)
             color_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RGB)) if calib else None
             right_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RIGHT)) if calib else None
@@ -103,15 +118,33 @@ class OakNode(Node):
                 f"color={'ok' if color_ok else 'MISSING'} stereo={'ok' if right_ok else 'MISSING'}"
             )
             self._publish_static_tfs(ns)
-            self.streams.append({
-                "ns": ns, "qc": qc, "qd": qd, "device": device,
+            stream = {
+                "ns": ns, "qc": qc, "qd": qd, "qconf": qconf, "qpcl": qpcl,
+                "device": device,
+                "pcl_last": 0.0,
                 "color_info": camera_info(
                     color_i[0], color_i[1], color_i[2], color_i[3],
                     1920, 1080, f"{ns}_color_optical_frame") if color_ok else None,
                 "depth_info": camera_info(
                     right_i[0], right_i[1], right_i[2], right_i[3],
                     1280, 720, f"{ns}_right_optical_frame") if right_ok else None,
-            })
+                "q_imu": None, "imu": {"acc": None, "gyr": None, "rot": None},
+            }
+            # IMU (POE only — the Lite has none). Raw accel is m/s^2, gyro rad/s.
+            try:
+                imu = device.getIMU()
+                imu.enableIMUSensor([
+                    dai.IMUSensor.ACCELEROMETER_RAW,
+                    dai.IMUSensor.GYROSCOPE_RAW,
+                    dai.IMUSensor.ROTATION_VECTOR,
+                ], 100)
+                imu.setBatchReportThreshold(1)
+                imu.setMaxBatchReports(5)
+                stream["q_imu"] = device.getOutputQueue("imu", 8, False)
+                self.get_logger().info(f"{ns}: IMU enabled (accel+gyro+rotvec @100Hz)")
+            except Exception:  # noqa: BLE001
+                self.get_logger().info(f"{ns}: no IMU on this device")
+            self.streams.append(stream)
         self.create_timer(1.0 / PUBLISH_HZ, self.tick)
 
     def _discover(self):
@@ -133,7 +166,7 @@ class OakNode(Node):
         return out
 
     def _publish_static_tfs(self, ns):
-        for child in ("color_optical_frame", "right_optical_frame"):
+        for child in ("color_optical_frame", "right_optical_frame", "imu_link"):
             t = TransformStamped()
             t.header.stamp = self.get_clock().now().to_msg()
             t.header.frame_id = f"{ns}_camera_link"
@@ -142,10 +175,13 @@ class OakNode(Node):
             self.tfb.sendTransform(t)
 
     def tick(self):
+        now = self.get_clock().now().nanoseconds / 1e9
         for s in self.streams:
             ns = s["ns"]
             color_frames = s["qc"].tryGetAll()
             depth_frames = s["qd"].tryGetAll()
+            conf_frames = s["qconf"].tryGetAll()
+            pcl_frames = s["qpcl"].tryGetAll()
             if color_frames:
                 frame = color_frames[-1].getCvFrame()
                 ok, jpg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
@@ -168,6 +204,46 @@ class OakNode(Node):
                 if s["depth_info"]:
                     s["depth_info"].header.stamp = msg.header.stamp
                     self._pub(f"/oak/{ns}/depth/camera_info", CameraInfo).publish(s["depth_info"])
+            if conf_frames:
+                conf = conf_frames[-1].getCvFrame()
+                msg = self.bridge.cv2_to_imgmsg(conf, encoding="mono8")
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.header.frame_id = f"{ns}_right_optical_frame"
+                self._pub(f"/oak/{ns}/confidence", Image).publish(msg)
+            if pcl_frames and now - s["pcl_last"] >= 1.0 / PCL_HZ:
+                pts = pcl_frames[-1].getPoints()  # Nx3 float32, millimetres
+                pts = pts[pts[:, 2] > 0]
+                if len(pts):
+                    pts_m = pts.astype(np.float32) / 1000.0
+                    header = Header()
+                    header.stamp = self.get_clock().now().to_msg()
+                    header.frame_id = f"{ns}_right_optical_frame"
+                    msg = point_cloud2.create_cloud_xyz32(header, pts_m)
+                    self._pub(f"/oak/{ns}/points", PointCloud2).publish(msg)
+                    s["pcl_last"] = now
+            if s["q_imu"] is not None:
+                for packet in s["q_imu"].tryGetAll():
+                    for report in packet.packets:
+                        if isinstance(report, dai.IMUReportAccelerometer):
+                            s["imu"]["acc"] = (report.x, report.y, report.z)
+                        elif isinstance(report, dai.IMUReportGyroscope):
+                            s["imu"]["gyr"] = (report.x, report.y, report.z)
+                        elif isinstance(report, dai.IMUReportRotationVectorWXYZ):
+                            s["imu"]["rot"] = (report.i, report.j, report.k, report.real)
+                if any(v is not None for v in s["imu"].values()):
+                    imu = Imu()
+                    imu.header.stamp = self.get_clock().now().to_msg()
+                    imu.header.frame_id = f"{ns}_imu_link"
+                    imu.orientation_covariance[0] = -1.0
+                    imu.angular_velocity_covariance[0] = -1.0
+                    imu.linear_acceleration_covariance[0] = -1.0
+                    if s["imu"]["rot"] is not None:
+                        imu.orientation.x, imu.orientation.y, imu.orientation.z, imu.orientation.w = s["imu"]["rot"]
+                    if s["imu"]["gyr"] is not None:
+                        imu.angular_velocity.x, imu.angular_velocity.y, imu.angular_velocity.z = s["imu"]["gyr"]
+                    if s["imu"]["acc"] is not None:
+                        imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z = s["imu"]["acc"]
+                    self._pub(f"/oak/{ns}/imu", Imu).publish(imu)
 
     def _pub(self, topic, cls):
         pub = getattr(self, "_pubcache", None)
