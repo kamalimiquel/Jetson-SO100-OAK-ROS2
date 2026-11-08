@@ -110,7 +110,7 @@ The Xavier runs the whole cell as **five Docker containers, one per job** (ADR-0
 | `so100-cams` | reads both OAK-D cameras | its own depthai SDK (wheel, py3.12) + the computer's USB ports, so it can open the cameras |
 | `so100-perception` | will turn images into grasp requests | plain ROS2 Humble image + a shared workspace folder |
 | `so100-control` | will run the joint API + episode recording | plain ROS2 Humble image + the same shared workspace |
-| `so100-web` | the browser tabs (3D view, graph, terminal) | foxglove_bridge (ws://:8765) + ttyd (7681) + tabs page (port 80); 3D renders client-side in Foxglove Studio |
+| `so100-web` | the browser tabs (RViz, terminal) | headless RViz2 (built from source) streamed via noVNC at :6080 + ttyd (7681) + tabs page (port 80) |
 
 ### How to create the containers
 
@@ -156,7 +156,7 @@ Notes (traps we hit — read before changing the stack):
 
 ## Windows PC setup — teleop + visualization
 
-Visualization needs nothing but a browser (ADR-0015, amended): open http://<xavier-ip>/ — tabs are 3D view and Graph (Foxglove Studio, connects itself to ws://<xavier-ip>:8765) and a Terminal (ttyd). Teleoperation with the F710 needs the native client (ADR-0017).
+Visualization needs nothing but a browser (ADR-0015): open http://<xavier-ip>/ — tabs are RViz (headless RViz2 via noVNC) and a Terminal (ttyd); the RViz stream alone is at http://<xavier-ip>:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs the native client (ADR-0017).
 
 **One-time setup:**
 1. ROS2 Humble (runtime only): the official Windows zip (ros2-humble-*-win64) from docs.ros.org → unpack to C:\dev\ros2_humble.
@@ -209,14 +209,14 @@ One node (/oak_cams), one depthai pipeline per device:
 | /oak/scene/confidence | out | stereo confidence map, 8UC1 (per-pixel depth certainty) |
 | /oak/scene/color/camera_info, /oak/scene/depth/camera_info | out | intrinsics — appear when calibration exists (Phase 4 easy_handeye) |
 | /oak/scene/imu | out | accel + gyro + rotation vector — only on units that carry an IMU (this POE unit has none) |
-| /oak/scene/points | out | point cloud (XYZ, meters) — computed host-side from depth; disabled until OAK_SCENE_FX/FY/CX/CY are set with Phase 4 intrinsics |
+| /oak/scene/points | out | point cloud (XYZ, meters) — LIVE with **placeholder** OAK-D POE intrinsics from compose env; shape is right, absolute scale is NOT (this unit has no factory calibration). Tune OAK_SCENE_DEPTH_SCALE until Phase 4 replaces the placeholders |
 | /oak/gripper/* | out | the same set for the wrist Lite, once it is plugged in |
 
 It also broadcasts /tf_static with the camera frame offsets (placeholders until easy_handeye).
 
 ### so100-web — the browser
 
-/foxglove_bridge (+ its internal /foxglove_bridge_component_manager) bridges everything to the browser over WebSocket (ws://xavier:8765).
+RViz2 (built from source in the image — no humble debs exist for focal) runs headless on Xvfb and is streamed via noVNC at :6080; a ttyd terminal at :7681; tabs page at :80. No nodes of its own — RViz2 consumes /robot_description, /tf, /joint_states and the /oak topics.
 
 so100-perception and so100-control carry no nodes yet (grasp pipeline and joint API + rosbag2 come in later phases).
 
