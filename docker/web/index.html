@@ -33,6 +33,14 @@
       const pane = document.querySelector(`iframe[data-pane="${btn.dataset.tab}"]`);
       pane.classList.add("active");
       if (!pane.src) pane.src = TAB_URLS[btn.dataset.tab];
+      // Cross-origin iframes (different port) are separate processes in
+      // Chromium — keyboard events only arrive after an explicit focus call.
+      pane.addEventListener("load", () => {
+        pane.focus();
+        try { pane.contentWindow.focus(); } catch (e) {}
+      });
+      pane.focus();
+      try { pane.contentWindow.focus(); } catch (e) {}
     });
   });
 </script>
