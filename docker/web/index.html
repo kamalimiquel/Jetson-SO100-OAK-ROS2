@@ -18,7 +18,7 @@
   <button data-tab="term">Terminal</button>
 </nav>
 <iframe class="active" data-pane="rviz"></iframe>
-<iframe data-pane="term"></iframe>
+<iframe data-pane="term" style="display:none"></iframe>
 <script>
   // __HOST__ is replaced with the Xavier's LAN address at provisioning time.
   const TAB_URLS = {
@@ -27,14 +27,19 @@
   };
   document.querySelectorAll("nav button").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      // The terminal opens as a FULL TAB: keyboard input inside cross-origin
+      // iframes is unreliable in Chromium/Wayland (focus never arrives).
+      if (tab === "term") {
+        window.open(TAB_URLS.term, "_blank");
+        return;
+      }
       document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
       document.querySelectorAll("iframe").forEach((f) => f.classList.remove("active"));
       btn.classList.add("active");
-      const pane = document.querySelector(`iframe[data-pane="${btn.dataset.tab}"]`);
+      const pane = document.querySelector(`iframe[data-pane="${tab}"]`);
       pane.classList.add("active");
-      if (!pane.src) pane.src = TAB_URLS[btn.dataset.tab];
-      // Cross-origin iframes (different port) are separate processes in
-      // Chromium — keyboard events only arrive after an explicit focus call.
+      if (!pane.src) pane.src = TAB_URLS[tab];
       pane.addEventListener("load", () => {
         pane.focus();
         try { pane.contentWindow.focus(); } catch (e) {}
