@@ -27,6 +27,24 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && colcon build --packages-up-to rviz2 --install-base /opt/rviz_ws \
     && rm -rf /opt/src /var/lib/apt/lists/*
 
+# ---- builder2: rqt_graph stack (pure python — builds in minutes)
+FROM dustynv/ros:humble-ros-base-l4t-r35.4.1 AS rqtbuilder
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+        | gpg --batch --yes --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        git python3-pip python3-pyqt5 python3-pyqtgraph python3-catkin-pkg \
+    && pip3 install colcon-common-extensions \
+    && mkdir -p /opt/src && cd /opt/src \
+    && git clone --depth 1 --branch humble https://github.com/ros-visualization/qt_gui_core.git qt_gui_core \
+    && git clone --depth 1 --branch humble https://github.com/ros-visualization/rqt.git rqt \
+    && git clone --depth 1 --branch humble https://github.com/ros-visualization/rqt_py_common.git rqt_py_common \
+    && git clone --depth 1 --branch humble https://github.com/ros-visualization/rqt_graph.git rqt_graph \
+    && touch qt_gui_core/qt_gui_cpp/COLCON_IGNORE \
+    && . /opt/ros/humble/install/setup.bash \
+    && colcon build --packages-select qt_gui qt_gui_py_common rqt_py_common rqt_gui rqt_gui_py rqt_graph --install-base /opt/rqt_ws \
+    && rm -rf /opt/src /var/lib/apt/lists/*
+
 # ---- runtime: Xvfb + noVNC + ttyd + the Qt/OGRE runtime libs rviz2 needs
 FROM dustynv/ros:humble-ros-base-l4t-r35.4.1
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
@@ -35,12 +53,14 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && apt-get install -y --no-install-recommends \
         curl xvfb x11vnc websockify novnc \
         libqt5core5a libqt5gui5 libqt5widgets5 libqt5svg5 libqt5x11extras5 \
+        python3-pyqt5 python3-pyqtgraph python3-catkin-pkg \
         libgl1 libgl1-mesa-dri libzzip-0-13 libcppunit-1.15-0 \
     && curl -L -o /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.aarch64 \
     && chmod +x /usr/local/bin/ttyd \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/rviz_ws /opt/rviz_ws
+COPY --from=rqtbuilder /opt/rqt_ws /opt/rqt_ws
 COPY docker/web/entry.sh /entry.sh
 RUN chmod +x /entry.sh
 

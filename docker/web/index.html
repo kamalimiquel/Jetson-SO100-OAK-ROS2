@@ -15,15 +15,18 @@
 <body>
 <nav>
   <button class="active" data-tab="rviz">RViz</button>
+  <button data-tab="graph">Graph</button>
   <button data-tab="term">Terminal</button>
 </nav>
 <iframe class="active" data-pane="rviz"></iframe>
+<iframe data-pane="graph"></iframe>
 <iframe data-pane="term"></iframe>
 <script>
   // __HOST__ is replaced with the Xavier's LAN address at provisioning time.
   const TAB_URLS = {
-    rviz: "http://__HOST__:6080/vnc.html?autoconnect=true",
-    term: "http://__HOST__:7681",
+    rviz:  "http://__HOST__:6080/vnc.html?autoconnect=true",
+    graph: "http://__HOST__:6081/vnc.html?autoconnect=true",
+    term:  "http://__HOST__:7681",
   };
   document.querySelectorAll("nav button").forEach((btn) => {
     btn.addEventListener("click", () => {
