@@ -19,6 +19,11 @@ import math
 import mujoco
 import roslibpy
 
+if not hasattr(mujoco, "viewer"):
+    raise SystemExit(
+        "mujoco %s has no viewer module — upgrade:  pip install -U mujoco" % mujoco.__version__
+    )
+
 WANTED = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
 
 
