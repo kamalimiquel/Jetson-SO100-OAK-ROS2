@@ -158,6 +158,19 @@ Notes (traps we hit — read before changing the stack):
 
 Visualization needs nothing but a browser (ADR-0015): open http://<xavier-ip>/ — tabs are RViz (headless RViz2 via noVNC) and a Terminal (ttyd); the RViz stream alone is at http://<xavier-ip>:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs the native client (ADR-0017).
 
+### MuJoCo (training, ADR-0016) — first milestone
+
+MuJoCo is already installed on the Windows PC. To verify the SO-100 model chain before any training, in a cmd/PowerShell:
+
+1. Install MuJoCo for Python (if not already):
+   pip install mujoco
+2. Get the SO-ARM100 model from MuJoCo Menagerie (clone or download zip):
+   git clone https://github.com/google-deepmind/mujoco_menagerie
+3. Run the repo's check script against the model:
+   python windows\mujoco_check.py C:\path\to\mujoco_menagerie\trs_so_arm100\scene.xml
+
+Expected output: "OK - model loaded, 6 joints, simulated 200 steps". That proves the sim can run the arm — the base for imitation-learning sessions later (Isaac Sim deferred for now by user decision).
+
 **One-time setup:**
 1. ROS2 Humble (runtime only): the official Windows zip (ros2-humble-*-win64) from docs.ros.org → unpack to C:\dev\ros2_humble.
 2. Visual Studio Build Tools 2022 with the "Desktop development with C++" workload.
