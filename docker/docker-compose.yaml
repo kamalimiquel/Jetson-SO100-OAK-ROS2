@@ -37,6 +37,14 @@ services:
     environment:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      # PLACEHOLDER intrinsics (OAK-D POE right mono, 720p) so the point cloud
+      # flows before Phase 4 calibration. Depth has no factory calibration on
+      # this unit, so absolute scale is wrong — tune OAK_SCENE_DEPTH_SCALE.
+      - OAK_SCENE_FX=627.664
+      - OAK_SCENE_FY=627.664
+      - OAK_SCENE_CX=638.273
+      - OAK_SCENE_CY=365.869
+      - OAK_SCENE_DEPTH_SCALE=1.0
     volumes:
       # OAK devices (VID 03e7) + the cgroup rule below (ADR-0007).
       - /dev/bus/usb:/dev/bus/usb

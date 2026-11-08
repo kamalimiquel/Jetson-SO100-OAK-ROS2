@@ -266,9 +266,10 @@ class OakNode(Node):
                     f"{ns}: point cloud disabled — set {env}_FX/FY/CX/CY (Phase 4 calibration)"
                 )
             return
+        scale = float(os.environ.get(f"{env}_DEPTH_SCALE", "1.0"))
         h, w = depth.shape
         uu, vv = np.meshgrid(np.arange(0, w, 2), np.arange(0, h, 2))
-        z = depth[::2, ::2].astype(np.float32) / 1000.0
+        z = depth[::2, ::2].astype(np.float32) * scale / 1000.0
         valid = (z > 0.1) & (z < 5.0)
         x = (uu - cx) * z / fx
         y = (vv - cy) * z / fy
