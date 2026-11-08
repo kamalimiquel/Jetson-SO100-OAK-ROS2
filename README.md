@@ -171,6 +171,17 @@ MuJoCo is already installed on the Windows PC. To verify the SO-100 model chain 
 
 Expected output: "OK - model loaded, 6 joints, simulated 200 steps". That proves the sim can run the arm — the base for imitation-learning sessions later (Isaac Sim deferred for now by user decision).
 
+### MuJoCo twin — live mirror of the real arm (rosbridge WebSocket, user choice)
+
+The Xavier's web container runs rosbridge (WebSocket JSON on port 9090). The Windows PC mirrors the real arm's /joint_states into MuJoCo:
+
+1. Install the two Python libraries:
+   pip install roslibpy mujoco
+2. Run the twin (model from Menagerie as above):
+   python windows\mujoco_twin.py C:\path\to\mujoco_menagerie\trs_so_arm100\scene.xml
+
+A MuJoCo window opens and the simulated arm follows the real one over the LAN (kinematic mirror — no physics, so nothing fights the real arm). Joint angles arrive in degrees and are converted to radians internally.
+
 **One-time setup:**
 1. ROS2 Humble (runtime only): the official Windows zip (ros2-humble-*-win64) from docs.ros.org → unpack to C:\dev\ros2_humble.
 2. Visual Studio Build Tools 2022 with the "Desktop development with C++" workload.
