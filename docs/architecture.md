@@ -8,15 +8,16 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 - **Windows 11 Home PC** — visualization (Chromium/noVNC), GraspGen server, F710 C++ client, training (MuJoCo + Isaac Sim).
 - **Devices** — SO-100 arm (serial `ttyACM0`), OAK-D scene (USB3), OAK-D Lite wrist (USB3).
 
-## Containers on the Xavier (compose, one per domain — ADR-0003)
+## Containers on the Xavier (compose, one per domain — ADR-0003, ADR-0019)
 
 | Service | Contents | Status |
 |---|---|---|
-| `arm` | LeRobot SDK bridge → joint states + joint commands (ADR-0006, ADR-0009) | planned |
-| `cams` | custom depthai node: scene + wrist pipelines (ADR-0007, ADR-0008) | planned |
+| `arm` | LeRobot SDK bridge → joint states + joint commands (ADR-0006, ADR-0009) | live — 6/6 motors, /joint_states at 50 Hz |
+| `cams` | custom depthai node: scene + wrist pipelines (ADR-0007, ADR-0008) | live — scene color/depth/confidence/IMU topics |
 | `perception` | segmentation → GraspGen request (ADR-0013) | planned |
 | `control` | joint API, episode recording rosbag2 (ADR-0012) | planned |
-| `web` | RViz2 + rqt_graph via noVNC, ttyd, tabs page (ADR-0014, ADR-0018) | planned |
+| `web` | RViz2 + rqt_graph via noVNC, ttyd, tabs page (ADR-0014, ADR-0018) | tabs page + ttyd live; RViz2 image build in progress (see README "Web image build") |
+| `rosbridge` | WebSocket bridge for the MuJoCo twin, ws://:9090 (ADR-0019) | live — verified 50 Hz to a LAN PC |
 
 ## Data flow
 
@@ -56,12 +57,15 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 | 0016 | Training: MuJoCo + Isaac Sim on Windows |
 | 0017 | F710 teleop: native Windows C++ client (rclcpp + SDL2) |
 | 0018 | Web interface: noVNC tabs + ttyd terminal |
+| 0019 | MuJoCo twin transport: rosbridge WebSocket (jammy container, `ipc: host`, kinematic mirror) |
 
 ## Open items before implementation (v0.1)
 
 - [x] Configure the SO-100 motors (`lerobot-setup-motors`: unique IDs + baudrate in servo EEPROM) and run LeRobot calibration. (ADR-0006 amended: the CH9102 adapter has no firmware to flash. IDs already 1–6; calibrated on the Xavier as id `so100_cell`.)
 - [x] Build `depthai-core` from source on the NX. (v2.33.0 installed at `~/depthai` + bindings in `~/oak/.venv`; USB3/Lite link verification pending the owner's cabling.)
-- [x] Compose file + provisioning script for the five services. (docker/docker-compose.yaml + scripts/provision-jetson.sh deployed on the Xavier; five containers verified, see README "Container stack".)
-- Print ChArUco board and run easy_handeye for both cameras.
-- Windows: ROS2 Humble binary + VS Build Tools + SDL2, firewall rules for DDS.
-- Check the Windows PC GPU for Isaac Sim viability.
+- [x] Compose file + provisioning script for the six services. (docker/docker-compose.yaml + scripts/provision-jetson.sh deployed on the Xavier; six containers, verified — see README "Container stack".)
+- [x] MuJoCo twin over rosbridge WebSocket (ADR-0019). (so100-rosbridge live at ws://:9090; Windows twin mirrors /joint_states — verified 2026-11-08.)
+- [~] RViz2 image build. (From-source build fails in rviz_default_plugins; prebuilt-workspace fast path added — see README "Web image build".)
+- [ ] Print ChArUco board and run easy_handeye for both cameras.
+- [ ] Windows: ROS2 Humble binary + VS Build Tools + SDL2, firewall rules for DDS.
+- [ ] Check the Windows PC GPU for Isaac Sim viability.

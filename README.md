@@ -23,8 +23,9 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
 
 - [x] Arm: LeRobot SDK (`~/lerobot/.venv`, py3.12) + calibration on the Xavier; all 6 motors verified over the bus (ADR-0006 amended — no adapter flash needed)
 - [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier; USB3 + wrist-Lite wiring check pending
-- [x] Compose file + provisioning script for the five services
-- [x] Web interface: foxglove_bridge (ws://:8765) + ttyd terminal + 3-tab page on the Xavier (ADR-0014/0015/0018 amended — Foxglove instead of literal RViz2, infeasible on focal)
+- [x] Compose file + provisioning script for the **six** services (five cell domains + rosbridge)
+- [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); Windows twin mirrors /joint_states at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC)
+- [~] Web interface: tabs page + ttyd live; RViz2 is built from source in the web image (no humble debs on focal) — the image build is in progress, see "Web image build (RViz2 from source)" (ADR-0014/0015/0018)
 - [ ] ChArUco board + easy_handeye for both cameras (ADR-0011)
 - [ ] Windows: ROS2 Humble + VS Build Tools + SDL2 + firewall, F710 client, GPU check (ADR-0015…0017)
 
@@ -102,7 +103,7 @@ The result is written to `~/.cache/huggingface/lerobot/calibration/robots/so_fol
 
 ## Container stack — how the Xavier runs the robot
 
-The Xavier runs the whole cell as **five Docker containers, one per job** (ADR-0003). A container is a little boxed Linux with exactly what its job needs — nothing more. All five are started by docker compose, they share the Xavier's network and memory with the host (host network + `ipc: host`), and they talk to each other in ROS2 on domain 42 with FastDDS.
+The Xavier runs the whole cell as **six Docker containers, one per job** (ADR-0003, ADR-0019). A container is a little boxed Linux with exactly what its job needs — nothing more. All six are started by docker compose, they share the Xavier's network and memory with the host (host network + `ipc: host`), and they talk to each other in ROS2 on domain 42 with FastDDS.
 
 | Container | Job | What's inside |
 |---|---|---|
@@ -110,7 +111,8 @@ The Xavier runs the whole cell as **five Docker containers, one per job** (ADR-0
 | `so100-cams` | reads both OAK-D cameras | its own depthai SDK (wheel, py3.12) + the computer's USB ports, so it can open the cameras |
 | `so100-perception` | will turn images into grasp requests | plain ROS2 Humble image + a shared workspace folder |
 | `so100-control` | will run the joint API + episode recording | plain ROS2 Humble image + the same shared workspace |
-| `so100-web` | the browser tabs (RViz, terminal) | headless RViz2 (built from source) streamed via noVNC at :6080 + ttyd (7681) + tabs page (port 80) |
+| `so100-web` | the browser tabs (RViz, graph, terminal) | headless RViz2 (built from source) streamed via noVNC at :6080 + rqt_graph (:6081) + ttyd (7681) + tabs page (port 80) |
+| `so100-rosbridge` | WebSocket bridge for the MuJoCo twin | Ubuntu 22.04 ROS2 Humble image with rosbridge_suite (binary packages) at ws://:9090 — it needs Python ≥3.9, which the focal images don't have (ADR-0019) |
 
 ### How to create the containers
 
@@ -144,15 +146,33 @@ The script is safe to run again and again. It: installs the compose v2 plugin if
    ```bash
    docker compose up -d --build web
    ```
+6. `so100-rosbridge` — builds its own image (pulls the Ubuntu 22.04 ROS2 image + installs rosbridge, a few minutes), then starts it:
+   ```bash
+   docker compose up -d --build rosbridge
+   ```
 
-**Day-to-day:** `docker ps` shows the five `so100-*` containers; the containers come back up by themselves after a Xavier reboot (`restart: unless-stopped`). Open a shell inside one with `docker exec -it so100-arm bash`. To use ROS2 commands inside a shell, source the ROS environment first: `bash -c "source /opt/ros/humble/install/setup.bash && ros2 topic list"`.
+**Day-to-day:** `docker ps` shows the six `so100-*` containers; the containers come back up by themselves after a Xavier reboot (`restart: unless-stopped`). Open a shell inside one with `docker exec -it so100-arm bash`. To use ROS2 commands inside a shell, source the ROS environment first: `bash -c "source /opt/ros/humble/install/setup.bash && ros2 topic list"`.
 
-Verified 2026-11-07: talker→listener across arm→control; arm bus 6/6 inside its container; OAK capture 1/1 inside cams; tabs page + ttyd live.
+Verified 2026-11-08: talker→listener across arm→control; arm bus 6/6 inside its container; OAK capture 1/1 inside cams; tabs page + ttyd live; rosbridge on :9090 serving /joint_states to a LAN PC at 50 Hz.
 
 Notes (traps we hit — read before changing the stack):
 - Compose v2 is required — v1 rejects `device_cgroup_rules` with a misleading error.
 - dusty images ship an expired ROS apt key: `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles.
 - Docker auto-creates missing bind-mount folders root-owned — pre-create them (the provision script does).
+
+## Web image build (RViz2 from source)
+
+Ubuntu 20.04 (focal) has no ROS2 Humble binary packages, so RViz2 must be compiled inside the web image — a multi-hour build (OGRE vendor alone ~2 h on the Xavier's 4 cores). `docker/web.Dockerfile` builds rviz2 + rqt_graph + noVNC/ttyd in stages.
+
+The build has two paths, controlled by the presence of a tarball:
+
+- **Fast path (prebuilt workspace):** drop `docker/prebuilt/rviz_ws.tar.gz` into the deploy folder (git-ignored). The builder stage extracts it instead of compiling. To produce it, build once in a persistent container and package the workspace:
+  1. `docker run --name rviz-builder <builder image with deps> ... colcon build --packages-up-to rviz2 --install-base /opt/rviz_ws`
+  2. fix any failing package **inside** that container (incremental colcon — no full rebuild)
+  3. `docker cp rviz-builder:/opt/rviz_ws - | tar -czf docker/prebuilt/rviz_ws.tar.gz ...`
+- **From-source fallback:** with no tarball present, the same Dockerfile stage runs the full colcon build — the reproducible recipe.
+
+**Known state (2026-11-08):** the full from-source run fails in `rviz_default_plugins` (the last big package before rviz2 itself); OGRE and everything up to rviz_common build clean. The web image has not been rebuilt with RViz2 yet — the currently deployed `so100-web` container still runs the pre-RViz build (tabs page + ttyd live, RViz tab pending). The rqt_graph and rosbridge additions ride the same rebuild.
 
 ## Windows PC setup — teleop + visualization
 
@@ -171,18 +191,39 @@ MuJoCo is already installed on the Windows PC. To verify the SO-100 model chain 
 
 Expected output: "OK - model loaded, 6 joints, simulated 200 steps". That proves the sim can run the arm — the base for imitation-learning sessions later (Isaac Sim deferred for now by user decision).
 
-### MuJoCo twin — live mirror of the real arm (rosbridge WebSocket, user choice)
+### MuJoCo twin — live mirror of the real arm (rosbridge WebSocket, ADR-0019)
 
-The Xavier's web container runs rosbridge (WebSocket JSON on port 9090). The Windows PC mirrors the real arm's /joint_states into MuJoCo:
+The Xavier's `so100-rosbridge` container serves a WebSocket at ws://192.168.1.185:9090 that forwards any ROS2 topic as JSON. The Windows PC mirrors the arm's /joint_states into MuJoCo:
 
-1. Install the two Python libraries:
-   pip install roslibpy mujoco
-2. Run the twin (model from Menagerie as above):
+1. Install the two Python libraries — **mind the versions** (MuJoCo 4.x moved the classic viewer into MuJoCo Studio; the twin uses the 3.x viewer):
+   ```
+   pip install roslibpy "mujoco>=3,<4"
+   ```
+2. Run the twin (any Menagerie SO-100-family model works; `trs_so_arm100` is the exact SO-100, `robotstudio_so101` the SO-101):
+   ```
    python windows\mujoco_twin.py C:\path\to\mujoco_menagerie\trs_so_arm100\scene.xml
+   ```
 
-A MuJoCo window opens and the simulated arm follows the real one over the LAN (kinematic mirror — no physics, so nothing fights the real arm). Joint angles arrive in degrees and are converted to radians internally.
+A MuJoCo window opens and the simulated arm follows the real one live. Internals, each of which cost debugging time on 2026-11-08:
 
-The WebSocket endpoint runs as a sixth container, so100-rosbridge (jammy image, port 9090): rosbridge_suite humble needs Python >=3.9, which the focal cell images don't have. It starts with `docker compose up -d rosbridge` and its health check is `ros2 topic list` inside the container — it must see /joint_states. It needs `ipc: host` like the rest of the stack: FastDDS shared-memory transport carries the data over /dev/shm, and without the host IPC namespace the container discovers topics but receives nothing.
+- **Kinematic mirror**: the script uses `viewer.launch_passive` (NOT `viewer.launch`, which blocks the main thread and steps its own physics — the model's position servos then hold the arm frozen at the initial pose). Each frame the script writes qpos from the latest message, runs `mj_forward` (kinematics only) and `sync`s the viewer. No physics, no fighting the real arm.
+- **Degrees → radians**: /joint_states publishes degrees (LeRobot convention); MuJoCo qpos is radians.
+- **Joint-name mapping**: Menagerie names its joints Rotation, Pitch, Elbow, Wrist_Pitch, Wrist_Roll, Jaw — not the LeRobot names. The script has an alias table plus a positional fallback, and prints the mapping (`qpos[0] <- shoulder_pan ...`) and the first received message so problems are visible in the console.
+- **Viewer import**: `from mujoco import viewer` must be explicit — in the 3.x line `import mujoco` alone does not expose it.
+
+The rosbridge server itself: rosbridge_suite humble needs Python >=3.9, which the focal cell images don't have — hence its own Ubuntu 22.04 container (docker/rosbridge.Dockerfile, official binary packages). It starts with `docker compose up -d rosbridge` and its health check is `ros2 topic echo /joint_states --once` inside the container. It needs `ipc: host` like the rest of the stack: FastDDS shared-memory transport carries the data over /dev/shm, and without the host IPC namespace the container discovers topics but receives nothing.
+
+Verified 2026-11-08 from a LAN PC: 398 /joint_states messages in 8 s (~50 Hz) through the WebSocket.
+
+Twin troubleshooting:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `RosTimeoutError: Failed to connect` | rosbridge down on the Xavier | `docker compose up -d rosbridge`; check `ss -tln \| grep 9090` on the Xavier |
+| window opens, arm never moves | old script or `viewer.launch` (blocking) | `git pull` — the current script uses `launch_passive` |
+| `mujoco ... has no viewer module` | MuJoCo 4.x installed | `pip install "mujoco>=3,<4"` |
+| `mapped 0/6 joints` warning | unknown model joint names | use the Menagerie SO-100/101 models; the alias table + fallback cover them |
+| a joint moves backwards | sign convention differs between model and arm | report it — a per-joint sign flip in the script fixes it |
 
 **One-time setup:**
 1. ROS2 Humble (runtime only): the official Windows zip (ros2-humble-*-win64) from docs.ros.org → unpack to C:\dev\ros2_humble.
@@ -242,9 +283,38 @@ It also broadcasts /tf_static with the camera frame offsets (placeholders until 
 
 ### so100-web — the browser
 
-RViz2 (built from source in the image — no humble debs exist for focal) runs headless on Xvfb and is streamed via noVNC at :6080; a ttyd terminal at :7681; tabs page at :80. No nodes of its own — RViz2 consumes /robot_description, /tf, /joint_states and the /oak topics.
+RViz2 (built from source in the image — no humble debs exist for focal) runs headless on Xvfb and is streamed via noVNC at :6080; rqt_graph at :6081; a ttyd terminal at :7681; tabs page at :80. No nodes of its own — RViz2 consumes /robot_description, /tf, /joint_states and the /oak topics. (Until the RViz2 image rebuild lands, the deployed container runs the pre-RViz build — see "Web image build".)
+
+### so100-rosbridge — the WebSocket bridge (MuJoCo twin, ADR-0019)
+
+| Node | What it does |
+|---|---|
+| /rosbridge_websocket | the WebSocket server at ws://:9090 — subscribes to any topic on request (e.g. /joint_states) and forwards it as JSON to LAN clients |
+| /rosapi | ROS introspection over the same socket (list topics/services) |
+
+Its topics (/client_count, /connected_clients) are bookkeeping only. Any client on the LAN (roslibpy on Windows, a browser, another robot) can now consume the whole cell over one WebSocket.
 
 so100-perception and so100-control carry no nodes yet (grasp pipeline and joint API + rosbag2 come in later phases).
+
+## Troubleshooting
+
+Traps this project has actually hit, with their fixes — in one place:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| ROS container: `apt-get update` fails with EXPKEYSIG | dusty images ship an expired ROS key | `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles |
+| compose rejects `device_cgroup_rules` with a misleading error | compose v1 | install the compose v2 plugin (user-level, no sudo — the provision script does it) |
+| bind-mount folder appears but is unwritable | docker auto-created it root-owned | pre-create `tools/` and `ws/` before `up` (the provision script does) |
+| container sees topics (`ros2 topic list`) but receives no data | missing `ipc: host` — FastDDS shared-memory transport needs the host IPC namespace | add `ipc: host` to the container (all six have it) |
+| rosbridge: `TypeError: unsupported operand type(s) for \|` | rosbridge_suite humble is Python ≥3.9 code, cell images are py3.8 | run rosbridge in its own Ubuntu 22.04 container (docker/rosbridge.Dockerfile) — never in the focal images |
+| rosbridge builds: missing package (rosbridge_test_msgs / rosapi_msgs / ament_cmake_mypy) | the suite's packages depend on each other and on ament_lint | build ALL of the cloned repos (`colcon build` without `--packages-select`) |
+| MuJoCo: `module 'mujoco' has no attribute 'viewer'` | 4.x moved the viewer to Studio; 3.x loads it lazily | `pip install "mujoco>=3,<4"` and `from mujoco import viewer` |
+| MuJoCo twin: window opens, arm frozen | `viewer.launch` blocks and steps its own physics | `viewer.launch_passive` + own qpos/mj_forward/sync loop |
+| MuJoCo twin: `mapped 0/6 joints` | Menagerie joint names differ from LeRobot | alias table + positional fallback in mujoco_twin.py |
+| OAK device: `open()` fails in bootloader state | missing udev rule | `SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"` (the provision script adds it) |
+| depthai link errors about non-PIC libs | Hunter pulled a prebuilt non-PIC dependency | force `CMAKE_POSITION_INDEPENDENT_CODE ON` in the toolchain + clean `~/.hunter` |
+| OAK ~2–3 fps at 1080p+720p | USB2 link (480 M) instead of USB3 | check `lsusb -t` for a 5000M hub; move to a blue port |
+| `pip install depthai` on the cell image | no cp38 wheels above 2.30.0.0 | pin `depthai==2.30.0.0` in the cams container |
 
 ## How we work
 
@@ -254,5 +324,5 @@ Every architecture decision is proposed with 3 alternatives (pros, cons, recomme
 
 - `docs/PROMPT.md` — engineering prompt and project phases
 - `docs/architecture.md` — architecture overview, ADR index, open items
-- `docs/adr/` — Architecture Decision Records (0001–0018)
+- `docs/adr/` — Architecture Decision Records (0001–0019)
 - `docs/architecture-flow.svg` / `.png` — data-flow diagram
