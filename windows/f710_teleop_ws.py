@@ -80,6 +80,7 @@ class Teleop:
         self.replay_i = 0
         self.last_input = 0.0
         self.joystick = None
+        self.hat_x_prev = 0
 
         self.prev = {}          # edge state per button
         print("waiting for /joint_states ...")
@@ -120,17 +121,23 @@ class Teleop:
     def held(self, b):
         return self._button(b)
 
-    def dpad(self):
-        """Return -1/0/+1 for the D-pad X axis: hat first, buttons as fallback."""
+    def dpad_step(self):
+        """-1/0/+1, EDGE-TRIGGERED: one joint hop per push of the D-pad.
+
+        The F710 exposes the D-pad as hat 0 in this SDL build. Reading it every
+        tick (50 Hz) makes a single tap jump several joints, which reads as
+        "the D-pad does nothing" — hence the previous-value guard here.
+        """
         if self.joystick is None:
             return 0
+        cur = 0
         if self.joystick.get_numhats() > 0:
-            x = self.joystick.get_hat(0)[0]
-            if x:
-                return x
-        left = self.pressed(13)
-        right = self.pressed(14)
-        return (1 if right else 0) - (1 if left else 0)
+            cur = self.joystick.get_hat(0)[0]
+        if not cur:                                  # button fallback
+            left, right = self.pressed(13), self.pressed(14)
+            cur = (1 if right else 0) - (1 if left else 0)
+        prev, self.hat_x_prev = self.hat_x_prev, cur
+        return cur if cur and not prev else 0
 
     # ---- main loop
     def run(self):
@@ -203,7 +210,7 @@ class Teleop:
                 self.targets[5] += trig * GRIP_RATE
                 moved = True
         else:
-            d = self.dpad()
+            d = self.dpad_step()
             if d:
                 self.joint_sel = (self.joint_sel + d) % DOF
                 print("joint:", JOINT_NAMES[self.joint_sel])
