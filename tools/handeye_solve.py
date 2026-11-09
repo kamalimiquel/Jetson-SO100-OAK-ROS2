@@ -181,13 +181,12 @@ def main():
                   % (len(keep), t_err, r_err, per[worst]))
             break
         print("  dropping %s (%.0f mm off)" % (used[keep[worst]]["image"], per[worst]))
-        dropped = keep.pop(worst)
-        t_err2, r_err2 = t_err, r_err
-        if t_err2 < best_sol[0]:
-            best_sol = (t_err2, r_err2, label, T, list(keep))
-        if len(keep) <= 6:
+        keep.pop(worst)
+        if t_err < best_sol[0]:
             best_sol = (t_err, r_err, label, T, list(keep))
-            print("  stopping at %d shots: %.1f mm / %.2f deg" % (len(keep), t_err, r_err))
+        if len(keep) <= 6:
+            print("  stopping at %d shots: best kept %.1f mm / %.2f deg"
+                  % (len(keep) + 1, best_sol[0], best_sol[1]))
             break
     t_err, r_err, label, T_bc, keep = best_sol
     used = [used[k] for k in keep]

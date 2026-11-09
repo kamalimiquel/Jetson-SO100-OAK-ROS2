@@ -1,5 +1,14 @@
 # Scene camera calibration — status
 
+> **2026-11-09, later:** the arm turned out to be an **SO-101**, not an SO-100 (ADR-0021).
+> With the SO-101 URDF the closed-form residual dropped from **431 mm to 29 mm** on the
+> first attempt (best kept subset 25 mm / 9°), and the bundle adjustment was re-run on
+> `datasets/2026-11-09-so101`. The intrinsics below still stand. Everything further down
+> describes the diagnosis against the wrong model and is kept as a record.
+
+Dataset for the SO-101 run: `docs/calibration/datasets/2026-11-09-so101/` (12 shots,
+`poses.json` + JPEGs, the operator's manual poses). Every step can be re-run from it.
+
 Last touched: 2026-11-09. **Not finished: the extrinsic is not usable yet.**
 
 | File | State |

@@ -83,7 +83,15 @@ def main():
 
     def corners_in(jpg):
         img = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_GRAYSCALE)
-        c, _, _, _ = det.detectBoard(img)
+        c, _, markers, mids = det.detectBoard(img)
+        # a second copy of the board in view (a PDF open on a monitor) gives the same
+        # marker ids twice and makes the ChArUco interpolation return nothing at all
+        if mids is not None and len(mids):
+            flat = [int(v) for v in np.array(mids).ravel()]
+            if len(flat) != len(set(flat)):
+                raise SystemExit("rejected: the board appears TWICE in the image (same marker "
+                                 "ids at different places) — is the PDF open on a monitor? "
+                                 "Hide it and repeat.")
         return None if c is None else c.reshape(-1, 2).astype(np.float32)
 
     url = "http://%s:%d/snapshot" % (args.host, args.view)
@@ -134,9 +142,9 @@ def main():
     to_board = tvec.ravel() / np.linalg.norm(tvec)
     tilt = float(np.degrees(np.arccos(np.clip(abs(np.dot(normal, to_board)), -1, 1))))
     span = float(np.linalg.norm(c2.max(axis=0) - c2.min(axis=0)))
-    if tilt > 45.0:
+    if tilt > 55.0:
         client.terminate()
-        print("rejected: board is seen too edge-on (%.0f deg off facing the camera, max 45) "
+        print("rejected: board is seen too edge-on (%.0f deg off facing the camera, max 55) "
               "— turn the gripper so the board faces the camera" % tilt)
         return
     if span < 180.0:

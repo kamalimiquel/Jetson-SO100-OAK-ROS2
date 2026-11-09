@@ -1,13 +1,10 @@
-# base <- scene_cam  (eye-to-hand, board mounted on the gripper)
-# solver: non-linear bundle adjustment over 13 shots, reprojection rms 64.30 px
+# base <- scene_cam  (eye-to-hand, board on the gripper)
+# solver: cv2.calibrateHandEye/base2gripper — residual 25.4 mm / 9.29 deg over 7 poses
 parent: base
 child: scene_cam_link
-translation: [-0.022628, 0.137380, 0.468859]
-rotation_row0: [0.98235430, -0.16462921, 0.08875392]
-rotation_row1: [-0.15614537, -0.98312320, -0.09532780]
-rotation_row2: [0.10294978, 0.07978716, -0.99148139]
-reprojection_rms_px: 64.298
-board_on_gripper_translation: [0.504431, 0.198639, 0.007503]
-board_on_gripper_rotation_row0: [-0.45159207, -0.89044923, 0.05625628]
-board_on_gripper_rotation_row1: [0.85280713, -0.44931639, -0.26614806]
-board_on_gripper_rotation_row2: [0.26226820, -0.07221460, 0.96228917]
+translation: [0.142991, -0.071746, -0.454554]
+rotation_row0: [-0.17883748, -0.90678788, 0.38177598]
+rotation_row1: [0.98049830, -0.13212070, 0.14548951]
+rotation_row2: [-0.08148762, 0.40034967, 0.91273211]
+residual_mm: 25.40
+residual_deg: 9.29
