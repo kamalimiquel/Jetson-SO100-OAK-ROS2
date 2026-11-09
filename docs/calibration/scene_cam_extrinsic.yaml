@@ -1,10 +1,19 @@
-# base <- scene_cam  (eye-to-hand, board on the gripper)
-# solver: cv2.calibrateHandEye/base2gripper — residual 25.4 mm / 9.29 deg over 7 poses
+# base <- scene_cam (eye-to-hand, SO-101 model)
+#
+# !! PROVISIONAL — do not use for grasping !!
+# Closed form on the SO-101 dataset: 29.1 mm / 8.7 deg (best subset 25.4 mm).
+# The bundle adjustment written below is NOT trusted: it reports 46 px of
+# reprojection error where this data should reach ~1 px, so the refinement code
+# is suspect. Use the closed-form solution from handeye_solve.py.
+
 parent: base
 child: scene_cam_link
-translation: [0.142991, -0.071746, -0.454554]
-rotation_row0: [-0.17883748, -0.90678788, 0.38177598]
-rotation_row1: [0.98049830, -0.13212070, 0.14548951]
-rotation_row2: [-0.08148762, 0.40034967, 0.91273211]
-residual_mm: 25.40
-residual_deg: 9.29
+translation: [0.543940, -0.065022, 0.499368]
+rotation_row0: [0.06566756, 0.85201886, 0.51937620]
+rotation_row1: [-0.97129079, 0.17385007, -0.16238950]
+rotation_row2: [-0.22865251, -0.49380159, 0.83897438]
+reprojection_rms_px: 46.576
+board_on_gripper_translation: [-0.031113, -0.061944, 0.043800]
+board_on_gripper_rotation_row0: [-0.43155641, 0.78571209, 0.44318797]
+board_on_gripper_rotation_row1: [0.88483348, 0.46431930, 0.03843578]
+board_on_gripper_rotation_row2: [-0.17558127, 0.40873476, -0.89560433]
