@@ -50,7 +50,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && git clone --depth 1 --branch humble https://github.com/ros-visualization/rqt_graph.git rqt_graph \
     && touch qt_gui_core/qt_gui_cpp/COLCON_IGNORE \
     && . /opt/ros/humble/install/setup.bash \
-    && colcon build --packages-select qt_gui qt_gui_py_common rqt_py_common rqt_gui rqt_gui_py rqt_graph --install-base /opt/rqt_ws \
+    && (colcon build --packages-select qt_gui qt_gui_py_common rqt_py_common rqt_gui rqt_gui_py rqt_graph --install-base /opt/rqt_ws || echo "rqt partial — Graph tab degraded") \
     && rm -rf /opt/src /var/lib/apt/lists/*
 
 # ---- runtime: Xvfb + noVNC + ttyd + the Qt/OGRE runtime libs rviz2 needs

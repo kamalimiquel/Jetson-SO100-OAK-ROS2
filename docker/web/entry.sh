@@ -19,6 +19,6 @@ source /opt/ros/humble/install/setup.bash
 [ -f /opt/rviz_ws/setup.bash ] && source /opt/rviz_ws/setup.bash
 [ -f /opt/rqt_ws/setup.bash ] && source /opt/rqt_ws/setup.bash
 DISPLAY=:0 ros2 run rviz2 rviz2 -d /srv/web/rviz.rviz &
-DISPLAY=:1 ros2 run rqt_graph rqt_graph &
+command -v rqt_graph >/dev/null 2>&1 && DISPLAY=:1 ros2 run rqt_graph rqt_graph &
 
 wait
