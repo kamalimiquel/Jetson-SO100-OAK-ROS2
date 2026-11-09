@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 620" font-family="DejaVu Sans, sans-serif">
+<rect width="1100" height="620" fill="#0b1220"/>
+<text x="40" y="44" fill="#e8edf5" font-size="24" font-weight="bold">Zero pose of the model — use THIS at calibration step 1</text>
+<text x="40" y="70" fill="#8d99ad" font-size="13">Arm lying flat on the table, pointing away from the base, every joint at 0. With this as the calibrated zero, RViz and the MuJoCo twin show exactly the real pose.</text>
+<rect x="40" y="96" width="1020" height="470" rx="10" fill="#141b2a" stroke="#263042"/>
+<line x1="80" y1="500" x2="1020" y2="500" stroke="#8d99ad" stroke-width="2"/>
+<text x="90" y="522" fill="#8d99ad" font-size="11">table</text>
+<rect x="302.68" y="445.15" width="76" height="26" rx="4" fill="#8fa0b8"/>
+<line x1="340.68" y1="455.15" x2="368.22" y2="362.9" stroke="#c9d3e0" stroke-width="16" stroke-linecap="round"/>
+<circle cx="340.68" cy="455.15" r="11" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<text x="334.68" y="433.15" fill="#d99036" font-size="11" font-weight="bold">M1 pan</text>
+<line x1="368.22" y1="362.9" x2="469.56" y2="388.1" stroke="#c9d3e0" stroke-width="16" stroke-linecap="round"/>
+<circle cx="368.22" cy="362.9" r="11" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<text x="362.22" y="340.9" fill="#d99036" font-size="11" font-weight="bold">M2 lift</text>
+<line x1="469.56" y1="388.1" x2="590.97" y2="383.42" stroke="#c9d3e0" stroke-width="16" stroke-linecap="round"/>
+<circle cx="469.56" cy="388.1" r="11" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<text x="463.56" y="366.1" fill="#d99036" font-size="11" font-weight="bold">M3 elbow</text>
+<line x1="590.97" y1="383.42" x2="645.06" y2="383.42" stroke="#c9d3e0" stroke-width="16" stroke-linecap="round"/>
+<circle cx="590.97" cy="383.42" r="11" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<text x="584.97" y="361.42" fill="#d99036" font-size="11" font-weight="bold">M4 wrist_flex</text>
+<line x1="645.06" y1="383.42" x2="667.02" y2="365.24" stroke="#c9d3e0" stroke-width="16" stroke-linecap="round"/>
+<circle cx="645.06" cy="383.42" r="11" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<text x="639.06" y="361.42" fill="#d99036" font-size="11" font-weight="bold">M5 wrist_roll</text>
+<line x1="667.02" y1="365.24" x2="709.02" y2="351.24" stroke="#d99036" stroke-width="7" stroke-linecap="round"/>
+<line x1="667.02" y1="365.24" x2="709.02" y2="379.24" stroke="#d99036" stroke-width="7" stroke-linecap="round"/>
+<text x="643.02" y="409.24" fill="#d99036" font-size="11" font-weight="bold">gripper half open</text>
+<text x="90" y="280" fill="#3fb950" font-size="13" font-weight="bold">✓ flat, straight, at table height</text>
+<text x="120" y="302" fill="#8d99ad" font-size="11.5">pan centred · lift, elbow, wrist straight · jaws half open</text>
+<text x="120" y="324" fill="#8d99ad" font-size="11.5">the gripper ends ~41 cm from the base</text>
+<rect x="40" y="586" width="1020" height="0" rx="10" fill="none"/>
+<text x="40" y="600" fill="#8d99ad" font-size="12">Side view. M1..M6 mark the joints in the order the calibration sweeps them.</text>
+</svg>
