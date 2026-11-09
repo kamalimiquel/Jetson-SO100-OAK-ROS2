@@ -20,9 +20,11 @@ Visualization Manager:
   Displays:
     - Class: rviz_default_plugins/Grid
       Name: Grid
+      Enabled: true
     - Class: rviz_default_plugins/TF
       Name: TF
-    - Class: rviz_common/RobotModel
+      Enabled: true
+    - Class: rviz_default_plugins/RobotModel
       Name: SO-100
       Description Topic:
         Value: /robot_description
