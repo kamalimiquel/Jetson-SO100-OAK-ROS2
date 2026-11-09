@@ -85,23 +85,30 @@ def main():
         raise SystemExit("not enough usable frames (%d) — check lighting/occlusion" % len(corners))
 
     # ---------------------------------------------------------- intrinsics
-    print("\nintrinsics (cv2.calibrateCameraCharuco) on %d views" % len(corners))
-    rms, K, dist, _, _ = cv2.aruco.calibrateCameraCharuco(
-        corners, ids, board, imsize, None, None)
+    # OpenCV 5 dropped cv2.aruco.calibrateCameraCharuco: match the detected
+    # corners to the board's object points and feed plain calibrateCamera.
+    print("\nintrinsics (charuco corners -> cv2.calibrateCamera) on %d views" % len(corners))
+    obj, img, per_frame = [], [], []
+    for pose, c, i in zip([q for q in poses], corners, ids):
+        o, p = board.matchImagePoints(c, i)
+        if o is not None and len(o) >= 6:
+            obj.append(o)
+            img.append(p)
+            per_frame.append((pose, o, p))
+    rms, K, dist, _, _ = cv2.calibrateCamera(obj, img, imsize, None, None)
     print("  rms %.2f px   fx=%.1f fy=%.1f cx=%.1f cy=%.1f"
           % (rms, K[0, 0], K[1, 1], K[0, 2], K[1, 2]))
 
     # ---------------------------------------------------- board pose per view
     R_t2c, t_t2c = [], []
     used = []
-    for p, c, i in zip([q for q in poses], corners, ids):
-        ok, rvec, tvec = cv2.solvePnP(board.getChessboardCorners(), c, K, dist,
-                                      flags=cv2.SOLVEPNP_ITERATIVE)
+    for pose, o, p in per_frame:
+        ok, rvec, tvec = cv2.solvePnP(o, p, K, dist, flags=cv2.SOLVEPNP_ITERATIVE)
         if not ok:
             continue
         R_t2c.append(cv2.Rodrigues(rvec)[0])
         t_t2c.append(tvec.reshape(3, 1))
-        used.append(p)
+        used.append(pose)
     print("board pose solved for %d/%d frames" % (len(used), len(poses)))
 
     R_g2b, t_g2b = [], []

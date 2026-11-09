@@ -72,8 +72,11 @@ def main() -> None:
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 angles = json.loads(self.rfile.read(length) or b"{}")["angles"]
-                if len(angles) != len(names):
-                    raise ValueError(f"expected {len(names)} angles")
+                # 6 values = drive every joint; 5 = drive the first five and leave the
+                # gripper completely alone (hand-eye sweeps and any caller that must not
+                # move joint 6). More than 6 is always an error.
+                if len(angles) not in (5, len(names)) or len(angles) > len(names):
+                    raise ValueError(f"expected 5 or {len(names)} angles, got {len(angles)}")
                 if not torque_on:
                     bus.enable_torque()
                     torque_on = True
@@ -81,6 +84,8 @@ def main() -> None:
                 for name, value in zip(names, angles):
                     i = names.index(name)
                     value = float(value)
+                    if value != value:      # NaN = caller does not want this joint driven
+                        continue            # (leaves Goal_Position where the servo holds it)
                     value = max(LO[i], min(HI[i], value))
                     bus.write("Goal_Position", name, value)
                 self._json({"status": "ok"})

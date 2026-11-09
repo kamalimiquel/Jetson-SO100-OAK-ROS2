@@ -101,6 +101,29 @@ DEFAULT_POSES = [
     (0, -30, 40, 40, 120), (0, -30, 40, -35, -120),
 ]
 
+# Adaptive mode: small offsets around the pose where the board was last seen.
+# The scene camera on this rig has a narrow field of view, so absolute poses are
+# a lottery; walking away from a known-good pose and rejecting the ones that lose
+# the board converges in a single pass without driving the arm for nothing.
+# (pan, lift, elbow, wrist_flex) — wrist_roll is left alone: it turns the board
+# edge-on to the camera and is not needed for rotation diversity.
+ADAPTIVE_STEPS = [
+    (0, 0, 0, 0),
+    (25, 0, 0, 0), (-25, 0, 0, 0),
+    (0, 18, 0, 0), (0, -18, 0, 0),
+    (0, 0, 25, 0), (0, 0, -25, 0),
+    (0, 0, 0, 25), (0, 0, 0, -25),
+    (20, 15, 0, 0), (-20, -15, 0, 0),
+    (0, 15, 20, 0), (0, -15, -20, 0),
+    (15, 0, 0, 20), (-15, 0, 0, -20),
+    (0, 0, 20, 20), (0, 0, -20, -20),
+    (25, 18, 25, 0), (-25, -18, -25, 0),
+    (0, 20, 0, 20), (0, -20, 0, -20),
+    (25, 0, 20, -15), (-25, 0, -20, 15),
+]
+
+LIMITS = [(-80, 80), (-70, 15), (-5, 75), (-45, 45), (-180, 180), (0, 100)]
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -108,10 +131,15 @@ def main():
     ap.add_argument("--port", type=int, default=9090)
     ap.add_argument("--view", type=int, default=8090, help="MJPEG view port (/snapshot)")
     ap.add_argument("--out", default=os.path.expanduser("~/calib/scene"))
-    ap.add_argument("--settle", type=float, default=2.0)
-    ap.add_argument("--gripper", type=float, default=45.0)
+    ap.add_argument("--settle", type=float, default=1.5)
+    ap.add_argument("--gripper", type=float, default=None,
+                    help="gripper target; default None = never send joint 6 at all")
+    ap.add_argument("--deg-per-s", type=float, default=25.0,
+                    help="ramp speed between poses (gentle)")
     ap.add_argument("--no-check", action="store_true",
                     help="skip the per-frame ChArUco check (needs opencv in the env)")
+    ap.add_argument("--adaptive", action="store_true",
+                    help="walk small offsets around the current pose instead of fixed poses")
     args = ap.parse_args()
 
     # live board check: a sweep that only sees the board in a few poses is useless,
@@ -141,18 +169,39 @@ def main():
         raise SystemExit("no /joint_states — is the arm container up?")
 
     records = []
-    for i, pose in enumerate(DEFAULT_POSES):
-        tgt = list(pose) + [args.gripper]
-        for _ in range(40):                       # ~1 s of 40 Hz targets
-            pub.publish({"layout": {"dim": [], "data_offset": 0}, "data": tgt})
-            time.sleep(0.025)
+    aborted = False
+    adaptive = bool(args.adaptive)
+    targets = []
+    if adaptive:
+        q0 = list(state["p"])
+        for dp, dl, de, dw in ADAPTIVE_STEPS:
+            cand = [q0[0] + dp, q0[1] + dl, q0[2] + de, q0[3] + dw, q0[4]]
+            cand = [min(max(v, lo), hi) for v, (lo, hi) in zip(cand, LIMITS[:5])]
+            targets.append((tuple(cand), None))
+        print("adaptive sweep from the current pose: %s" % [round(v, 1) for v in q0])
+    else:
+        targets = [(tuple(p), None) for p in DEFAULT_POSES]
+
+    last_good = list(state["p"])
+    for i, (pose, _) in enumerate(targets):
+        base = list(state["p"])
+        # joint 6 (gripper) is left out of the message on purpose: the joint server
+        # accepts 5 values and then never writes that servo. NaN over rosbridge is a
+        # trap — JSON has no NaN, the whole message gets dropped and nothing moves.
+        goal = list(pose[:5]) if args.gripper is None else list(pose[:5]) + [args.gripper]
+        # gentle ramp: biggest joint delta decides how long the move takes
+        delta = max(abs(g - b) for g, b in zip(goal[:5], base[:5]))
+        ramp = max(0.8, min(4.0, delta / max(1.0, args.deg_per_s)))
+        steps = max(8, int(ramp / 0.05))
+        for k in range(1, steps + 1):
+            a = k / float(steps)
+            mid = [b + (g - b) * a for b, g in zip(base[:len(goal)], goal)]
+            pub.publish({"layout": {"dim": [], "data_offset": 0}, "data": mid})
+            time.sleep(0.05)
         time.sleep(args.settle)                   # let the servos settle
         q = list(state["p"])
         url = "http://%s:%d/snapshot" % (args.host, args.view)
         jpg = urllib.request.urlopen(url, timeout=10).read()
-        name = "pose_%02d.jpg" % i
-        with open(os.path.join(args.out, name), "wb") as f:
-            f.write(jpg)
         seen = None
         if det is not None:
             import cv2
@@ -160,11 +209,35 @@ def main():
             img = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_GRAYSCALE)
             c, _, _, _ = det.detectBoard(img)
             seen = 0 if c is None else len(c)
-        records.append({"image": name, "target": tgt, "joints_deg": q,
+        good = seen is None or seen >= 12
+        if adaptive and not good:
+            # lost the board: come back to the last pose that saw it, drop the frame
+            print("pose %02d/%d  joints=%s  corners=%s  <-- board lost, reverting"
+                  % (i + 1, len(targets), [round(v, 1) for v in q], seen))
+            delta = max(abs(g - b) for g, b in zip(last_good[:5], state["p"][:5]))
+            steps = max(8, int(max(0.8, min(4.0, delta / max(1.0, args.deg_per_s))) / 0.05))
+            base = list(state["p"])
+            for k in range(1, steps + 1):
+                a = k / float(steps)
+                mid = [b + (g - b) * a for b, g in zip(base, last_good)]
+                pub.publish({"layout": {"dim": [], "data_offset": 0}, "data": mid})
+                time.sleep(0.05)
+            time.sleep(args.settle)
+            continue
+        last_good = list(q)
+        name = "pose_%02d.jpg" % len(records)
+        with open(os.path.join(args.out, name), "wb") as f:
+            f.write(jpg)
+        records.append({"image": name, "target": goal, "joints_deg": q,
                         "fk_base_jaw": fk(q), "corners": seen})
-        print("pose %02d/%d  joints=%s  %d B%s"
-              % (i + 1, len(DEFAULT_POSES), [round(v, 1) for v in q], len(jpg),
-                 "" if seen is None else "  corners=%2d/16%s" % (seen, "" if seen >= 12 else "  <-- BAD")))
+        print("pose %02d/%d  joints=%s  corners=%s%s"
+              % (i + 1, len(targets), [round(v, 1) for v in q], seen,
+                 "" if good else "  <-- BAD"))
+        if i == 0 and seen == 0:
+            print("\n!! the board is not visible in the very first pose — aborting so the arm "
+                  "does not keep moving for nothing. Fix the board/camera and re-run.")
+            aborted = True
+            break
 
     with open(os.path.join(args.out, "poses.json"), "w") as f:
         json.dump({"board": {"squares": 5, "square_m": 0.018, "marker_m": 0.0135,
