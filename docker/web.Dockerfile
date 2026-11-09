@@ -47,7 +47,6 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && mkdir -p /opt/src && cd /opt/src \
     && git clone --depth 1 --branch humble https://github.com/ros-visualization/qt_gui_core.git qt_gui_core \
     && git clone --depth 1 --branch humble https://github.com/ros-visualization/rqt.git rqt \
-    && git clone --depth 1 --branch humble https://github.com/ros-visualization/rqt_py_common.git rqt_py_common \
     && git clone --depth 1 --branch humble https://github.com/ros-visualization/rqt_graph.git rqt_graph \
     && touch qt_gui_core/qt_gui_cpp/COLCON_IGNORE \
     && . /opt/ros/humble/install/setup.bash \
