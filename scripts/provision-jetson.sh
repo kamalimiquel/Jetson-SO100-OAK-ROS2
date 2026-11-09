@@ -39,10 +39,7 @@ cd "$(dirname "$0")/../docker"
 mkdir -p ../tools ../ws
 "${COMPOSE[@]}" up -d --build
 
-echo "== tabs page: fill LAN address =="
-LAN_IP=$(hostname -I | awk '{print $1}')
-sed -i "s/__HOST__/${LAN_IP}/g" web/index.html
-"${COMPOSE[@]}" restart web
+echo "== tabs page (self-configuring: derives the host from its URL) =="
 
 echo "== status =="
 docker ps --format "table {{.Names}}\t{{.Status}}"

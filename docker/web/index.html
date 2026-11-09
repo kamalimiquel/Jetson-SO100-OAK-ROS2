@@ -24,29 +24,37 @@
 <iframe data-pane="graph"></iframe>
 <iframe data-pane="term"></iframe>
 <script>
-  // __HOST__ is replaced with the Xavier's LAN address at provisioning time.
+  // No placeholder: the page derives the host from its own URL, so it works
+  // from any address (LAN IP, hostname) without a provisioning-time rewrite.
+  const HOST = location.hostname;
   const TAB_URLS = {
-    rviz:  "http://__HOST__:6080/vnc.html?autoconnect=true",
-    graph: "http://__HOST__:6081/vnc.html?autoconnect=true",
-    term:  "http://__HOST__:7681",
+    rviz:  `http://${HOST}:6080/vnc.html?autoconnect=true&resize=scale`,
+    graph: `http://${HOST}:6081/vnc.html?autoconnect=true&resize=scale`,
+    term:  `http://${HOST}:7681`,
   };
-  document.querySelectorAll("nav button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tab = btn.dataset.tab;
-      document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
-      document.querySelectorAll("iframe").forEach((f) => f.classList.remove("active"));
-      btn.classList.add("active");
-      const pane = document.querySelector(`iframe[data-pane="${tab}"]`);
-      pane.classList.add("active");
-      if (!pane.src) pane.src = TAB_URLS[tab];
-      pane.addEventListener("load", () => {
-        pane.focus();
-        try { pane.contentWindow.focus(); } catch (e) {}
-      });
-      pane.focus();
-      try { pane.contentWindow.focus(); } catch (e) {}
-    });
+
+  function showTab(btn) {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll("iframe").forEach((f) => f.classList.remove("active"));
+    btn.classList.add("active");
+    const pane = document.querySelector(`iframe[data-pane="${tab}"]`);
+    pane.classList.add("active");
+    if (!pane.src) {
+      pane.src = TAB_URLS[tab];
+      pane.addEventListener("load", () => { pane.focus(); });
+    }
+    pane.focus();
+  }
+
+  document.querySelectorAll("nav button[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => showTab(btn));
   });
+
+  // Load the initially active tab (RViz) right away.
+  const initial = document.querySelector("nav button.active");
+  if (initial) showTab(initial);
+
   // Shutdown: POST to the web container's endpoint, which SSHes to the host
   // and runs `sudo shutdown -h now`.
   document.getElementById("shutdown").addEventListener("click", async () => {
@@ -55,7 +63,7 @@
     btn.disabled = true;
     btn.textContent = "Shutting down…";
     try {
-      const resp = await fetch("http://__HOST__:8099/shutdown", { method: "POST" });
+      const resp = await fetch(`http://${HOST}:8099/shutdown`, { method: "POST" });
       const data = await resp.json();
       alert(data.status === "ok" ? "Shutdown command sent — the Xavier is going down." : "Shutdown failed: " + data.output);
     } catch (e) {
