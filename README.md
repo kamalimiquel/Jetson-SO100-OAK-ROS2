@@ -160,33 +160,121 @@ Notes (traps we hit — read before changing the stack):
 - dusty images ship an expired ROS apt key: `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles.
 - Docker auto-creates missing bind-mount folders root-owned — pre-create them (the provision script does).
 
-## Web image build
+## Web interface — RViz · Graph · Terminal
 
-The web image is based on the dusty **desktop** image (`dustynv/ros:humble-desktop-l4t-r35.4.1`), which ships `rviz2` and `rqt_graph` prebuilt. The build is just apt (Xvfb, noVNC, ttyd) — **minutes**, with no colcon stage.
+One page at **http://<xavier-ip>/** with three tabs, served by the `so100-web` container:
 
-Historical note: the original base (`humble-ros-base`) has no rviz2 (Ubuntu 20.04 has no Humble binary packages), so rviz2 was compiled from source for weeks of build time (OGRE alone ~2 h; a prebuilt-workspace fast path was even added). Switching the base to the desktop image removed all of it. The recipe is in git history if ever needed.
-
-## RViz tab — the live 3D view
-
-http://<xavier-ip>:6080/vnc.html?autoconnect=true (embedded as the first tab). It shows:
-
-- **SO-100 RobotModel** — the arm with its real-time pose, driven by `/joint_states` → `robot_state_publisher` → `/tf`
-- **Grid + TF** — workspace grid, quiet TF overlay (names/axes off)
-- **Scene color** — the OAK-D camera image panel
-
-The model comes from **phosphobot 0.3.134's canonical SO-100 assets** (`resources/urdf/so-100`), stored in the repo:
-
-| Piece | Location | Notes |
+| Tab | URL (direct) | What you see |
 |---|---|---|
-| URDF | `docker/ws/arm/urdf/so100.urdf` (served to RViz via the latched `/robot_description`) | joint names renamed to LeRobot's (`Rotation`→`shoulder_pan`, `Pitch`→`shoulder_lift`, `Elbow`→`elbow_flex`, `Wrist_Pitch`→`wrist_flex`, `Wrist_Roll`→`wrist_roll`, `Jaw`→`gripper`) so live joint states drive it |
-| Meshes | `docker/web/so-100/meshes/*.STL` (bind-mounted at `/srv/web/so-100/meshes/`) | referenced as `file:///srv/web/so-100/meshes/...` in the URDF — RViz's URL loader needs explicit URIs, bare paths fail with "Could not resolve host" |
-| Config | `docker/web/rviz.rviz` | Fixed Frame **Base**; RobotModel subscribes **transient-local** (the description is latched); the view lives under `Views → Current` (a `Current View` key is silently ignored) |
+| **RViz** | http://<xavier-ip>:6080/vnc.html | RViz2: the SO-100 arm with its live pose, the grid, TF and the OAK-D camera image |
+| **Graph** | http://<xavier-ip>:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
+| **Terminal** | http://<xavier-ip>:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced |
 
-Traps found here, worth knowing before touching it:
+Plus a red **Shutdown Xavier NX** button on the right (it POSTs to the container's :8099 endpoint, which SSHes to the host and powers it off; the password lives only in a 600 file on the host, mounted read-only as a secret).
 
-- **A URDF that urdfdom rejects silently renders nothing.** Our first hand-rolled URDF contained empty `<joint>` stubs; RViz showed the display as **Ok with zero links** — no error, no arm. The canonical phosphobot model parses cleanly.
-- `viewer`-side fixes are irrelevant here: the render pipeline itself is fine (grid/TF/camera always drew).
-- rviz2 startup needs `libignition-math6` at **runtime** too, not just at build time, or the Orbit view controller fails to load.
+The page derives the Xavier's address from its own URL (`location.hostname`), so it works from any IP without editing anything, and it loads the first tab (RViz) on page open.
+
+### What runs inside `so100-web`
+
+```
+Xvfb :10 1280x800  ──► rviz2 ──► x11vnc :5900 ──► websockify :6080 ──┐
+Xvfb :11 1280x800  ──► rqt_graph ─► x11vnc :5901 ─► websockify :6081 ─┼──► browser tabs
+ttyd :7681 (shell in the container) ────────────────────────────────┤
+python -m http.server :80 (tabs page + URDF + meshes, from /srv/web) ┘
+shutdown_server.py :8099 (button endpoint)
+```
+
+Each piece, and why it is there:
+
+- **Xvfb** — a virtual X screen, because there is no monitor. Two of them: `:10` for RViz, `:11` for rqt.
+- **rviz2 / rqt_graph** — run headless on those displays. Both come **prebuilt in the image** (see below).
+- **x11vnc** — exports each virtual screen as a VNC server (`:5900`, `:5901`).
+- **websockify + noVNC** — turns VNC into WebSocket/HTTP so a browser can show it (`:6080`, `:6081`).
+- **ttyd** (`-W`, writable) — a terminal over WebSocket (`:7681`). Without `-W` it silently starts read-only.
+- **`http.server :80`** — the tabs page itself, plus the URDF and the STL meshes that RViz reads from `/srv/web/...` (that directory is the repository's `docker/web/`, bind-mounted read-only).
+
+### The image: the **desktop** dusty image, no compiling
+
+`docker/web.Dockerfile` is ~25 lines: it starts from `dustynv/ros:humble-desktop-l4t-r35.4.1` (which ships `rviz2` and `rqt_graph` prebuilt), installs the X/VNC layer (`xvfb x11vnc x11-utils xauth websockify novnc xdotool imagemagick`), the SSH client for the shutdown endpoint, `libignition-math6-dev` (RViz2 needs it at runtime), downloads the static `ttyd` binary, and copies `entry.sh` + `shutdown_server.py`.
+
+The base matters enormously: the dusty **desktop** flavour carries `rviz2` and `rqt_graph` already compiled, while the **ros-base** flavour does not — and Ubuntu 20.04 has no ROS2 Humble binary packages, so with ros-base RViz2 had to be compiled from source (OGRE alone ~2 h; a whole prebuilt-workspace mechanism was invented for it). Switching the base to *desktop* deleted that entire problem. If you ever wonder "why is this image only apt?" — that is why. The old recipe survives in the git history.
+
+### `entry.sh` — the container's whole startup
+
+In order: clear stale X locks → start `Xvfb :10` and `:11` → **wait until X accepts connections** (`xdpyinfo`, not a fixed `sleep`) → start the two `x11vnc` servers with explicit `-rfbport` → two `websockify` front-ends → `ttyd` → shutdown server → the tabs page → source ROS → `LIBGL_ALWAYS_SOFTWARE=1` → `rviz2 -d /srv/web/rviz.rviz` on `:10` → `rqt_graph` on `:11`, then a loop that stretches the rqt window to full screen (it opens tiny).
+
+Two rules learned the hard way:
+
+1. **Never use displays `:0`/`:1` in the container.** The Xavier's own desktop runs Xorg on `:0`; with `--network host` the X11 abstract socket namespace is shared, so a container Xvfb on `:0` dies with *"server already running"* while everything else looks healthy (and rviz2 then fails with `qt.qpa.xcb: could not connect to display`).
+2. **Clear `/tmp/.X10-lock` and `/tmp/.X11-unix/X10` on start.** A container restart can leave them behind and Xvfb refuses to start.
+
+### The arm in RViz — model, URDF and the QoS/view config
+
+The pose comes from the arm side: `arm_bridge` publishes `/joint_states` at 50 Hz → `robot_state_publisher` publishes `/tf` and the latched `/robot_description` → RViz draws the model at those transforms.
+
+The model is **phosphobot 0.3.134's canonical SO-100** (`resources/urdf/so-100`), copied into the repo:
+
+| Piece | Location | Detail |
+|---|---|---|
+| URDF | `docker/ws/arm/urdf/so100.urdf` | phosphobot's URDF with the six joint names **renamed to LeRobot's** (`Rotation`→`shoulder_pan`, `Pitch`→`shoulder_lift`, `Elbow`→`elbow_flex`, `Wrist_Pitch`→`wrist_flex`, `Wrist_Roll`→`wrist_roll`, `Jaw`→`gripper`) so live joint states drive it, and mesh references rewritten to `file:///srv/web/so-100/meshes/...` |
+| Meshes | `docker/web/so-100/meshes/*.STL` | 7 STLs from phosphobot; spaces URL-encoded (`Moving%20Jaw.STL`) |
+| Config | `docker/web/rviz.rviz` | Fixed Frame **Base** (the URDF root link), Grid + TF + RobotModel + Image (compressed) displays, explicit Orbit view |
+
+Three config details that are easy to get wrong:
+
+- **RobotModel must subscribe with `Durability Policy: Transient Local`** — `/robot_description` is latched; a default (volatile) subscription created after the publisher never receives it.
+- **The view must live under `Views → Current:`**. A `Current View:` key is silently ignored and RViz falls back to its defaults.
+- **Mesh paths must be explicit `file://` URIs.** Bare or relative paths (`assets/Base.stl`) are handed to the URL loader and fail with the misleading *"Could not resolve host: assets"*.
+
+And the one trap that cost the most time: **a URDF that `urdfdom` rejects renders nothing, silently.** Our first hand-rolled URDF contained empty `<joint>` stubs; RViz showed the display as **"Status: Ok" with zero links**, no error anywhere, and painted only the grid and TF. A ten-line test URDF with a single box proved the renderer itself was fine (single link draws, the arm did not) — that is the fastest way to tell a config problem from a model problem. The canonical phosphobot model parses cleanly.
+
+### Step by step from a clean Xavier
+
+1. **Deploy the repository** (the deploy directory is not a git clone; `rsync` it):
+   ```bash
+   rsync -az --exclude .git --exclude __pycache__ ./ maju@<xavier-ip>:~/so100/
+   ```
+2. **Build and start the stack:**
+   ```bash
+   cd ~/so100/docker
+   docker compose up -d --build          # or: SUDO_PASSWORD=... bash ../scripts/provision-jetson.sh
+   ```
+   The web image pulls `dustynv/ros:humble-desktop-l4t-r35.4.1` (several GB, once) and then builds in minutes.
+3. **Check the container and its ports:**
+   ```bash
+   docker ps --format '{{.Names}} {{.Status}}' | grep so100-web
+   ss -tln | grep -E ':80 |:6080|:6081|:7681'
+   ```
+4. **Check that both GUIs are actually running inside it:**
+   ```bash
+   docker exec so100-web bash -c 'command -v rviz2; command -v rqt_graph; ps aux | grep -E "rviz2|rqt_graph" | grep -v grep'
+   ```
+5. **Check the data reaching RViz** (joint feedback + the full transform chain):
+   ```bash
+   docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 topic hz /joint_states'
+   docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 run tf2_ros tf2_echo Base "Moving Jaw"'
+   ```
+   `Base` is the URDF root; `Moving Jaw` is the gripper link. A missing transform means the arm side, not RViz.
+6. **Open the page:** http://<xavier-ip>/ — RViz tab first, then Graph, then Terminal.
+7. **Raw captures without a browser** (useful when a tab is blank):
+   ```bash
+   docker exec so100-web bash -c 'DISPLAY=:10 import -window root /tmp/rviz.png; DISPLAY=:11 import -window root /tmp/graph.png'
+   docker cp so100-web:/tmp/rviz.png .
+   ```
+   If the raw X11 capture shows the arm but the browser does not, the problem is noVNC/the browser tab (hard-refresh, `Ctrl+Shift+R`), not RViz.
+
+### Troubleshooting the tabs
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| First tab empty, others work | the page never assigned `src` to the initially active iframe (older page version) | current `index.html` loads the first tab on open; hard-refresh |
+| All iframes dead, URLs contain the literal `__HOST__` | tabs page overwritten by a plain `rsync` after provisioning had rewritten it | current page derives the host from its own URL — no `__HOST__` any more |
+| RViz tab black, direct `:6080` fine | cached noVNC session in the tab | `Ctrl+Shift+R`, or open `:6080` directly |
+| `qt.qpa.xcb: could not connect to display :10` | Xvfb failed (stale lock, or `:0` collision) | check `docker logs so100-web` for the Xvfb fatal error; entry clears locks and uses `:10`/`:11` |
+| rqt_graph opens as a tiny window | rqt's default geometry | entry stretches it with `xdotool` once the window exists |
+| RViz: "The class rviz_default_plugins/Orbit could not be loaded" | missing `libignition-math6` at runtime | it is in the image now; if you tweak the Dockerfile, keep it |
+| RViz: RobotModel "Ok" but no arm | URDF rejected by urdfdom (e.g. empty `<joint>` stubs) | use the canonical phosphobot model; test with a one-box URDF to isolate |
+| RViz: "Could not resolve host: assets" | relative mesh paths treated as URLs | `file://` URIs in the URDF |
 
 ## Windows PC setup — teleop + visualization
 
