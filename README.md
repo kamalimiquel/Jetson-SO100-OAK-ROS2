@@ -97,6 +97,13 @@ The result is written to `~/.cache/huggingface/lerobot/calibration/robots/so_fol
 1. **Free the serial port**: the running arm container holds `/dev/ttyACM0`, so stop it first (`docker stop so100-arm`). RViz keeps running — it simply stops updating.
 2. **Run the calibration** on the Xavier host: `~/lerobot/.venv/bin/lerobot-calibrate --robot.type=so100_follower --robot.port=/dev/ttyACM0 --robot.id=so100_cell`.
 3. **Step 1 — mid-range pose** (first panel of the picture): torque is off, hold the arm so it cannot fall; put every joint near the middle of its travel (arm half-bent, gripper ~50 %) and press Enter.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/calibration-step1-side.jpg" alt="mid-range pose, side view"><br><em>Side view: base centred, upper arm ~25–30° back from vertical, elbow ~60°, wrist ~35°, gripper half open. The cables must have slack — the USB link dropped mid-calibration once when it was pulled.</em></td>
+<td width="50%"><img src="docs/calibration-step1-gripper.jpg" alt="mid-range pose, gripper close-up"><br><em>Gripper close-up: jaws half open, wrist roll at a comfortable middle so the sweep does not start against a stop.</em></td>
+</tr>
+</table>
 4. **Step 2 — sweep each joint** slowly through its full range, one joint at a time, returning to mid before the next (panels B1–B6 show the direction for each). A hard stop is a mechanical limit — stop pushing.
 5. **Bring the arm back**: `docker start so100-arm`. The joint server reads the new JSON on start; `/joint_states`, TF and the RViz model follow immediately.
 
