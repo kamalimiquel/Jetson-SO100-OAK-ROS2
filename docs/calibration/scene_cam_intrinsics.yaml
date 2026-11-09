@@ -1,15 +1,15 @@
-# scene OAK-D intrinsics — cv2.aruco.calibrateCameraCharuco, rms 0.17 px
-# 13 views, {'squares': 5, 'square_m': 0.018, 'marker_m': 0.0135, 'dict': 'DICT_4X4_50'}
+# scene OAK-D intrinsics — cv2.aruco.calibrateCameraCharuco, rms 0.24 px
+# 12 views, {'squares': 5, 'square_m': 0.018, 'marker_m': 0.0135, 'dict': 'DICT_4X4_50'}
 image_width: 1920
 image_height: 1080
 camera_name: scene_cam
 camera_matrix:
   rows: 3
   cols: 3
-  data: [1542.773630, 0.000000, 947.026090, 0.000000, 1533.407267, 561.457236, 0.000000, 0.000000, 1.000000]
+  data: [1571.500670, 0.000000, 940.752498, 0.000000, 1556.855204, 539.590400, 0.000000, 0.000000, 1.000000]
 distortion_model: plumb_bob
 distortion_coefficients:
   rows: 1
   cols: 5
-  data: [0.12819909, -0.60547084, 0.00764299, -0.00058692, 1.54427794]
-reprojection_rms_px: 0.172
+  data: [0.22057557, -1.63378981, 0.00017575, -0.00114670, 5.33602909]
+reprojection_rms_px: 0.243

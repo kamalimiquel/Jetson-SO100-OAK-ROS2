@@ -39,6 +39,11 @@ def detect(paths, board):
         imsize = gray.shape[::-1]
         c, i, _, _ = det.detectBoard(gray)
         n = 0 if c is None else len(c)
+        if c is not None and n:
+            # subpixel refinement: the board is small in the image, and a fraction of
+            # a pixel here is worth millimetres in the solved pose
+            c = cv2.cornerSubPix(gray, c.astype(np.float32), (5, 5), (-1, -1),
+                                 (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 1e-3))
         print("  %-28s %2d/16 corners" % (os.path.basename(p), n))
         if c is not None and n >= 8:
             corners.append(c)
@@ -145,6 +150,47 @@ def main():
     label, (T_bc, t_err, r_err) = best
     print("\nusing %s -> base<-cam = %s, residual %.1f mm / %.2f deg"
           % (label, np.round(T_bc[:3, 3], 4), t_err, r_err))
+
+    # ---------------------------------------------------- outlier rejection
+    # The stream frame can be up to a second older than the joint readings: if the
+    # operator moved fast and said "ok", that shot pairs a stale image with a fresh
+    # pose and poisons the solve. Drop the worst shot and re-solve until the worst
+    # shot is acceptable (or too few remain).
+    print("\noutlier rejection (a stale frame shows up as one shot disagreeing):")
+    keep = list(range(len(used)))
+    best_sol = (t_err, r_err, label, T_bc, list(keep))
+    while len(keep) > 6:
+        Rg = [R_g2b[k] if label == "gripper2base" else np.array(R_g2b[k]).T for k in keep]
+        tg = [t_g2b[k] if label == "gripper2base" else -np.array(R_g2b[k]).T.dot(np.array(t_g2b[k])) for k in keep]
+        Rc, tc = cv2.calibrateHandEye([np.array(r) for r in Rg],
+                                      [np.array(t) for t in tg],
+                                      [R_t2c[k] for k in keep], [t_t2c[k] for k in keep],
+                                      method=cv2.CALIB_HAND_EYE_PARK)
+        T = np.eye(4)
+        T[:3, :3] = Rc
+        T[:3, 3] = np.array(tc).reshape(3)
+        consts = [inv(np.array(used[k]["fk_base_jaw"], dtype=float)).dot(T).dot(
+            np.block([[R_t2c[k], t_t2c[k]], [np.zeros(3), 1.0]])) for k in keep]
+        per = [float(np.linalg.norm(c[:3, 3] - np.median([x[:3, 3] for x in consts], axis=0)) * 1000)
+               for c in consts]
+        worst = int(np.argmax(per))
+        t_err, r_err = spread(consts)
+        if per[worst] < 8.0:
+            best_sol = (t_err, r_err, label, T, list(keep))
+            print("  converged with %d shots: %.1f mm / %.2f deg (worst shot %.1f mm)"
+                  % (len(keep), t_err, r_err, per[worst]))
+            break
+        print("  dropping %s (%.0f mm off)" % (used[keep[worst]]["image"], per[worst]))
+        dropped = keep.pop(worst)
+        t_err2, r_err2 = t_err, r_err
+        if t_err2 < best_sol[0]:
+            best_sol = (t_err2, r_err2, label, T, list(keep))
+        if len(keep) <= 6:
+            best_sol = (t_err, r_err, label, T, list(keep))
+            print("  stopping at %d shots: %.1f mm / %.2f deg" % (len(keep), t_err, r_err))
+            break
+    t_err, r_err, label, T_bc, keep = best_sol
+    used = [used[k] for k in keep]
 
     # ------------------------------------------------------------------ save
     os.makedirs(args.out, exist_ok=True)

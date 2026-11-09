@@ -1,18 +1,13 @@
-# base <- scene_cam  (eye-to-hand, board on the gripper)
-#
-# !! INVALID — DO NOT USE !!
-# Round 2 (13 shots, moved by hand) gives a 281 mm / 114 deg residual. Diagnosis:
-# the board's pose in the GRIPPER frame varies by 432 mm across the shots, i.e. the
-# board was not rigidly attached to the gripper while the poses were taken. Eye-to-hand
-# needs one constant board->gripper transform; if the board can be moved by hand
-# relative to the gripper, no solution exists.
-# Keep only scene_cam_intrinsics.yaml (rms 0.17 px, 13 views).
-
+# base <- scene_cam  (eye-to-hand, board mounted on the gripper)
+# solver: non-linear bundle adjustment over 13 shots, reprojection rms 64.30 px
 parent: base
 child: scene_cam_link
-translation: [-0.147828, -0.311221, 0.041519]
-rotation_row0: [0.47758016, 0.81297920, 0.33313964]
-rotation_row1: [-0.46138744, -0.09061243, 0.88255936]
-rotation_row2: [0.74768899, -0.57519928, 0.33182370]
-residual_mm: 281.16
-residual_deg: 114.30
+translation: [-0.022628, 0.137380, 0.468859]
+rotation_row0: [0.98235430, -0.16462921, 0.08875392]
+rotation_row1: [-0.15614537, -0.98312320, -0.09532780]
+rotation_row2: [0.10294978, 0.07978716, -0.99148139]
+reprojection_rms_px: 64.298
+board_on_gripper_translation: [0.504431, 0.198639, 0.007503]
+board_on_gripper_rotation_row0: [-0.45159207, -0.89044923, 0.05625628]
+board_on_gripper_rotation_row1: [0.85280713, -0.44931639, -0.26614806]
+board_on_gripper_rotation_row2: [0.26226820, -0.07221460, 0.96228917]
