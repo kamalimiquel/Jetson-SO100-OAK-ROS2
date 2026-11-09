@@ -23,7 +23,9 @@ x11vnc -display :10 -forever -shared -nopw -quiet -rfbport 5900 &
 x11vnc -display :11 -forever -shared -nopw -quiet -rfbport 5901 &
 websockify --web /usr/share/novnc 6080 localhost:5900 &
 websockify --web /usr/share/novnc 6081 localhost:5901 &
-ttyd -W -p 7681 bash -lc 'source /opt/ros/humble/install/setup.bash && [ -f /opt/rviz_ws/setup.bash ] && source /opt/rviz_ws/setup.bash && exec bash' &
+# The ROS env is a nicety here: if the source fails the shell must still open
+# (a failing `&&` chain exits bash and ttyd shows "press to reconnect").
+ttyd -W -p 7681 bash -lc 'source /opt/ros/humble/install/setup.bash 2>/dev/null; exec bash' &
 python3 /shutdown_server.py &
 python3 -m http.server 80 --directory /srv/web &
 

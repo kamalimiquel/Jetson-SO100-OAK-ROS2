@@ -9,6 +9,7 @@ the host, never in the repo). GET /health returns 200 without doing anything.
 
 import json
 import subprocess
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SECRET = "/run/secrets/shutdown-secret"
@@ -17,6 +18,20 @@ SECRET = "/run/secrets/shutdown-secret"
 def read_password() -> str:
     with open(SECRET) as fh:
         return fh.read().strip()
+
+
+def fire_shutdown():
+    """Runs on a timer, after the HTTP response has been sent."""
+    try:
+        password = read_password()
+        cmd = (
+            f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no "
+            f"-o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 maju@127.0.0.1 "
+            f"\"echo '{password}' | sudo -S -p '' shutdown -h now\""
+        )
+        subprocess.run(cmd, shell=True, capture_output=True, timeout=20)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -48,18 +63,13 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(b'{"error": "not found"}')
             return
         try:
-            password = read_password()
-            cmd = (
-                f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no "
-                f"-o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 maju@127.0.0.1 "
-                f"\"echo '{password}' | sudo -S -p '' shutdown -h now\""
-            )
-            proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=15)
-            ok = proc.returncode == 0
-            self._cors(200 if ok else 500)
+            # Answer FIRST, then power off: the host dies mid-request otherwise
+            # and the browser reports "Failed to fetch" for a shutdown that worked.
+            threading.Timer(1.0, fire_shutdown).start()
+            self._cors(200)
             self.wfile.write(json.dumps({
-                "status": "ok" if ok else "error",
-                "output": (proc.stdout or proc.stderr).decode(errors="replace")[-300:],
+                "status": "ok",
+                "output": "shutdown scheduled (2 s)",
             }).encode())
         except Exception as exc:  # noqa: BLE001
             self._cors(500)
