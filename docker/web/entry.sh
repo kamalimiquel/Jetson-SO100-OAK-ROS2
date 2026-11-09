@@ -32,8 +32,14 @@ export LIBGL_ALWAYS_SOFTWARE=1
 DISPLAY=:10 ros2 run rviz2 rviz2 -d /srv/web/rviz.rviz &
 command -v rqt_graph >/dev/null 2>&1 && {
   DISPLAY=:11 ros2 run rqt_graph rqt_graph &
-  # rqt opens in a small window; stretch it to the display once it exists.
-  (sleep 6; DISPLAY=:11 xdotool search --class rqt_graph windowsize 100% 100% windowmove 0 0 2>/dev/null) &
+  # rqt opens in a small window; wait for it, then stretch it to the display.
+  (for i in $(seq 1 30); do
+     id=$(DISPLAY=:11 xdotool search --class rqt_graph 2>/dev/null | head -1)
+     if [ -n "$id" ]; then
+       DISPLAY=:11 xdotool windowsize "$id" 100% 100% windowmove "$id" 0 0 2>/dev/null && break
+     fi
+     sleep 2
+   done) &
 }
 
 wait
