@@ -37,9 +37,9 @@ import roslibpy
 
 DOF = 6
 TICK = 0.02                     # 50 Hz
-STEP_MAX = 20.0                 # deg per tick at full stick (joint-step)
-FEEL_MAX = 10.0                 # deg per tick at full stick (cartesian-feel)
-GRIP_RATE = 2.5                 # gripper % per tick
+STEP_MAX = 1.0                  # deg per tick at full stick (joint-step) = 50 deg/s
+FEEL_MAX = 0.5                  # deg per tick at full stick (cartesian-feel) = 25 deg/s
+GRIP_RATE = 1.0                 # gripper % per tick = 50 %/s
 DEADZONE = 0.15
 IDLE_STOP = 0.5                 # s without input -> stop publishing
 LIM_LO = [-170.0, -170.0, -170.0, -170.0, -170.0, 0.0]
@@ -52,12 +52,17 @@ def clamp(v, lo, hi):
     return lo if v < lo else (hi if v > hi else v)
 
 
-def dz(v):
-    return 0.0 if abs(v) < DEADZONE else v
+def dz(v, scale=1.0):
+    """Dead zone + quadratic curve: fine control near the centre, full speed at
+    the edge. `scale` multiplies the whole response (--scale)."""
+    if abs(v) < DEADZONE:
+        return 0.0
+    return v * abs(v) * scale
 
 
 class Teleop:
-    def __init__(self, host, port):
+    def __init__(self, host, port, scale=1.0):
+        self.scale = scale
         self.client = roslibpy.Ros(host=host, port=port)
         self.client.run()
         self.pub = roslibpy.Topic(self.client, "/joint_targets", "std_msgs/Float64MultiArray")
@@ -97,7 +102,7 @@ class Teleop:
     def axis(self, a):
         if self.joystick is None:
             return 0.0
-        return dz(self.joystick.get_axis(a))
+        return dz(self.joystick.get_axis(a), self.scale)
 
     def _button(self, b):
         """get_button with a bounds guard: pad layouts differ (hat vs buttons)."""
@@ -261,11 +266,13 @@ def main():
     ap.add_argument("--host", default="192.168.1.50", help="the Xavier's LAN address")
     ap.add_argument("--port", type=int, default=9090)
     ap.add_argument("--dump", action="store_true", help="only print pad input (mapping aid)")
+    ap.add_argument("--scale", type=float, default=1.0,
+                    help="speed factor (0.5 = half speed, 2.0 = double)")
     args = ap.parse_args()
     if args.dump:
         dump(); return 0
     print(f"rosbridge at ws://{args.host}:{args.port} (pass --host <xavier-ip> to change)")
-    Teleop(args.host, args.port).run()
+    Teleop(args.host, args.port, args.scale).run()
 
 
 if __name__ == "__main__":
