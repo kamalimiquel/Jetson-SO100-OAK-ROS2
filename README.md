@@ -102,6 +102,8 @@ The result is written to `~/.cache/huggingface/lerobot/calibration/robots/so_fol
 
 The calibration file is overwritten in place, so keep a copy if you want to compare runs.
 
+**`wrist_roll` always calibrates to `0…4095`** — that is correct, not a bug: it is a *continuous* joint (no hard stops), so its sweep covers the whole encoder turn. The only visible consequence is that its reported angle flips sign when it crosses the 0/4095 boundary; at teleop speeds that is invisible. Do not try to "fix" it by re-posing the wrist mid-range — re-homing shifts the value but the full-turn range comes back.
+
 **Current state on the Xavier:** uv 0.13.7 in `~/.local/bin`; venv `~/lerobot/.venv` (CPython 3.12.16, lerobot + torch 2.15); arm calibrated as `so100_cell` (2026-11-07).
 
 ## Camera setup — depthai on the Xavier
