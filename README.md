@@ -329,6 +329,29 @@ Twin troubleshooting:
 | `mapped 0/6 joints` warning | unknown model joint names | use the Menagerie SO-100/101 models; the alias table + fallback cover them |
 | a joint moves backwards | sign convention differs between model and arm | report it — a per-joint sign flip in the script fixes it |
 
+### F710 teleop — the pad (ADR-0017, amended by ADR-0020)
+
+**Recommended path — Python over rosbridge (no ROS2 on Windows).** Two pip packages, same WebSocket the MuJoCo twin already uses:
+
+```
+pip install pygame roslibpy
+python windows\f710_teleop_ws.py --host 192.168.1.50
+```
+
+The pad must be in **X mode** (switch on its back). It waits for `/joint_states`, seeds the targets at the arm's real pose and then starts publishing `/joint_targets` (degrees, 6 values). Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
+
+**Controls** (identical to the C++ client):
+
+- **joint-step** (default): D-pad L/R picks joint 0–5, left stick Y moves it, LB/RB close/open the gripper.
+- **cartesian-feel**: START toggles — left stick = pan/lift, right stick = elbow/wrist_roll, triggers = gripper.
+- **record / replay**: X starts/stops recording the targets, B replays them.
+
+**Safety**: `/joint_targets` is only sent after feedback arrives; per-tick deltas and the joint ranges are clamped, and the Jetson bridge enforces the real limits regardless.
+
+Transport verified 2026-11-09: a target vector published through rosbridge reached the arm bridge, and sending the current pose produced zero movement.
+
+**Alternative — the C++ client** (`windows/f710_teleop.cpp`, rclcpp + SDL2 + DDS; needs the full ROS2 Windows install):
+
 **One-time setup:**
 1. ROS2 Humble (runtime only): the official Windows zip (ros2-humble-*-win64) from docs.ros.org → unpack to C:\dev\ros2_humble.
 2. Visual Studio Build Tools 2022 with the "Desktop development with C++" workload.
@@ -433,5 +456,5 @@ Every architecture decision is proposed with 3 alternatives (pros, cons, recomme
 
 - `docs/PROMPT.md` — engineering prompt and project phases
 - `docs/architecture.md` — architecture overview, ADR index, open items
-- `docs/adr/` — Architecture Decision Records (0001–0019)
+- `docs/adr/` — Architecture Decision Records (0001–0020)
 - `docs/architecture-flow.svg` / `.png` — data-flow diagram

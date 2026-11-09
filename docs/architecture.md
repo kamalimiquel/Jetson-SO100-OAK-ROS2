@@ -58,6 +58,7 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 | 0017 | F710 teleop: native Windows C++ client (rclcpp + SDL2) |
 | 0018 | Web interface: noVNC tabs + ttyd terminal |
 | 0019 | MuJoCo twin transport: rosbridge WebSocket (jammy container, `ipc: host`, kinematic mirror) |
+| 0020 | F710 teleop over the same rosbridge (Python client); C++ client kept as alternative |
 
 ## Open items before implementation (v0.1)
 
