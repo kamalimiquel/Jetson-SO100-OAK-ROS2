@@ -6,6 +6,8 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
 
 ![Data flow](docs/architecture-flow.png)
 
+**Legend:** solid green = implemented and verified on the Xavier; amber = code written but never run; dashed grey = missing. The bottom band lists the modules still to build (the grasp loop and episode-based training).
+
 ## Status
 
 - [x] Phase 0: repo + engineering prompt (`docs/PROMPT.md`)
