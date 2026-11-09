@@ -26,7 +26,8 @@ Visualization Manager:
       Enabled: true
     - Class: rviz_default_plugins/RobotModel
       Name: SO-100
-      Description Source: Topic
+      Description Source: File
+      Description File: /srv/web/so100.urdf
       Description Topic:
         Depth: 5
         Durability Policy: Transient Local
