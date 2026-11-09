@@ -8,6 +8,10 @@
 # Xvfb on :0/:1 dies with "server already running".
 set -e
 
+# A container restart can leave stale X locks behind (the previous Xvfb was
+# killed without cleaning up) — Xvfb then refuses with "server already running".
+rm -f /tmp/.X10-lock /tmp/.X11-lock /tmp/.X11-unix/X10 /tmp/.X11-unix/X11 2>/dev/null || true
+
 Xvfb :10 -screen 0 1280x800x24 -ac &
 Xvfb :11 -screen 1 1280x800x24 -ac &
 sleep 2
