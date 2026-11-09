@@ -67,6 +67,6 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 - [x] Compose file + provisioning script for the six services. (docker/docker-compose.yaml + scripts/provision-jetson.sh deployed on the Xavier; six containers, verified — see README "Container stack".)
 - [x] MuJoCo twin over rosbridge WebSocket (ADR-0019). (so100-rosbridge live at ws://:9090; Windows twin mirrors /joint_states — verified 2026-11-08.)
 - [x] RViz2 tab live: source-built rviz2 in the web image (prebuilt workspace fast path), arm model from phosphobot's canonical SO-100 assets — see README "RViz tab".
-- [ ] Print ChArUco board and run easy_handeye for both cameras.
+- [ ] Hand-eye calibration of the **scene OAK-D only** with the printable ChArUco board (`docs/charuco-board.pdf`, done) and the OpenCV solver — ADR-0011 amended 2026-11-09: `cv2.calibrateHandEye` in the perception container instead of easy_handeye/aruco_ros, same image set also yields the camera intrinsics. Wrist OAK-D Lite deferred until it is mounted.
 - [ ] Windows: ROS2 Humble binary + VS Build Tools + SDL2, firewall rules for DDS.
 - [ ] Check the Windows PC GPU for Isaac Sim viability.

@@ -28,7 +28,7 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
 - [x] Compose file + provisioning script for the **six** services (five cell domains + rosbridge)
 - [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); Windows twin mirrors /joint_states at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC)
 - [x] Web interface: **three tabs live** — RViz2 (arm + TF + camera), rqt_graph, terminal — via noVNC + ttyd (see "RViz tab") (ADR-0014/0015/0018)
-- [ ] ChArUco board + easy_handeye for both cameras (ADR-0011)
+- [ ] Hand-eye calibration — printable ChArUco board ready (`docs/charuco-board.pdf`); scene OAK-D next, OpenCV solver (ADR-0011 amended: no easy_handeye build)
 - [ ] Windows: ROS2 Humble + VS Build Tools + SDL2 + firewall, F710 client, GPU check (ADR-0015…0017)
 
 ## Jetson setup — uv + LeRobot SDK (arm)
