@@ -1,0 +1,175 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- generated from menagerie robotstudio_so101/so101.xml by tools/mjcf_so101_to_urdf.py -->
+<robot name="so101">
+  <link name="base">
+    <visual>
+      <origin xyz="-0.006365 -9.9e-05 -0.0024" rpy="1.5707963 -0 1.5707963"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/base_motor_holder_so101_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="-0.006365 0 -0.0024" rpy="1.5707963 -0 1.5707963"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/base_so101_v2.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0.0263353 0 0.0437" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/sts3215_03a_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="-0.0309827 -0.000199 0.0474" rpy="1.5707963 -0 1.5707963"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/waveshare_mounting_plate_so101_v2.obj"/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="shoulder">
+    <visual>
+      <origin xyz="-0.030399 0.000422 -0.0417" rpy="1.5707963 1.5707963 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/sts3215_03a_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="-0.067599 -0.0001778 0.01585" rpy="1.5707963 -1.5707963 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/motor_holder_so101_base_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0.012201 2.2e-05 0.0464" rpy="-1.5707963 0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/rotation_pitch_so101_v1.obj"/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="upper_arm">
+    <visual>
+      <origin xyz="-0.11257 -0.0155 0.0187" rpy="3.1415927 0 -1.5707963"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/sts3215_03a_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="-0.065085 0.012 0.0182" rpy="3.1415927 -0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/upper_arm_so101_v1.obj"/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="lower_arm">
+    <visual>
+      <origin xyz="-0.06485 -0.032 0.0182" rpy="3.1415927 -0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/under_arm_so101_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="-0.06485 -0.032 0.018" rpy="3.1415927 0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/motor_holder_so101_wrist_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="-0.1224 0.0052 0.0187" rpy="3.1415927 -0 3.1415927"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/sts3215_03a_v1.obj"/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="wrist">
+    <visual>
+      <origin xyz="0 -0.0424 0.0306" rpy="1.5707963 1.5707963 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/sts3215_03a_no_horn_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0 -0.028 0.0181" rpy="-1.5707963 -1.5707963 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/wrist_roll_pitch_so101_v2.obj"/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="gripper">
+    <visual>
+      <origin xyz="0.0077 0.0001 -0.0234" rpy="-1.5707963 0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/sts3215_03a_v1.obj"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0 -0.000218 0.00095" rpy="3.1415927 -0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/wrist_roll_follower_so101_v1.obj"/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="camera_mount">
+    <visual>
+      <origin xyz="0 -0.000218 0.00095" rpy="3.1415927 -0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/wrist_roll_follower_so101_camera_mount.obj"/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="moving_jaw_so101_v1">
+    <visual>
+      <origin xyz="0 0 0.0189" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///srv/web/so101/meshes/moving_jaw_so101_v1.obj"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="shoulder_pan" type="revolute">
+    <parent link="base"/>
+    <child link="shoulder"/>
+    <origin xyz="0.0388353 0 0.0624" rpy="3.1415927 -0 3.1415927"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.919860" upper="1.919860" effort="35" velocity="10"/>
+  </joint>
+  <joint name="shoulder_lift" type="revolute">
+    <parent link="shoulder"/>
+    <child link="upper_arm"/>
+    <origin xyz="-0.0303992 -0.0182778 -0.0542" rpy="-1.5707963 -1.5707963 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.745329" upper="1.745329" effort="35" velocity="10"/>
+  </joint>
+  <joint name="elbow_flex" type="revolute">
+    <parent link="upper_arm"/>
+    <child link="lower_arm"/>
+    <origin xyz="-0.11257 -0.028 0" rpy="0 -0 1.5707963"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.690000" upper="1.690000" effort="35" velocity="10"/>
+  </joint>
+  <joint name="wrist_flex" type="revolute">
+    <parent link="lower_arm"/>
+    <child link="wrist"/>
+    <origin xyz="-0.1349 0.0052 0" rpy="0 0 -1.5707963"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.658063" upper="1.658063" effort="35" velocity="10"/>
+  </joint>
+  <joint name="wrist_roll" type="revolute">
+    <parent link="wrist"/>
+    <child link="gripper"/>
+    <origin xyz="5.55112e-17 -0.0611 0.0181" rpy="1.5707963 0.048679515 3.1415927"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.743847" upper="2.841206" effort="35" velocity="10"/>
+  </joint>
+  <joint name="fixed_camera_mount" type="fixed">
+    <parent link="gripper"/>
+    <child link="camera_mount"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  <joint name="gripper" type="revolute">
+    <parent link="gripper"/>
+    <child link="moving_jaw_so101_v1"/>
+    <origin xyz="0.0202 0.0188 -0.0234" rpy="1.5707963 -0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.174533" upper="1.745329" effort="35" velocity="10"/>
+  </joint>
+</robot>

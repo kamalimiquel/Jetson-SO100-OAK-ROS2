@@ -22,16 +22,16 @@ import urllib.request
 import roslibpy
 
 # ---------------------------------------------------------------- URDF chain
-# (name, parent, xyz, rpy, axis) — kept identical to docker/ws/arm/urdf/so100.urdf,
-# which is aligned frame-by-frame with the MuJoCo Menagerie model.
-CHAIN = [
-    ("shoulder_pan", (0.0, -0.0452, 0.0165), (1.5708, 0.0, 0.0), (0, 1, 0)),
-    ("shoulder_lift", (0.0, 0.1025, 0.0306), (1.5708, 0.0, 0.0), (1, 0, 0)),
-    ("elbow_flex", (0.0, 0.11257, 0.028), (-1.5708, 0.0, 0.0), (1, 0, 0)),
-    ("wrist_flex", (0.0, 0.0052, 0.1349), (-1.5708, 0.0, 0.0), (1, 0, 0)),
-    ("wrist_roll", (0.0, -0.0601, 0.0), (0.0, 1.5708, 0.0), (0, 1, 0)),
-    ("gripper", (-0.0202, -0.0244, 0.0), (0.0, 3.14159, 0.0), (0, 0, 1)),
-]
+# FK straight from the URDF the robot actually publishes — never a hand-copied
+# chain. The physical arm is an SO-101 (that is the model the MuJoCo twin loads);
+# an SO-100 chain here silently produced a different robot and ruined the
+# hand-eye solve.
+import xml.etree.ElementTree as _ET
+
+URDF_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "docker", "ws", "arm", "urdf", "so101.urdf")
+JOINT_ORDER = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex",
+               "wrist_roll", "gripper"]
 
 
 def _mm(A, B):
@@ -57,10 +57,6 @@ def _rz(a):
     return [[c, -s, 0], [s, c, 0], [0, 0, 1]]
 
 
-def _rpy(r, p, y):
-    return _mm(_rz(y), _mm(_ry(p), _rx(r)))
-
-
 def _axis_rot(axis, ang):
     x, y, z = axis
     n = math.sqrt(x * x + y * y + z * z)
@@ -72,13 +68,48 @@ def _axis_rot(axis, ang):
             [z * x * C - y * s, z * y * C + x * s, c + z * z * C]]
 
 
+def _rpy2m(r, p, y):
+    return _mm(_rz(y), _mm(_ry(p), _rx(r)))
+
+
+def _load_chain(path=None):
+    """[(parent, child, xyz, rpy, axis)] ordered from the root link outwards."""
+    root = _ET.parse(path or URDF_PATH).getroot()
+    joints = {}
+    for j in root.findall("joint"):
+        if j.get("type") != "revolute":
+            continue
+        o = j.find("origin")
+        a = j.find("axis")
+        joints[j.find("child").get("link")] = (
+            j.find("parent").get("link"),
+            [float(v) for v in o.get("xyz").split()],
+            [float(v) for v in o.get("rpy").split()],
+            [float(v) for v in a.get("xyz").split()],
+        )
+    chain, link = [], None
+    while joints:
+        nxt = next((c for c, (p, *_rest) in joints.items() if link is None or p == link), None)
+        if nxt is None:
+            break
+        chain.append(joints.pop(nxt))
+        link = nxt
+    return chain
+
+
+_CHAIN = None
+
+
 def fk(q_deg):
-    """base -> jaw, as a 4x4 (row-major nested lists)."""
+    """base -> jaw as a 4x4 nested list, q_deg in JOINT_ORDER (degrees)."""
+    global _CHAIN
+    if _CHAIN is None:
+        _CHAIN = _load_chain()
     R = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
     p = [0.0, 0.0, 0.0]
-    for (_, xyz, rpy_, axis), ang in zip(CHAIN, q_deg):
+    for (parent, xyz, rpy, axis), ang in zip(_CHAIN, q_deg):
         p = [p[i] + _mv(R, list(xyz))[i] for i in range(3)]
-        R = _mm(R, _rpy(*rpy_))
+        R = _mm(R, _rpy2m(*rpy))
         R = _mm(R, _axis_rot(axis, math.radians(ang)))
     return [[R[0][0], R[0][1], R[0][2], p[0]],
             [R[1][0], R[1][1], R[1][2], p[1]],

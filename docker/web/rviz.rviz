@@ -12,13 +12,13 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.0
+      Distance: 0.85
       Focal Point:
-        X: 0.0
-        Y: -0.15
-        Z: -0.02
-      Pitch: 0.35
-      Yaw: 3.1416
+        X: 0.15
+        Y: 0.0
+        Z: 0.13
+      Pitch: 0.30
+      Yaw: 3.6
     Saved: ~
   Displays:
     - Class: rviz_default_plugins/Grid
