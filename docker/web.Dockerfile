@@ -21,7 +21,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && pip3 install colcon-common-extensions
 COPY docker/prebuilt /opt/prebuilt
 RUN if [ -s /opt/prebuilt/rviz_ws.tar.gz ]; then \
-        echo "== using prebuilt rviz_ws ==" && tar xzf /opt/prebuilt/rviz_ws.tar.gz -C /; \
+        echo "== using prebuilt rviz_ws ==" && tar xzf /opt/prebuilt/rviz_ws.tar.gz -C /opt; \
     else \
         echo "== building rviz2 from source ==" \
         && mkdir -p /opt/src && cd /opt/src \
