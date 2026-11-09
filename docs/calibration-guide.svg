@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1420" font-family="DejaVu Sans, sans-serif">
+<defs><marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#d99036"/></marker></defs>
+<rect width="1500" height="1420" fill="#0b1220"/>
+<text x="40" y="46" fill="#e8edf5" font-size="25" font-weight="bold">SO-100 — poses for lerobot-calibrate</text>
+<text x="40" y="72" fill="#8d99ad" font-size="13">Step 1: mid-range pose (arm half-bent, gripper ~50 %). Step 2: sweep each joint slowly through its full range, one at a time, and return to mid before the next.</text>
+<rect x="40" y="96" width="520" height="560" rx="10" fill="#141b2a" stroke="#263042"/>
+<text x="60" y="126" fill="#3fb950" font-size="16" font-weight="bold">STEP 1 — mid-range pose</text>
+<text x="60" y="148" fill="#8d99ad" font-size="12">All joints near the middle of their travel · gripper half open</text>
+<rect x="125.0" y="540" width="90" height="22" rx="4" fill="#8fa0b8"/>
+<line x1="170" y1="540" x2="121.82151816156028" y2="436.6809122778219" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="121.82151816156028" y1="436.6809122778219" x2="179.03576768757713" y2="354.97049585999497" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="179.03576768757713" y1="354.97049585999497" x2="179.03576768757713" y2="312.22049585999497" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<circle cx="170" cy="540" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="121.82151816156028" cy="436.6809122778219" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="179.03576768757713" cy="354.97049585999497" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<line x1="179.03576768757713" y1="312.22049585999497" x2="162.03576768757713" y2="286.22049585999497" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<line x1="179.03576768757713" y1="312.22049585999497" x2="196.03576768757713" y2="286.22049585999497" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<text x="60" y="600" fill="#8d99ad" font-size="12">torque is OFF: hold the arm so it does not fall</text>
+<text x="60" y="620" fill="#8d99ad" font-size="12">press Enter only when the pose is stable</text>
+<text x="300" y="380" fill="#d99036" font-size="12" font-weight="bold">M1 shoulder_pan</text>
+<text x="300" y="393" fill="#8d99ad" font-size="11.5">arm vertical, base turned to its centre</text>
+<text x="300" y="412" fill="#d99036" font-size="12" font-weight="bold">M2 shoulder_lift</text>
+<text x="300" y="425" fill="#8d99ad" font-size="11.5">upper arm ~25-30 deg back from vertical</text>
+<text x="300" y="444" fill="#d99036" font-size="12" font-weight="bold">M3 elbow_flex</text>
+<text x="300" y="457" fill="#8d99ad" font-size="11.5">forearm bent ~60 deg</text>
+<text x="300" y="476" fill="#d99036" font-size="12" font-weight="bold">M4 wrist_flex</text>
+<text x="300" y="489" fill="#8d99ad" font-size="11.5">wrist ~35 deg, gripper pointing up-forward</text>
+<text x="300" y="508" fill="#d99036" font-size="12" font-weight="bold">M5 wrist_roll</text>
+<text x="300" y="521" fill="#8d99ad" font-size="11.5">any comfortable angle (it is a roll)</text>
+<text x="300" y="540" fill="#d99036" font-size="12" font-weight="bold">M6 gripper</text>
+<text x="300" y="553" fill="#8d99ad" font-size="11.5">half open</text>
+<rect x="590" y="96" width="430" height="250" rx="10" fill="#141b2a" stroke="#263042"/>
+<text x="608" y="124" fill="#e8edf5" font-size="14" font-weight="bold">B1  shoulder_pan — M1</text>
+<text x="608" y="144" fill="#8d99ad" font-size="11.5">rotate the whole arm left / right</text>
+<rect x="760.0" y="304" width="90" height="22" rx="4" fill="#8fa0b8"/>
+<line x1="805.0" y1="304" x2="805.0" y2="241.6" stroke="#d99036" stroke-width="14" stroke-linecap="round"/>
+<line x1="805.0" y1="241.6" x2="805.0" y2="187.0" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="805.0" y1="187.0" x2="805.0" y2="163.6" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<circle cx="805.0" cy="304" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="805.0" cy="241.6" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="805.0" cy="187.0" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<line x1="805.0" y1="163.6" x2="788.0" y2="137.6" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<line x1="805.0" y1="163.6" x2="822.0" y2="137.6" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<path d="M 664.0 252.7 A 150 150 0 0 1 946.0 252.7" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<path d="M 917.8 263.0 A 120 120 0 0 0 692.2 263.0" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<rect x="1040" y="96" width="430" height="250" rx="10" fill="#141b2a" stroke="#263042"/>
+<text x="1058" y="124" fill="#e8edf5" font-size="14" font-weight="bold">B2  shoulder_lift — M2</text>
+<text x="1058" y="144" fill="#8d99ad" font-size="11.5">raise / lower the arm</text>
+<rect x="1190.0" y="304" width="90" height="22" rx="4" fill="#8fa0b8"/>
+<line x1="1235.0" y1="304" x2="1224.1643537135835" y2="242.5479962120382" stroke="#d99036" stroke-width="14" stroke-linecap="round"/>
+<line x1="1224.1643537135835" y1="242.5479962120382" x2="1214.683163212969" y2="188.77749289757165" stroke="#d99036" stroke-width="14" stroke-linecap="round"/>
+<line x1="1214.683163212969" y1="188.77749289757165" x2="1210.6197958555629" y2="165.732991477086" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<circle cx="1235.0" cy="304" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="1224.1643537135835" cy="242.5479962120382" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="1214.683163212969" cy="188.77749289757165" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<line x1="1210.6197958555629" y1="165.732991477086" x2="1189.363211435015" y2="143.0800089191064" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<line x1="1210.6197958555629" y1="165.732991477086" x2="1222.8466750374303" y2="137.17597087843077" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<path d="M 1188.8 177.1 A 135 135 0 0 1 1302.5 187.1" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<path d="M 1281.2 177.1 A 135 135 0 0 0 1167.5 187.1" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<rect x="590" y="362" width="430" height="250" rx="10" fill="#141b2a" stroke="#263042"/>
+<text x="608" y="390" fill="#e8edf5" font-size="14" font-weight="bold">B3  elbow_flex — M3</text>
+<text x="608" y="410" fill="#8d99ad" font-size="11.5">fold / unfold the forearm</text>
+<rect x="720.0" y="560" width="90" height="22" rx="4" fill="#8fa0b8"/>
+<line x1="765.0" y1="560" x2="743.6579430564783" y2="501.3631804629593" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="743.6579430564783" y1="501.3631804629593" x2="762.3322428820599" y2="450.0559633680487" stroke="#d99036" stroke-width="14" stroke-linecap="round"/>
+<line x1="762.3322428820599" y1="450.0559633680487" x2="770.3355142358805" y2="428.06715604165845" stroke="#d99036" stroke-width="14" stroke-linecap="round"/>
+<circle cx="765.0" cy="560" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="743.6579430564783" cy="501.3631804629593" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="762.3322428820599" cy="450.0559633680487" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<line x1="770.3355142358805" y1="428.06715604165845" x2="763.2532634089874" y2="397.8208054646885" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<line x1="770.3355142358805" y1="428.06715604165845" x2="795.2028125157084" y2="409.44949033776123" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<path d="M 919.6 480.8 A 90 90 0 0 1 850.6 538.6" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<path d="M 850.6 538.6 A 90 90 0 0 0 919.6 480.8" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<rect x="1040" y="362" width="430" height="250" rx="10" fill="#141b2a" stroke="#263042"/>
+<text x="1058" y="390" fill="#e8edf5" font-size="14" font-weight="bold">B4  wrist_flex — M4</text>
+<text x="1058" y="410" fill="#8d99ad" font-size="11.5">tilt the wrist up / down</text>
+<rect x="1165.0" y="560" width="90" height="22" rx="4" fill="#8fa0b8"/>
+<line x1="1210.0" y1="560" x2="1188.6579430564782" y2="501.3631804629593" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="1188.6579430564782" y1="501.3631804629593" x2="1211.7329001475205" y2="451.8787752907582" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="1211.7329001475205" y1="451.8787752907582" x2="1209.6934557672253" y2="428.56781935541136" stroke="#d99036" stroke-width="14" stroke-linecap="round"/>
+<circle cx="1210.0" cy="560" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="1188.6579430564782" cy="501.3631804629593" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="1211.7329001475205" cy="451.8787752907582" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<line x1="1209.6934557672253" y1="428.56781935541136" x2="1190.4920965882266" y2="404.1484048317362" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<line x1="1209.6934557672253" y1="428.56781935541136" x2="1224.362716323346" y2="401.1851095783158" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<path d="M 1254.9 418.6 A 48 48 0 0 1 1287.6 388.6" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<path d="M 1287.6 388.6 A 48 48 0 0 0 1254.9 418.6" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<rect x="590" y="628" width="430" height="250" rx="10" fill="#141b2a" stroke="#263042"/>
+<text x="608" y="656" fill="#e8edf5" font-size="14" font-weight="bold">B5  wrist_roll — M5</text>
+<text x="608" y="676" fill="#8d99ad" font-size="11.5">twist the wrist around its axis</text>
+<rect x="720.0" y="826" width="90" height="22" rx="4" fill="#8fa0b8"/>
+<line x1="765.0" y1="826" x2="743.6579430564783" y2="767.3631804629593" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="743.6579430564783" y1="767.3631804629593" x2="770.9579430564783" y2="720.078193416329" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="770.9579430564783" y1="720.078193416329" x2="775.0213104138844" y2="697.0336919958434" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<circle cx="765.0" cy="826" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="743.6579430564783" cy="767.3631804629593" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="770.9579430564783" cy="720.078193416329" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<line x1="775.0213104138844" y1="697.0336919958434" x2="762.7944312320171" y2="668.476671397188" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<line x1="775.0213104138844" y1="697.0336919958434" x2="796.2778948344321" y2="674.3807094378637" stroke="#c9d3e0" stroke-width="7" stroke-linecap="round"/>
+<path d="M 907.0 706.0 A 42 42 0 1 1 897.2 679.0" fill="none" stroke="#d99036" stroke-width="4" marker-end="url(#arw)"/>
+<rect x="1040" y="628" width="430" height="250" rx="10" fill="#141b2a" stroke="#263042"/>
+<text x="1058" y="656" fill="#e8edf5" font-size="14" font-weight="bold">B6  gripper — M6</text>
+<text x="1058" y="676" fill="#8d99ad" font-size="11.5">open / close fully</text>
+<rect x="1210.0" y="836" width="90" height="22" rx="4" fill="#8fa0b8"/>
+<line x1="1255.0" y1="836" x2="1238.8496915856026" y2="775.7262284395622" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="1238.8496915856026" y1="775.7262284395622" x2="1273.9458950744877" y2="733.900201845266" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<line x1="1273.9458950744877" y1="733.900201845266" x2="1285.6458950744877" y2="713.6352073967101" stroke="#c9d3e0" stroke-width="14" stroke-linecap="round"/>
+<circle cx="1255.0" cy="836" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="1238.8496915856026" cy="775.7262284395622" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<circle cx="1273.9458950744877" cy="733.900201845266" r="11.200000000000001" fill="#0b1220" stroke="#8fa0b8" stroke-width="4"/>
+<line x1="1285.6458950744877" y1="713.6352073967101" x2="1285.7421165580995" y2="683.6685468983147" stroke="#d99036" stroke-width="7" stroke-linecap="round"/>
+<line x1="1285.6458950744877" y1="713.6352073967101" x2="1311.549673590876" y2="698.5685468983148" stroke="#d99036" stroke-width="7" stroke-linecap="round"/>
+<text x="1313.0" y="686" fill="#d99036" font-size="11">open / close</text>
+<text x="40" y="950" fill="#8d99ad" font-size="12">Sweep = move the joint slowly from one end to the other (a few seconds) and back. If a joint hits a hard stop, stop pushing: that is its mechanical limit.</text>
+<rect x="40" y="1000" width="1420" height="300" rx="10" fill="#10151d" stroke="#263042"/>
+<text x="60" y="1030" fill="#e8edf5" font-size="15" font-weight="bold">How to run it on the Xavier</text>
+<text x="60" y="1058" fill="#8d99ad" font-family="DejaVu Sans Mono, monospace" font-size="12.5"># 1. the arm container must release the serial port first</text>
+<text x="60" y="1084" fill="#3fb950" font-family="DejaVu Sans Mono, monospace" font-size="12.5">docker stop so100-arm</text>
+<text x="60" y="1110" fill="#8d99ad" font-family="DejaVu Sans Mono, monospace" font-size="12.5"># 2. calibrate (two interactive steps: mid-range, then the sweep)</text>
+<text x="60" y="1136" fill="#3fb950" font-family="DejaVu Sans Mono, monospace" font-size="12.5">~/lerobot/.venv/bin/lerobot-calibrate --robot.type=so100_follower \</text>
+<text x="60" y="1162" fill="#3fb950" font-family="DejaVu Sans Mono, monospace" font-size="12.5">    --robot.port=/dev/ttyACM0 --robot.id=so100_cell</text>
+<text x="60" y="1188" fill="#8d99ad" font-family="DejaVu Sans Mono, monospace" font-size="12.5"># 3. bring the arm back</text>
+<text x="60" y="1214" fill="#3fb950" font-family="DejaVu Sans Mono, monospace" font-size="12.5">docker start so100-arm</text>
+<text x="60" y="1254" fill="#8d99ad" font-size="11.5">The result overwrites ~/.cache/huggingface/lerobot/calibration/robots/so_follower/so100_cell.json — the arm container reads it on start.</text>
+</svg>

@@ -90,6 +90,18 @@ Two interactive steps with torque off — the operator must hold the arm:
 
 The result is written to `~/.cache/huggingface/lerobot/calibration/robots/so_follower/so100_cell.json`. Without it, normalized reads raise `has no calibration registered` (raw reads with `normalize=False` still work).
 
+### Re-calibrating the arm (with pose pictures)
+
+![calibration guide](docs/calibration-guide.png)
+
+1. **Free the serial port**: the running arm container holds `/dev/ttyACM0`, so stop it first (`docker stop so100-arm`). RViz keeps running — it simply stops updating.
+2. **Run the calibration** on the Xavier host: `~/lerobot/.venv/bin/lerobot-calibrate --robot.type=so100_follower --robot.port=/dev/ttyACM0 --robot.id=so100_cell`.
+3. **Step 1 — mid-range pose** (first panel of the picture): torque is off, hold the arm so it cannot fall; put every joint near the middle of its travel (arm half-bent, gripper ~50 %) and press Enter.
+4. **Step 2 — sweep each joint** slowly through its full range, one joint at a time, returning to mid before the next (panels B1–B6 show the direction for each). A hard stop is a mechanical limit — stop pushing.
+5. **Bring the arm back**: `docker start so100-arm`. The joint server reads the new JSON on start; `/joint_states`, TF and the RViz model follow immediately.
+
+The calibration file is overwritten in place, so keep a copy if you want to compare runs.
+
 **Current state on the Xavier:** uv 0.13.7 in `~/.local/bin`; venv `~/lerobot/.venv` (CPython 3.12.16, lerobot + torch 2.15); arm calibrated as `so100_cell` (2026-11-07).
 
 ## Camera setup — depthai on the Xavier
