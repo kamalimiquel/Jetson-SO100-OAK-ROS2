@@ -30,6 +30,10 @@ python3 -m http.server 80 --directory /srv/web &
 source /opt/ros/humble/install/setup.bash
 export LIBGL_ALWAYS_SOFTWARE=1
 DISPLAY=:10 ros2 run rviz2 rviz2 -d /srv/web/rviz.rviz &
-command -v rqt_graph >/dev/null 2>&1 && DISPLAY=:11 ros2 run rqt_graph rqt_graph &
+command -v rqt_graph >/dev/null 2>&1 && {
+  DISPLAY=:11 ros2 run rqt_graph rqt_graph &
+  # rqt opens in a small window; stretch it to the display once it exists.
+  (sleep 6; DISPLAY=:11 xdotool search --class rqt_graph windowsize 100% 100% windowmove 0 0 2>/dev/null) &
+}
 
 wait

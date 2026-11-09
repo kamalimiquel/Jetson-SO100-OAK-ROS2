@@ -9,7 +9,7 @@ FROM dustynv/ros:humble-desktop-l4t-r35.4.1
 RUN rm -f /etc/apt/sources.list.d/*ros* 2>/dev/null; \
     apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl xvfb x11vnc x11-utils xauth websockify novnc \
+        curl xvfb x11vnc x11-utils xauth websockify novnc xdotool \
         sshpass openssh-client \
         python3-pyqt5 python3-pyqtgraph libignition-math6-dev \
         libgl1 libgl1-mesa-dri libzzip-0-13 libcppunit-1.15-0 \
