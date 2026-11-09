@@ -153,7 +153,7 @@ The script is safe to run again and again. It: installs the compose v2 plugin if
 
 **Day-to-day:** `docker ps` shows the six `so100-*` containers; the containers come back up by themselves after a Xavier reboot (`restart: unless-stopped`). Open a shell inside one with `docker exec -it so100-arm bash`. To use ROS2 commands inside a shell, source the ROS environment first: `bash -c "source /opt/ros/humble/install/setup.bash && ros2 topic list"`.
 
-Verified 2026-11-08: talker→listener across arm→control; arm bus 6/6 inside its container; OAK capture 1/1 inside cams; tabs page + ttyd live; rosbridge on :9090 serving /joint_states to a LAN PC at 50 Hz.
+Verified 2026-11-09: six containers up — `so100-arm` (bus 6/6, `/joint_states` at 50 Hz), `so100-cams` (OAK capture 1/1), `so100-control`, `so100-perception`, `so100-web` (tabs page + RViz2 arm + rqt_graph + ttyd live), `so100-rosbridge` (:9090 serving `/joint_states` to a LAN PC at 50 Hz).
 
 Notes (traps we hit — read before changing the stack):
 - Compose v2 is required — v1 rejects `device_cgroup_rules` with a misleading error.
