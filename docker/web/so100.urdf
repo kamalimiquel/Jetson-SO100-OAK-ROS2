@@ -19,19 +19,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Base.stl"/>
+        <mesh filename="file:///srv/web/assets/Base.obj"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Base_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Base_Motor.obj"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Base.stl"/>
+        <mesh filename="file:///srv/web/assets/Base.obj"/>
       </geometry>
     </collision>
   </link>
@@ -45,19 +45,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Rotation_Pitch.stl"/>
+        <mesh filename="file:///srv/web/assets/Rotation_Pitch.obj"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Rotation_Pitch_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Rotation_Pitch_Motor.obj"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Rotation_Pitch.stl"/>
+        <mesh filename="file:///srv/web/assets/Rotation_Pitch.obj"/>
       </geometry>
     </collision>
   </link>
@@ -71,19 +71,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Upper_Arm.stl"/>
+        <mesh filename="file:///srv/web/assets/Upper_Arm.obj"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Upper_Arm_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Upper_Arm_Motor.obj"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Upper_Arm.stl"/>
+        <mesh filename="file:///srv/web/assets/Upper_Arm.obj"/>
       </geometry>
     </collision>
   </link>
@@ -97,19 +97,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Lower_Arm.stl"/>
+        <mesh filename="file:///srv/web/assets/Lower_Arm.obj"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Lower_Arm_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Lower_Arm_Motor.obj"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Lower_Arm.stl"/>
+        <mesh filename="file:///srv/web/assets/Lower_Arm.obj"/>
       </geometry>
     </collision>
   </link>
@@ -123,19 +123,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll.stl"/>
+        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll.obj"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll_Motor.obj"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll.stl"/>
+        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll.obj"/>
       </geometry>
     </collision>
   </link>
@@ -149,13 +149,13 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Fixed_Jaw.stl"/>
+        <mesh filename="file:///srv/web/assets/Fixed_Jaw.obj"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Fixed_Jaw_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Fixed_Jaw_Motor.obj"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
@@ -170,7 +170,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="file:///srv/web/assets/Moving_Jaw.stl"/>
+        <mesh filename="file:///srv/web/assets/Moving_Jaw.obj"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>

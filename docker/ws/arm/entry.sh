@@ -14,8 +14,11 @@ sleep 2
 python3 /opt/ws/arm/arm_bridge.py &
 
 # robot_state_publisher reads the robot_description PARAMETER (not the topic)
-# in Humble — pass the URDF directly, with a retry for the boot race.
-URDF=$(cat /opt/ws/arm/urdf/so100.urdf)
-(until ros2 run robot_state_publisher robot_state_publisher --ros-args -p robot_description:="$URDF"; do echo "rsp: retrying in 2s"; sleep 2; done) &
+# in Humble — pass the URDF directly. Re-read it on every retry: a container
+# started while the file is being synced must not cache an empty string.
+(until URDF=$(cat /opt/ws/arm/urdf/so100.urdf) && [ -n "$URDF" ] \
+     && ros2 run robot_state_publisher robot_state_publisher --ros-args -p robot_description:="$URDF"; do
+   echo "rsp: retrying in 2s"; sleep 2
+ done) &
 
 wait
