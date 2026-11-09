@@ -235,18 +235,29 @@ Two rules learned the hard way:
 
 The pose comes from the arm side: `arm_bridge` publishes `/joint_states` at 50 Hz → `robot_state_publisher` publishes `/tf` and the latched `/robot_description` → RViz draws the model at those transforms.
 
-The model is **phosphobot 0.3.134's canonical SO-100** (`resources/urdf/so-100`), copied into the repo:
+The model is **the SO-100 kinematic chain of the MuJoCo Menagerie model**
+(`trs_so_arm100`), which is the reference the twin was validated against. Every joint frame
+(`<origin xyz rpy>`) and every `<axis>` is copied one-to-one from that MJCF, so RViz and the
+MuJoCo twin execute the same mathematics:
 
-| Piece | Location | Detail |
+| Piece | Path | Notes |
 |---|---|---|
-| URDF | `docker/ws/arm/urdf/so100.urdf` | phosphobot's URDF with the six joint names **renamed to LeRobot's** (`Rotation`→`shoulder_pan`, `Pitch`→`shoulder_lift`, `Elbow`→`elbow_flex`, `Wrist_Pitch`→`wrist_flex`, `Wrist_Roll`→`wrist_roll`, `Jaw`→`gripper`) so live joint states drive it, and mesh references rewritten to `file:///srv/web/so-100/meshes/...` |
-| Meshes | `docker/web/so-100/meshes/*.STL` | 7 STLs from phosphobot; spaces URL-encoded (`Moving%20Jaw.STL`) |
-| Config | `docker/web/rviz.rviz` | Fixed Frame **Base** (the URDF root link), Grid + TF + RobotModel + Image (compressed) displays, explicit Orbit view |
+| URDF | `docker/ws/arm/urdf/so100.urdf` | Meshes at `file:///srv/web/assets/*.obj`; joint names are LeRobot's |
+| Meshes | `docker/web/assets/*.obj` | OBJ conversion of the Menagerie STLs (RViz's STL loader fails silently on these files; OBJ loads fine) |
+| Config | `docker/web/rviz.rviz` | Fixed Frame **base** (the URDF root link), Grid + TF + RobotModel + Image (compressed) displays, explicit Orbit view |
 
 Three config details that are easy to get wrong:
 
 - **RobotModel must subscribe with `Durability Policy: Transient Local`** — `/robot_description` is latched; a default (volatile) subscription created after the publisher never receives it.
 - **The view must live under `Views → Current:`**. A `Current View:` key is silently ignored and RViz falls back to its defaults.
+- **Degrees → radians is the trap that looks like a broken model.** `/joint_states` carries
+  **degrees** (LeRobot's convention, and what the teleop and the twin use), while every ROS
+  consumer (`robot_state_publisher`, RViz, `tf2`) interprets joint positions in **radians**
+  (REP-103). Feeding degrees straight in multiplies every angle by 57.3: the arm renders
+  twisted, with meshes cutting through each other, and no error is printed anywhere. The arm
+  container runs `deg2rad.py`, which republishes `/joint_states` as `/joint_states_rad`, and
+  `robot_state_publisher` is launched with `-r joint_states:=/joint_states_rad`. The MuJoCo
+  twin always looked right because it converts degrees to radians explicitly.
 - **Mesh paths must be explicit `file://` URIs.** Bare or relative paths (`assets/Base.stl`) are handed to the URL loader and fail with the misleading *"Could not resolve host: assets"*.
 
 And the one trap that cost the most time: **a URDF that `urdfdom` rejects renders nothing, silently.** Our first hand-rolled URDF contained empty `<joint>` stubs; RViz showed the display as **"Status: Ok" with zero links**, no error anywhere, and painted only the grid and TF. A ten-line test URDF with a single box proved the renderer itself was fine (single link draws, the arm did not) — that is the fastest way to tell a config problem from a model problem. The canonical phosphobot model parses cleanly.
@@ -275,7 +286,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
 5. **Check the data reaching RViz** (joint feedback + the full transform chain):
    ```bash
    docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 topic hz /joint_states'
-   docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 run tf2_ros tf2_echo Base "Moving Jaw"'
+   docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 run tf2_ros tf2_echo Base jaw'
    ```
    `Base` is the URDF root; `Moving Jaw` is the gripper link. A missing transform means the arm side, not RViz.
 6. **Open the page:** http://192.168.1.50/ — RViz tab first, then Graph, then Terminal.
@@ -296,6 +307,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
 | `qt.qpa.xcb: could not connect to display :10` | Xvfb failed (stale lock, or `:0` collision) | check `docker logs so100-web` for the Xvfb fatal error; entry clears locks and uses `:10`/`:11` |
 | rqt_graph opens as a tiny window | rqt's default geometry | entry stretches it with `xdotool` once the window exists |
 | RViz: "The class rviz_default_plugins/Orbit could not be loaded" | missing `libignition-math6` at runtime | it is in the image now; if you tweak the Dockerfile, keep it |
+| RViz arm twisted / meshes interpenetrating | joint positions fed in **degrees** into a radians consumer | run the `deg2rad.py` bridge and remap `joint_states` for `robot_state_publisher` |
 | RViz: RobotModel "Ok" but no arm | URDF rejected by urdfdom (e.g. empty `<joint>` stubs) | use the canonical phosphobot model; test with a one-box URDF to isolate |
 | RViz: "Could not resolve host: assets" | relative mesh paths treated as URLs | `file://` URIs in the URDF |
 
@@ -463,6 +475,7 @@ Traps this project has actually hit, with their fixes — in one place:
 | depthai link errors about non-PIC libs | Hunter pulled a prebuilt non-PIC dependency | force `CMAKE_POSITION_INDEPENDENT_CODE ON` in the toolchain + clean `~/.hunter` |
 | OAK ~2–3 fps at 1080p+720p | USB2 link (480 M) instead of USB3 | check `lsusb -t` for a 5000M hub; move to a blue port |
 | `pip install depthai` on the cell image | no cp38 wheels above 2.30.0.0 | pin `depthai==2.30.0.0` in the cams container |
+| RViz arm malformed, links crossing through each other | joint positions fed in **degrees** into a radians consumer | run the `deg2rad.py` bridge and remap `joint_states` for `robot_state_publisher` |
 | RViz: display "Ok" but nothing renders | URDF rejected by urdfdom (e.g. empty `<joint>` stubs) — no error surfaces | use the canonical phosphobot SO-100 model; validate the URDF structure |
 | RViz: "Orbit could not be loaded" popup | missing `libignition-math6` at runtime | install `libignition-math6-dev` in the image |
 | RViz: "Could not resolve host: assets" | bare/relative mesh paths are treated as URLs | use `file:///srv/web/...` URIs (encode spaces as %20) |
