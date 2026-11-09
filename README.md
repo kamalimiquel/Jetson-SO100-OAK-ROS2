@@ -122,7 +122,7 @@ The Xavier runs the whole cell as **six Docker containers, one per job** (ADR-00
 SUDO_PASSWORD=<your password> bash scripts/provision-jetson.sh
 ```
 
-The script is safe to run again and again. It: installs the compose v2 plugin if missing (into your user, no sudo), makes sure the camera udev rule exists, builds the two custom images (cams, web), starts all five containers, and writes the Xavier's address into the tabs page. When it finishes, all five containers are running — `docker ps` shows them. The tabs page is then at http://<xavier-ip>/ (port 80).
+The script is safe to run again and again. It: installs the compose v2 plugin if missing (into your user, no sudo), makes sure the camera udev rule exists, builds the custom images (cams, web, rosbridge) and starts all six containers. When it finishes `docker ps` shows them, and the tabs page is at http://192.168.1.50/ (port 80) — the page derives the host from its own URL, so there is nothing to fill in.
 
 **The manual way — one container at a time.** From the `docker/` folder on the Xavier:
 
@@ -162,13 +162,13 @@ Notes (traps we hit — read before changing the stack):
 
 ## Web interface — RViz · Graph · Terminal
 
-One page at **http://<xavier-ip>/** with three tabs, served by the `so100-web` container:
+One page at **http://<xavier-ip>/** with three tabs, served by the `so100-web` container. The examples below use the generic address `192.168.1.50` — substitute your own Xavier's LAN address everywhere it appears.
 
 | Tab | URL (direct) | What you see |
 |---|---|---|
-| **RViz** | http://<xavier-ip>:6080/vnc.html | RViz2: the SO-100 arm with its live pose, the grid, TF and the OAK-D camera image |
-| **Graph** | http://<xavier-ip>:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
-| **Terminal** | http://<xavier-ip>:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced |
+| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-100 arm with its live pose, the grid, TF and the OAK-D camera image |
+| **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
+| **Terminal** | http://192.168.1.50:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced |
 
 Plus a red **Shutdown Xavier NX** button on the right (it POSTs to the container's :8099 endpoint, which SSHes to the host and powers it off; the password lives only in a 600 file on the host, mounted read-only as a secret).
 
@@ -232,7 +232,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
 
 1. **Deploy the repository** (the deploy directory is not a git clone; `rsync` it):
    ```bash
-   rsync -az --exclude .git --exclude __pycache__ ./ maju@<xavier-ip>:~/so100/
+   rsync -az --exclude .git --exclude __pycache__ ./ maju@192.168.1.50:~/so100/
    ```
 2. **Build and start the stack:**
    ```bash
@@ -255,7 +255,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
    docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 run tf2_ros tf2_echo Base "Moving Jaw"'
    ```
    `Base` is the URDF root; `Moving Jaw` is the gripper link. A missing transform means the arm side, not RViz.
-6. **Open the page:** http://<xavier-ip>/ — RViz tab first, then Graph, then Terminal.
+6. **Open the page:** http://192.168.1.50/ — RViz tab first, then Graph, then Terminal.
 7. **Raw captures without a browser** (useful when a tab is blank):
    ```bash
    docker exec so100-web bash -c 'DISPLAY=:10 import -window root /tmp/rviz.png; DISPLAY=:11 import -window root /tmp/graph.png'
@@ -278,7 +278,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
 
 ## Windows PC setup — teleop + visualization
 
-Visualization needs nothing but a browser (ADR-0015): open http://<xavier-ip>/ — tabs are RViz (headless RViz2 via noVNC) and a Terminal (ttyd); the RViz stream alone is at http://<xavier-ip>:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs the native client (ADR-0017).
+Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — tabs are RViz (headless RViz2 via noVNC) and a Terminal (ttyd); the RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs the native client (ADR-0017).
 
 ### MuJoCo (training, ADR-0016) — first milestone
 
@@ -295,7 +295,7 @@ Expected output: "OK - model loaded, 6 joints, simulated 200 steps". That proves
 
 ### MuJoCo twin — live mirror of the real arm (rosbridge WebSocket, ADR-0019)
 
-The Xavier's `so100-rosbridge` container serves a WebSocket at ws://<xavier-ip>:9090 that forwards any ROS2 topic as JSON. The Windows PC mirrors the arm's /joint_states into MuJoCo:
+The Xavier's `so100-rosbridge` container serves a WebSocket at ws://192.168.1.50:9090 that forwards any ROS2 topic as JSON. The Windows PC mirrors the arm's /joint_states into MuJoCo:
 
 1. Install the two Python libraries — **mind the versions** (MuJoCo 4.x moved the classic viewer into MuJoCo Studio; the twin uses the 3.x viewer):
    ```
