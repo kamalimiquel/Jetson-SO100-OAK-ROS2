@@ -4,36 +4,45 @@ Panels:
 Visualization Manager:
   Class: ""
   Global Options:
-    Fixed Frame: base
+    Fixed Frame: Base
     Frame Rate: 30
+    Background Color: 48; 48; 48
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
   Views:
-    Current View:
+    Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.2
+      Distance: 0.8
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0.15
-      Pitch: 0.35
-      Yaw: 0.9
+        X: 0.0
+        Y: 0.0
+        Z: 0.12
+      Pitch: 0.3
+      Yaw: 0.7
     Saved: ~
   Displays:
     - Class: rviz_default_plugins/Grid
       Name: Grid
       Enabled: true
+      Alpha: 0.5
     - Class: rviz_default_plugins/TF
       Name: TF
       Enabled: true
+      Show Arrows: false
+      Show Axes: true
+      Show Names: true
     - Class: rviz_default_plugins/RobotModel
       Name: SO-100
-      Description Source: File
-      Description File: /srv/web/so100.urdf
+      Description Source: Topic
       Description Topic:
         Depth: 5
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 1.0
       Enabled: true
     - Class: rviz_default_plugins/Image
       Name: Scene color
