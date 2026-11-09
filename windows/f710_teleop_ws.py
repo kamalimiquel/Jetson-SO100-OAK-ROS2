@@ -99,17 +99,33 @@ class Teleop:
             return 0.0
         return dz(self.joystick.get_axis(a))
 
+    def _button(self, b):
+        """get_button with a bounds guard: pad layouts differ (hat vs buttons)."""
+        if self.joystick is None or b >= self.joystick.get_numbuttons():
+            return False
+        return bool(self.joystick.get_button(b))
+
     def pressed(self, b):
         """Edge-triggered button press."""
-        if self.joystick is None:
-            return False
-        now = self.joystick.get_button(b)
+        now = self._button(b)
         was = self.prev.get(b, False)
         self.prev[b] = now
         return now and not was
 
     def held(self, b):
-        return self.joystick is not None and bool(self.joystick.get_button(b))
+        return self._button(b)
+
+    def dpad(self):
+        """Return -1/0/+1 for the D-pad X axis: hat first, buttons as fallback."""
+        if self.joystick is None:
+            return 0
+        if self.joystick.get_numhats() > 0:
+            x = self.joystick.get_hat(0)[0]
+            if x:
+                return x
+        left = self.pressed(13)
+        right = self.pressed(14)
+        return (1 if right else 0) - (1 if left else 0)
 
     # ---- main loop
     def run(self):
@@ -123,7 +139,10 @@ class Teleop:
                 if self.joystick is None and pygame.joystick.get_count() > 0:
                     self.joystick = pygame.joystick.Joystick(0)
                     self.joystick.init()
-                    print(f"controller: {self.joystick.get_name()}")
+                    print(f"controller: {self.joystick.get_name()} "
+                          f"({self.joystick.get_numaxes()} axes, "
+                          f"{self.joystick.get_numbuttons()} buttons, "
+                          f"{self.joystick.get_numhats()} hats)")
                 self.tick()
                 clock.tick(50)
         except KeyboardInterrupt:
@@ -172,17 +191,16 @@ class Teleop:
                 self.targets[2] += rx * FEEL_MAX
                 self.targets[4] -= ry * FEEL_MAX
                 moved = True
-            trig = (self.joystick.get_axis(5) + 1) / 2 if self.joystick else 0.0   # RT 0..1
-            trig -= (self.joystick.get_axis(4) + 1) / 2 if self.joystick else 0.0  # LT
+            naxes = self.joystick.get_numaxes() if self.joystick else 0
+            trig = (self.joystick.get_axis(5) + 1) / 2 if naxes > 5 else 0.0   # RT
+            trig -= (self.joystick.get_axis(4) + 1) / 2 if naxes > 4 else 0.0  # LT
             if abs(trig) > 0.05:
                 self.targets[5] += trig * GRIP_RATE
                 moved = True
         else:
-            if self.pressed(14):   # D-pad right
-                self.joint_sel = (self.joint_sel + 1) % DOF
-                print("joint:", JOINT_NAMES[self.joint_sel])
-            if self.pressed(13):   # D-pad left
-                self.joint_sel = (self.joint_sel - 1) % DOF
+            d = self.dpad()
+            if d:
+                self.joint_sel = (self.joint_sel + d) % DOF
                 print("joint:", JOINT_NAMES[self.joint_sel])
             ly = self.axis(1)
             if ly:
@@ -208,11 +226,44 @@ class Teleop:
             self.record.append(list(self.targets))
 
 
+def dump(seconds=20):
+    """Print every axis/button/hat change — use it to map an unknown pad."""
+    pygame.init()
+    pygame.joystick.init()
+    if pygame.joystick.get_count() == 0:
+        print("no joystick found"); return
+    js = pygame.joystick.Joystick(0); js.init()
+    print(f"{js.get_name()} — {js.get_numaxes()} axes, {js.get_numbuttons()} buttons, {js.get_numhats()} hats")
+    print(f"move each control for {seconds}s ...")
+    prev = {}
+    t0 = time.time()
+    clock = pygame.time.Clock()
+    while time.time() - t0 < seconds:
+        pygame.event.pump()
+        cur = {}
+        for a in range(js.get_numaxes()):
+            v = js.get_axis(a)
+            if abs(v) > 0.3: cur[f"axis {a}"] = round(v, 2)
+        for b in range(js.get_numbuttons()):
+            if js.get_button(b): cur[f"button {b}"] = 1
+        for h in range(js.get_numhats()):
+            if any(js.get_hat(h)): cur[f"hat {h}"] = js.get_hat(h)
+        for k in sorted(cur):
+            if prev.get(k) != cur[k]:
+                print(f"  {k} = {cur[k]}")
+        prev = cur
+        clock.tick(30)
+    print("done")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="192.168.1.50", help="the Xavier's LAN address")
     ap.add_argument("--port", type=int, default=9090)
+    ap.add_argument("--dump", action="store_true", help="only print pad input (mapping aid)")
     args = ap.parse_args()
+    if args.dump:
+        dump(); return 0
     print(f"rosbridge at ws://{args.host}:{args.port} (pass --host <xavier-ip> to change)")
     Teleop(args.host, args.port).run()
 
