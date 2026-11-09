@@ -19,19 +19,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="assets/Base.stl"/>
+        <mesh filename="file:///srv/web/assets/Base.stl"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="assets/Base_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Base_Motor.stl"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="assets/Base.stl"/>
+        <mesh filename="file:///srv/web/assets/Base.stl"/>
       </geometry>
     </collision>
   </link>
@@ -45,19 +45,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="assets/Rotation_Pitch.stl"/>
+        <mesh filename="file:///srv/web/assets/Rotation_Pitch.stl"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="assets/Rotation_Pitch_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Rotation_Pitch_Motor.stl"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="assets/Rotation_Pitch.stl"/>
+        <mesh filename="file:///srv/web/assets/Rotation_Pitch.stl"/>
       </geometry>
     </collision>
   </link>
@@ -71,19 +71,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="assets/Upper_Arm.stl"/>
+        <mesh filename="file:///srv/web/assets/Upper_Arm.stl"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="assets/Upper_Arm_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Upper_Arm_Motor.stl"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="assets/Upper_Arm.stl"/>
+        <mesh filename="file:///srv/web/assets/Upper_Arm.stl"/>
       </geometry>
     </collision>
   </link>
@@ -97,19 +97,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="assets/Lower_Arm.stl"/>
+        <mesh filename="file:///srv/web/assets/Lower_Arm.stl"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="assets/Lower_Arm_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Lower_Arm_Motor.stl"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="assets/Lower_Arm.stl"/>
+        <mesh filename="file:///srv/web/assets/Lower_Arm.stl"/>
       </geometry>
     </collision>
   </link>
@@ -123,19 +123,19 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="assets/Wrist_Pitch_Roll.stl"/>
+        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll.stl"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="assets/Wrist_Pitch_Roll_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll_Motor.stl"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="assets/Wrist_Pitch_Roll.stl"/>
+        <mesh filename="file:///srv/web/assets/Wrist_Pitch_Roll.stl"/>
       </geometry>
     </collision>
   </link>
@@ -149,13 +149,13 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="assets/Fixed_Jaw.stl"/>
+        <mesh filename="file:///srv/web/assets/Fixed_Jaw.stl"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <visual>
       <geometry>
-        <mesh filename="assets/Fixed_Jaw_Motor.stl"/>
+        <mesh filename="file:///srv/web/assets/Fixed_Jaw_Motor.stl"/>
       </geometry>
       <material name="sts3215"/>
     </visual>
@@ -170,7 +170,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="assets/Moving_Jaw.stl"/>
+        <mesh filename="file:///srv/web/assets/Moving_Jaw.stl"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
