@@ -3,7 +3,7 @@
 
 Polls the LeRobot joint server (loopback HTTP) at 50 Hz and publishes
 /joint_states; forwards /joint_targets (Float64MultiArray, 6) to the server;
-publishes the SO-100 URDF on /robot_description (latched) so
+publishes the SO-101 URDF on /robot_description (latched) so
 robot_state_publisher can emit TF for Foxglove.
 """
 
@@ -18,7 +18,7 @@ from std_msgs.msg import Float64MultiArray, String
 
 JOINT_NAMES = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
 SERVER = "http://127.0.0.1:8002"
-URDF_PATH = "/opt/ws/arm/urdf/so100.urdf"
+URDF_PATH = "/opt/ws/arm/urdf/so101.urdf"
 
 
 class ArmBridge(Node):
