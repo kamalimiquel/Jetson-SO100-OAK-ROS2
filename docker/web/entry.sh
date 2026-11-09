@@ -14,7 +14,11 @@ rm -f /tmp/.X10-lock /tmp/.X11-lock /tmp/.X11-unix/X10 /tmp/.X11-unix/X11 2>/dev
 
 Xvfb :10 -screen 0 1280x800x24 -ac &
 Xvfb :11 -screen 1 1280x800x24 -ac &
-sleep 2
+# Wait for X to accept connections instead of a fixed sleep (advisorily from the
+# reference patch: xdpyinfo returns only once the server is ready).
+for d in :10 :11; do
+  for i in $(seq 1 40); do xdpyinfo -display $d >/dev/null 2>&1 && break; sleep 0.25; done
+done
 x11vnc -display :10 -forever -shared -nopw -quiet -rfbport 5900 &
 x11vnc -display :11 -forever -shared -nopw -quiet -rfbport 5901 &
 websockify --web /usr/share/novnc 6080 localhost:5900 &
@@ -26,6 +30,7 @@ python3 -m http.server 80 --directory /srv/web &
 source /opt/ros/humble/install/setup.bash
 [ -f /opt/rviz_ws/setup.bash ] && source /opt/rviz_ws/setup.bash
 [ -f /opt/rqt_ws/setup.bash ] && source /opt/rqt_ws/setup.bash
+export LIBGL_ALWAYS_SOFTWARE=1
 DISPLAY=:10 ros2 run rviz2 rviz2 -d /srv/web/rviz.rviz &
 command -v rqt_graph >/dev/null 2>&1 && DISPLAY=:11 ros2 run rqt_graph rqt_graph &
 
