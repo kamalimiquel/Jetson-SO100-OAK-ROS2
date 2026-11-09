@@ -140,6 +140,12 @@ def main():
                     help="skip the per-frame ChArUco check (needs opencv in the env)")
     ap.add_argument("--adaptive", action="store_true",
                     help="walk small offsets around the current pose instead of fixed poses")
+    ap.add_argument("--watch", action="store_true",
+                    help="user moves the arm by hand/pad; capture any stable pose that sees the board")
+    ap.add_argument("--want", type=int, default=14, help="stop after this many accepted poses (--watch)")
+    ap.add_argument("--watch-minutes", type=float, default=10.0, help="give up after this long (--watch)")
+    ap.add_argument("--min-novelty", type=float, default=5.0,
+                    help="a new pose must differ by at least this many degrees (any joint)")
     args = ap.parse_args()
 
     # live board check: a sweep that only sees the board in a few poses is useless,

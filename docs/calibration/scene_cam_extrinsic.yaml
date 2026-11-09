@@ -1,16 +1,18 @@
 # base <- scene_cam  (eye-to-hand, board on the gripper)
 #
-# !! PROVISIONAL — DO NOT USE FOR GRASPING !!
-# Residual 49 mm / 8.7 deg: the accepted poses were too similar (the scene camera
-# sees the board only in a narrow band of poses). Needs a re-run with a wide pose
-# spread once the camera is aimed at the workspace. The INTRINSICS in
-# scene_cam_intrinsics.yaml (rms 0.22 px) are good and reusable.
-# solver: cv2.calibrateHandEye/base2gripper — residual 49.3 mm / 8.70 deg over 9 poses
+# !! INVALID — DO NOT USE !!
+# Round 2 (13 shots, moved by hand) gives a 281 mm / 114 deg residual. Diagnosis:
+# the board's pose in the GRIPPER frame varies by 432 mm across the shots, i.e. the
+# board was not rigidly attached to the gripper while the poses were taken. Eye-to-hand
+# needs one constant board->gripper transform; if the board can be moved by hand
+# relative to the gripper, no solution exists.
+# Keep only scene_cam_intrinsics.yaml (rms 0.17 px, 13 views).
+
 parent: base
 child: scene_cam_link
-translation: [-0.037070, -0.114552, 0.591100]
-rotation_row0: [0.96959458, -0.18247351, 0.16306370]
-rotation_row1: [-0.22055182, -0.94030654, 0.25919203]
-rotation_row2: [0.10603418, -0.28727518, -0.95196099]
-residual_mm: 49.28
-residual_deg: 8.70
+translation: [-0.147828, -0.311221, 0.041519]
+rotation_row0: [0.47758016, 0.81297920, 0.33313964]
+rotation_row1: [-0.46138744, -0.09061243, 0.88255936]
+rotation_row2: [0.74768899, -0.57519928, 0.33182370]
+residual_mm: 281.16
+residual_deg: 114.30
