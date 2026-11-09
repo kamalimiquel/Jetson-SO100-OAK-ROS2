@@ -63,6 +63,7 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         libqt5core5a libqt5gui5 libqt5widgets5 libqt5svg5 libqt5x11extras5 \
         python3-pyqt5 python3-pyqtgraph python3-catkin-pkg \
         python3-pip \
+        libignition-math6-dev \
         libgl1 libgl1-mesa-dri libzzip-0-13 libcppunit-1.15-0 \
     && curl -L -o /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.aarch64 \
     && chmod +x /usr/local/bin/ttyd \
