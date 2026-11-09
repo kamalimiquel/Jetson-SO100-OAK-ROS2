@@ -19,10 +19,14 @@ Xvfb :11 -screen 1 1280x800x24 -ac &
 for d in :10 :11; do
   for i in $(seq 1 40); do xdpyinfo -display $d >/dev/null 2>&1 && break; sleep 0.25; done
 done
-x11vnc -display :10 -forever -shared -nopw -quiet -rfbport 5900 &
-x11vnc -display :11 -forever -shared -nopw -quiet -rfbport 5901 &
-websockify --web /usr/share/novnc 6080 localhost:5900 &
-websockify --web /usr/share/novnc 6081 localhost:5901 &
+# The two VNC ports are 5910/5911 on purpose: 5900 is taken on the host by
+# vino-server (GNOME's screen sharing), and with --network host our x11vnc
+# cannot bind it — websockify would then happily proxy the HOST's desktop,
+# which is exactly the "VNC shows an Ubuntu login" symptom after a reboot.
+x11vnc -display :10 -forever -shared -nopw -quiet -rfbport 5910 &
+x11vnc -display :11 -forever -shared -nopw -quiet -rfbport 5911 &
+websockify --web /usr/share/novnc 6080 localhost:5910 &
+websockify --web /usr/share/novnc 6081 localhost:5911 &
 # The ROS env is a nicety here: if the source fails the shell must still open
 # (a failing `&&` chain exits bash and ttyd shows "press to reconnect").
 ttyd -W -p 7681 bash -lc 'source /opt/ros/humble/install/setup.bash 2>/dev/null; exec bash' &
