@@ -25,7 +25,7 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
 - [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier; USB3 + wrist-Lite wiring check pending
 - [x] Compose file + provisioning script for the **six** services (five cell domains + rosbridge)
 - [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); Windows twin mirrors /joint_states at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC)
-- [~] Web interface: tabs page + ttyd live; **RViz2 tab live** — arm + TF + camera feed, streamed via noVNC (see "RViz tab") (ADR-0014/0015/0018)
+- [x] Web interface: **three tabs live** — RViz2 (arm + TF + camera), rqt_graph, terminal — via noVNC + ttyd (see "RViz tab") (ADR-0014/0015/0018)
 - [ ] ChArUco board + easy_handeye for both cameras (ADR-0011)
 - [ ] Windows: ROS2 Humble + VS Build Tools + SDL2 + firewall, F710 client, GPU check (ADR-0015…0017)
 
@@ -111,7 +111,7 @@ The Xavier runs the whole cell as **six Docker containers, one per job** (ADR-00
 | `so100-cams` | reads both OAK-D cameras | its own depthai SDK (wheel, py3.12) + the computer's USB ports, so it can open the cameras |
 | `so100-perception` | will turn images into grasp requests | plain ROS2 Humble image + a shared workspace folder |
 | `so100-control` | will run the joint API + episode recording | plain ROS2 Humble image + the same shared workspace |
-| `so100-web` | the browser tabs (RViz, graph, terminal) | headless RViz2 (built from source) streamed via noVNC at :6080 + rqt_graph (:6081) + ttyd (7681) + tabs page (port 80) |
+| `so100-web` | the browser tabs (RViz, graph, terminal) | desktop ROS2 image (rviz2 + rqt prebuilt) + noVNC at :6080/:6081 + ttyd (7681) + tabs page (port 80) |
 | `so100-rosbridge` | WebSocket bridge for the MuJoCo twin | Ubuntu 22.04 ROS2 Humble image with rosbridge_suite (binary packages) at ws://:9090 — it needs Python ≥3.9, which the focal images don't have (ADR-0019) |
 
 ### How to create the containers
@@ -160,19 +160,11 @@ Notes (traps we hit — read before changing the stack):
 - dusty images ship an expired ROS apt key: `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles.
 - Docker auto-creates missing bind-mount folders root-owned — pre-create them (the provision script does).
 
-## Web image build (RViz2 from source)
+## Web image build
 
-Ubuntu 20.04 (focal) has no ROS2 Humble binary packages, so RViz2 must be compiled inside the web image — a multi-hour build (OGRE vendor alone ~2 h on the Xavier's 4 cores). `docker/web.Dockerfile` builds rviz2 + rqt_graph + noVNC/ttyd in stages.
+The web image is based on the dusty **desktop** image (`dustynv/ros:humble-desktop-l4t-r35.4.1`), which ships `rviz2` and `rqt_graph` prebuilt. The build is just apt (Xvfb, noVNC, ttyd) — **minutes**, with no colcon stage.
 
-The build has two paths, controlled by the presence of a tarball:
-
-- **Fast path (prebuilt workspace):** drop `docker/prebuilt/rviz_ws.tar.gz` into the deploy folder (git-ignored). The builder stage extracts it instead of compiling. To produce it, build once in a persistent container and package the workspace:
-  1. `docker run --name rviz-builder <builder image with deps> ... colcon build --packages-up-to rviz2 --install-base /opt/rviz_ws`
-  2. fix any failing package **inside** that container (incremental colcon — no full rebuild)
-  3. `docker cp rviz-builder:/opt/rviz_ws - | tar -czf docker/prebuilt/rviz_ws.tar.gz ...`
-- **From-source fallback:** with no tarball present, the same Dockerfile stage runs the full colcon build — the reproducible recipe.
-
-**Known state (2026-11-09):** the image builds and runs — `so100-web` serves the tabs page, ttyd, rqt display and the RViz2 tab with the live arm. The from-source path initially failed in `rviz_default_plugins` (missing `ignition-math6` at configure, missing `map_msgs` from the image), which is why the prebuilt tarball now drives the build.
+Historical note: the original base (`humble-ros-base`) has no rviz2 (Ubuntu 20.04 has no Humble binary packages), so rviz2 was compiled from source for weeks of build time (OGRE alone ~2 h; a prebuilt-workspace fast path was even added). Switching the base to the desktop image removed all of it. The recipe is in git history if ever needed.
 
 ## RViz tab — the live 3D view
 
@@ -305,7 +297,7 @@ It also broadcasts /tf_static with the camera frame offsets (placeholders until 
 
 ### so100-web — the browser
 
-RViz2 (built from source in the image — no humble debs exist for focal) runs headless on Xvfb and is streamed via noVNC at :6080; rqt_graph at :6081; a ttyd terminal at :7681; tabs page at :80. No nodes of its own — RViz2 consumes /robot_description, /tf, /joint_states and the /oak topics. (Until the RViz2 image rebuild lands, the deployed container runs the pre-RViz build — see "Web image build".)
+RViz2 (from the desktop image) runs headless on Xvfb :10 and is streamed via noVNC at :6080; rqt_graph on :11 at :6081 (maximized automatically); a ttyd terminal at :7681; tabs page at :80. No nodes of its own — RViz2 consumes /robot_description, /tf, /joint_states and the /oak topics.
 
 ### so100-rosbridge — the WebSocket bridge (MuJoCo twin, ADR-0019)
 
