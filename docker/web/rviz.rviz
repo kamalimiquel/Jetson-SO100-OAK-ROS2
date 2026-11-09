@@ -26,7 +26,12 @@ Visualization Manager:
       Enabled: true
     - Class: rviz_default_plugins/RobotModel
       Name: SO-100
+      Description Source: Topic
       Description Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
         Value: /robot_description
       Enabled: true
     - Class: rviz_default_plugins/Image
