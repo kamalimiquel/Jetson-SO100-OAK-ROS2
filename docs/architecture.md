@@ -65,7 +65,7 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 - [x] Build `depthai-core` from source on the NX. (v2.33.0 installed at `~/depthai` + bindings in `~/oak/.venv`; USB3/Lite link verification pending the owner's cabling.)
 - [x] Compose file + provisioning script for the six services. (docker/docker-compose.yaml + scripts/provision-jetson.sh deployed on the Xavier; six containers, verified — see README "Container stack".)
 - [x] MuJoCo twin over rosbridge WebSocket (ADR-0019). (so100-rosbridge live at ws://:9090; Windows twin mirrors /joint_states — verified 2026-11-08.)
-- [~] RViz2 image build. (From-source build fails in rviz_default_plugins; prebuilt-workspace fast path added — see README "Web image build".)
+- [x] RViz2 tab live: source-built rviz2 in the web image (prebuilt workspace fast path), arm model from phosphobot's canonical SO-100 assets — see README "RViz tab".
 - [ ] Print ChArUco board and run easy_handeye for both cameras.
 - [ ] Windows: ROS2 Humble binary + VS Build Tools + SDL2, firewall rules for DDS.
 - [ ] Check the Windows PC GPU for Isaac Sim viability.

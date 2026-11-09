@@ -29,8 +29,8 @@ Visualization Manager:
       Name: TF
       Enabled: true
       Show Arrows: false
-      Show Axes: true
-      Show Names: true
+      Show Axes: false
+      Show Names: false
     - Class: rviz_default_plugins/RobotModel
       Name: SO-100
       Description Source: Topic

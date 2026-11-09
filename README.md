@@ -25,7 +25,7 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
 - [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier; USB3 + wrist-Lite wiring check pending
 - [x] Compose file + provisioning script for the **six** services (five cell domains + rosbridge)
 - [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); Windows twin mirrors /joint_states at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC)
-- [~] Web interface: tabs page + ttyd live; RViz2 is built from source in the web image (no humble debs on focal) — the image build is in progress, see "Web image build (RViz2 from source)" (ADR-0014/0015/0018)
+- [~] Web interface: tabs page + ttyd live; **RViz2 tab live** — arm + TF + camera feed, streamed via noVNC (see "RViz tab") (ADR-0014/0015/0018)
 - [ ] ChArUco board + easy_handeye for both cameras (ADR-0011)
 - [ ] Windows: ROS2 Humble + VS Build Tools + SDL2 + firewall, F710 client, GPU check (ADR-0015…0017)
 
@@ -172,7 +172,29 @@ The build has two paths, controlled by the presence of a tarball:
   3. `docker cp rviz-builder:/opt/rviz_ws - | tar -czf docker/prebuilt/rviz_ws.tar.gz ...`
 - **From-source fallback:** with no tarball present, the same Dockerfile stage runs the full colcon build — the reproducible recipe.
 
-**Known state (2026-11-08):** the full from-source run fails in `rviz_default_plugins` (the last big package before rviz2 itself); OGRE and everything up to rviz_common build clean. The web image has not been rebuilt with RViz2 yet — the currently deployed `so100-web` container still runs the pre-RViz build (tabs page + ttyd live, RViz tab pending). The rqt_graph and rosbridge additions ride the same rebuild.
+**Known state (2026-11-09):** the image builds and runs — `so100-web` serves the tabs page, ttyd, rqt display and the RViz2 tab with the live arm. The from-source path initially failed in `rviz_default_plugins` (missing `ignition-math6` at configure, missing `map_msgs` from the image), which is why the prebuilt tarball now drives the build.
+
+## RViz tab — the live 3D view
+
+http://<xavier-ip>:6080/vnc.html?autoconnect=true (embedded as the first tab). It shows:
+
+- **SO-100 RobotModel** — the arm with its real-time pose, driven by `/joint_states` → `robot_state_publisher` → `/tf`
+- **Grid + TF** — workspace grid, quiet TF overlay (names/axes off)
+- **Scene color** — the OAK-D camera image panel
+
+The model comes from **phosphobot 0.3.134's canonical SO-100 assets** (`resources/urdf/so-100`), stored in the repo:
+
+| Piece | Location | Notes |
+|---|---|---|
+| URDF | `docker/ws/arm/urdf/so100.urdf` (served to RViz via the latched `/robot_description`) | joint names renamed to LeRobot's (`Rotation`→`shoulder_pan`, `Pitch`→`shoulder_lift`, `Elbow`→`elbow_flex`, `Wrist_Pitch`→`wrist_flex`, `Wrist_Roll`→`wrist_roll`, `Jaw`→`gripper`) so live joint states drive it |
+| Meshes | `docker/web/so-100/meshes/*.STL` (bind-mounted at `/srv/web/so-100/meshes/`) | referenced as `file:///srv/web/so-100/meshes/...` in the URDF — RViz's URL loader needs explicit URIs, bare paths fail with "Could not resolve host" |
+| Config | `docker/web/rviz.rviz` | Fixed Frame **Base**; RobotModel subscribes **transient-local** (the description is latched); the view lives under `Views → Current` (a `Current View` key is silently ignored) |
+
+Traps found here, worth knowing before touching it:
+
+- **A URDF that urdfdom rejects silently renders nothing.** Our first hand-rolled URDF contained empty `<joint>` stubs; RViz showed the display as **Ok with zero links** — no error, no arm. The canonical phosphobot model parses cleanly.
+- `viewer`-side fixes are irrelevant here: the render pipeline itself is fine (grid/TF/camera always drew).
+- rviz2 startup needs `libignition-math6` at **runtime** too, not just at build time, or the Orbit view controller fails to load.
 
 ## Windows PC setup — teleop + visualization
 
@@ -315,6 +337,11 @@ Traps this project has actually hit, with their fixes — in one place:
 | depthai link errors about non-PIC libs | Hunter pulled a prebuilt non-PIC dependency | force `CMAKE_POSITION_INDEPENDENT_CODE ON` in the toolchain + clean `~/.hunter` |
 | OAK ~2–3 fps at 1080p+720p | USB2 link (480 M) instead of USB3 | check `lsusb -t` for a 5000M hub; move to a blue port |
 | `pip install depthai` on the cell image | no cp38 wheels above 2.30.0.0 | pin `depthai==2.30.0.0` in the cams container |
+| RViz: display "Ok" but nothing renders | URDF rejected by urdfdom (e.g. empty `<joint>` stubs) — no error surfaces | use the canonical phosphobot SO-100 model; validate the URDF structure |
+| RViz: "Orbit could not be loaded" popup | missing `libignition-math6` at runtime | install `libignition-math6-dev` in the image |
+| RViz: "Could not resolve host: assets" | bare/relative mesh paths are treated as URLs | use `file:///srv/web/...` URIs (encode spaces as %20) |
+| RViz: view properties ignored | wrong key — humble expects `Views → Current` | fix the config key (a `Current View` key is silently dropped) |
+| Xvfb: "server already running" on :0 | the host desktop owns display :0 under host networking | container displays on :10/:11 + clear stale `/tmp/.X1?-lock` on start |
 
 ## How we work
 
