@@ -406,6 +406,7 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 - **joint-step** (default): D-pad L/R picks joint 0–5, left stick Y moves it, LB/RB close/open the gripper.
 - **cartesian-feel**: START toggles — left stick = pan/lift, right stick X = elbow, right stick Y = wrist_roll, **LB + right stick Y = wrist_flex**, triggers = gripper.
 - **record / replay**: X starts/stops recording the targets, B replays them.
+- **torque**: hold **B for 5 s** to switch the servos on or off, same as the red button in the web page — the state is read from the arm before flipping, so it cannot get out of sync. A short tap still replays.
 
 #### joint-step, the default mode
 

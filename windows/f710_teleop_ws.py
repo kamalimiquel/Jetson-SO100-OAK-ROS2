@@ -22,6 +22,8 @@ Modes (same behaviour as the C++ client in this folder):
   record / replay       X starts/stops recording the sent targets, B replays.
 
 Safety:
+  - B held for HOLD_TORQUE seconds switches the servos on/off (POST :8092/torque);
+    a short press still replays the recording,
   - nothing is published until /joint_states has been received (the arm's real
     position seeds the targets, so the first command is "stay where you are");
   - per-tick deltas are clamped and values limited to the joint ranges;
@@ -31,9 +33,12 @@ Safety:
 """
 
 import argparse
+import json
 import math
 import sys
 import time
+import urllib.error
+import urllib.request
 
 import pygame
 import roslibpy
@@ -44,6 +49,7 @@ STEP_MAX = 1.0                  # deg per tick at full stick (joint-step) = 50 d
 FEEL_MAX = 0.5                  # deg per tick at full stick (cartesian-feel) = 25 deg/s
 GRIP_RATE = 1.0                 # gripper % per tick = 50 %/s
 DEADZONE = 0.15
+HOLD_TORQUE = 5.0               # hold B this long to switch the servos on/off
 IDLE_STOP = 0.5                 # s without input -> stop publishing
 LIM_LO = [-170.0, -170.0, -170.0, -170.0, -170.0, 0.0]
 LIM_HI = [170.0, 170.0, 170.0, 170.0, 170.0, 100.0]
@@ -84,6 +90,9 @@ class Teleop:
         self.last_input = 0.0
         self.joystick = None
         self.hat_x_prev = 0
+        self.torque_url = f"http://{host}:8092/torque"
+        self.b_down_at = None       # when B was pressed, for the 5 s hold
+        self.b_long_fired = False   # the hold already switched torque: swallow the release
 
         self.prev = {}          # edge state per button
         print("waiting for /joint_states ...")
@@ -160,6 +169,7 @@ class Teleop:
         print("F710 teleop — joint-step mode. START=toggle mode, X=record, B=replay. Ctrl+C to quit.")
         print("  cartesian-feel: left stick pan/lift · right stick elbow/roll · "
               "LB+right stick Y = wrist_flex · triggers gripper")
+        print("  hold B 5 s = torque on/off (the arm boots torque-off)")
         try:
             while True:
                 pygame.event.pump()
@@ -179,6 +189,44 @@ class Teleop:
             self.client.terminate()
             pygame.quit()
 
+    def toggle_torque(self):
+        """Read the real state, invert it — never assume what the servos are doing."""
+        try:
+            with urllib.request.urlopen(self.torque_url, timeout=3) as r:
+                on = bool(json.loads(r.read() or b"{}").get("torque"))
+        except Exception as exc:  # noqa: BLE001
+            print(f"torque: cannot read state ({exc})")
+            return
+        want = not on
+        try:
+            req = urllib.request.Request(
+                self.torque_url, data=json.dumps({"on": want}).encode(), method="POST",
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=6) as r:
+                state = bool(json.loads(r.read() or b"{}").get("torque"))
+            print("torque:", "ENABLED" if state else "DISABLED")
+        except Exception as exc:  # noqa: BLE001
+            print(f"torque: toggle failed ({exc})")
+
+    def handle_b(self):
+        """B pressed short = replay the recording; held HOLD_TORQUE = torque on/off."""
+        now = time.time()
+        down = self._button(1)
+        if down and self.b_down_at is None:
+            self.b_down_at = now
+            self.b_long_fired = False
+        elif down and not self.b_long_fired and now - self.b_down_at >= HOLD_TORQUE:
+            self.b_long_fired = True
+            print(f"B held {HOLD_TORQUE:.0f} s")
+            self.toggle_torque()
+        elif not down and self.b_down_at is not None:
+            held = now - self.b_down_at
+            self.b_down_at = None
+            if not self.b_long_fired and held < HOLD_TORQUE and self.record:
+                self.replaying = True
+                self.replay_i = 0
+                print(f"REPLAY of {len(self.record)} points")
+
     def tick(self):
         # mode / record / replay toggles
         if self.pressed(7):        # START
@@ -191,10 +239,7 @@ class Teleop:
                 print("RECORDING started")
             else:
                 print(f"RECORDING stopped — {len(self.record)} points")
-        if self.pressed(1) and self.record:   # B
-            self.replaying = True
-            self.replay_i = 0
-            print(f"REPLAY of {len(self.record)} points")
+        self.handle_b()
 
         if self.replaying:
             if self.replay_i >= len(self.record):
