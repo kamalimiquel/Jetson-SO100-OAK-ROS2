@@ -37,13 +37,11 @@ services:
     environment:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      # PLACEHOLDER intrinsics (OAK-D POE right mono, 720p) so the point cloud
-      # flows before Phase 4 calibration. Depth has no factory calibration on
-      # this unit, so absolute scale is wrong — tune OAK_SCENE_DEPTH_SCALE.
-      - OAK_SCENE_FX=627.664
-      - OAK_SCENE_FY=627.664
-      - OAK_SCENE_CX=638.273
-      - OAK_SCENE_CY=365.869
+      # Intrinsics are NOT set here on purpose: the depth map is delivered in the
+      # right camera's geometry, so the node asks the device for that camera's K at
+      # the resolution the map actually arrives at (1280x720 -> fx 833.00 cx 639.23).
+      # The env pair only survives as a fallback for a unit with no calibration.
+      # DEPTH_SCALE corrects a depth map that comes out proportional instead of mm.
       - OAK_SCENE_DEPTH_SCALE=1.0
     volumes:
       # OAK devices (VID 03e7) + the cgroup rule below (ADR-0007).

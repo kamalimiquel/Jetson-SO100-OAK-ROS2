@@ -125,14 +125,26 @@ class OakNode(Node):
             right_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RIGHT)) if calib else None
             color_ok = color_i is not None and color_i[0] > 0
             right_ok = right_i is not None and right_i[0] > 0
+            # getDefaultIntrinsics can come back empty on units whose calibration is
+            # stored per-resolution; ask point-blank for the depth geometry instead
+            probe_k = None
+            try:
+                pr = calib.getCameraIntrinsics(dai.CameraBoardSocket.CAM_C, 1280, 720)
+                probe_k = (pr[0][0], pr[1][1], pr[0][2], pr[1][2])
+            except Exception:  # noqa: BLE001
+                pass
             self.get_logger().info(
-                f"{ns}: device {info.getMxId()} — factory calib: "
-                f"color={'ok' if color_ok else 'MISSING'} stereo={'ok' if right_ok else 'MISSING'}"
+                f"{ns}: device {info.getMxId()} — calib: default color="
+                f"{'ok' if color_ok else 'MISSING'} stereo={'ok' if right_ok else 'MISSING'}"
+                + (f", depth 1280x720 fx={probe_k[0]:.2f} cx={probe_k[2]:.2f}" if probe_k else
+                   ", depth intrinsics unavailable")
             )
             self._publish_static_tfs(ns)
             stream = {
                 "ns": ns, "qc": qc, "qd": qd, "qconf": qconf,
                 "device": device,
+                "calib": calib,
+                "k_cache": {},
                 "pcl_last": 0.0,
                 "cloud_warned": False,
                 "color_info": camera_info(
@@ -248,26 +260,62 @@ class OakNode(Node):
                         imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z = s["imu"]["acc"]
                     self._pub(f"/oak/{ns}/imu", Imu).publish(imu)
 
+    def _cloud_intrinsics(self, s, w, h):
+        """Intrinsics that go with the depth map, in order of trust.
+
+        The map is produced by the stereo pair and delivered in the RIGHT camera's
+        geometry at the stereo resolution, so the right camera's K at that exact size
+        is the only correct choice — not the colour camera's, and definitely not a
+        hard-coded placeholder. Falls back to env vars, then gives up.
+        """
+        key = (w, h)
+        cache = s["k_cache"]
+        if key in cache:
+            return cache[key]
+        k = None
+        calib = s.get("calib")
+        if calib is not None:
+            for sock in ("CAM_C", "RIGHT"):
+                try:
+                    raw = calib.getCameraIntrinsics(getattr(dai.CameraBoardSocket, sock), w, h)
+                    if raw and float(raw[0][0]) > 0:
+                        k = (float(raw[0][0]), float(raw[1][1]), float(raw[0][2]), float(raw[1][2]))
+                        break
+                except Exception:  # noqa: BLE001
+                    continue
+        source = "device"
+        if k is None:
+            env = f"OAK_{s['ns'].upper()}"
+            try:
+                k = (float(os.environ[f"{env}_FX"]), float(os.environ[f"{env}_FY"]),
+                     float(os.environ[f"{env}_CX"]), float(os.environ[f"{env}_CY"]))
+                source = "env"
+            except KeyError:
+                if not s["cloud_warned"]:
+                    s["cloud_warned"] = True
+                    self.get_logger().warn(
+                        f"{s['ns']}: point cloud disabled — no calibration for {w}x{h}")
+                return None
+        cache[key] = k
+        self.get_logger().info(
+            f"{s['ns']}: cloud intrinsics ({source}, {w}x{h}) fx={k[0]:.2f} fy={k[1]:.2f} "
+            f"cx={k[2]:.2f} cy={k[3]:.2f}")
+        return k
+
     def _publish_cloud(self, s, depth, now):
-        """Host-side unprojection of the depth map. Requires intrinsics from
-        env (OAK_SCENE_FX/FY/CX/CY) — disabled until Phase 4 calibration
-        provides real values; depth units must be mm (factory calibration)."""
+        """Host-side unprojection of the depth map.
+
+        The map is 16UC1 in millimetres — a depth of 1000 is one metre — which is what
+        the stereo pipeline gives when the unit has a usable calibration; the scale env
+        var exists only to correct a unit whose depth comes out proportional."""
         ns = s["ns"]
         env = f"OAK_{ns.upper()}"
-        try:
-            fx = float(os.environ[f"{env}_FX"])
-            fy = float(os.environ[f"{env}_FY"])
-            cx = float(os.environ[f"{env}_CX"])
-            cy = float(os.environ[f"{env}_CY"])
-        except KeyError:
-            if not s["cloud_warned"]:
-                s["cloud_warned"] = True
-                self.get_logger().warn(
-                    f"{ns}: point cloud disabled — set {env}_FX/FY/CX/CY (Phase 4 calibration)"
-                )
-            return
-        scale = float(os.environ.get(f"{env}_DEPTH_SCALE", "1.0"))
         h, w = depth.shape
+        K = self._cloud_intrinsics(s, w, h)
+        if K is None:
+            return
+        fx, fy, cx, cy = K
+        scale = float(os.environ.get(f"{env}_DEPTH_SCALE", "1.0"))
         uu, vv = np.meshgrid(np.arange(0, w, 2), np.arange(0, h, 2))
         z = depth[::2, ::2].astype(np.float32) * scale / 1000.0
         valid = (z > 0.1) & (z < 5.0)
