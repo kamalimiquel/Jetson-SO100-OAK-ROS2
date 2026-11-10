@@ -6,7 +6,7 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
 
 ![Data flow](docs/architecture-flow.png)
 
-**Legend:** solid green = implemented and verified on the Xavier; amber = code written but never run; dashed grey = missing. The bottom band lists the modules still to build (the grasp loop and episode-based training).
+**Legend:** solid green = implemented and verified on the Xavier; amber = code written but never run; dashed grey = missing. The bottom band lists the modules still to build (the grasp loop and episode-based training). The picture was drawn before the teleop and the point cloud went live — for the current state, trust the checklist below.
 
 ### What each joint is called
 
@@ -24,10 +24,10 @@ the URDF comes from, so it cannot drift.
 - [x] Phase 0: repo + engineering prompt (`docs/PROMPT.md`)
 - [x] Phase 1: ROS2 Humble in containers, FastDDS, domain 42 (ADR-0001, ADR-0002)
 - [x] Phase 2: Docker — per-domain containers, zero-copy, `--ipc=host` (ADR-0003…0005)
-- [x] Phase 3: drivers — LeRobot (arm), depthai-core (both OAK-Ds) (ADR-0006…0008)
-- [x] Phase 4: control — joint-space API, mounting, calibration, recording, GraspGen (ADR-0009…0013)
+- [x] Phase 3: drivers — LeRobot (arm), depthai-core (scene OAK-D; the wrist camera waits for hardware) (ADR-0006…0008)
+- [ ] Phase 4: control — joint-space API and camera mounting done; hand-eye at 29 mm, and the IK node, episode recording and GraspGen still to build (ADR-0009…0013)
 - [x] Phase 5: RViz — headless RViz2 + noVNC (ADR-0014)
-- [x] Phase 6: Windows — noVNC in Chromium, MuJoCo+Isaac Sim, F710 C++ client (ADR-0015…0017)
+- [x] Phase 6: Windows — noVNC in Chromium, MuJoCo twin, F710 teleop over rosbridge (ADR-0015…0017, amended by ADR-0020)
 - [x] Phase 7: web interface — noVNC tabs + ttyd (ADR-0018)
 - [x] Phase 8: architecture doc + diagram, v0.1 tag
 - [ ] Implementation on the hardware (see `docs/architecture.md` → open items)
@@ -57,7 +57,7 @@ the URDF comes from, so it cannot drift.
 
 ## Jetson setup — uv + LeRobot SDK (arm)
 
-Exact commands to install and use the LeRobot stack for the SO-100 arm on the Xavier NX (ADR-0006). Verified working; doubles as the record of the Jetson's current state.
+Exact commands to install and use the LeRobot stack for the SO-101 arm on the Xavier NX (ADR-0006). Verified working; doubles as the record of the Jetson's current state.
 
 **1. Install uv**
 
@@ -139,7 +139,7 @@ The calibration file is overwritten in place, so keep a copy if you want to comp
 
 ## Camera setup — depthai on the Xavier
 
-**State:** scene OAK-D POE verified capturing color 1080p + depth 720p (on a USB2 link at the time — ~2.3 fps; USB3 wiring pending). Wrist OAK-D Lite pending connection. `depthai-core` v2.33.0 built from source and installed at `~/depthai`; `depthai-python` bindings built against it and installed into `~/oak/.venv` (version string `2.33.0.0.dev0+<commit>` — the source build, not the wheel).
+**State:** scene OAK-D-POE (IMX378 colour + two OV9282 mono, 7.5 cm baseline) capturing colour 1920x1080 and depth 1280x720 at **1.0-1.5 fps**, limited by the link negotiating **High Speed (480 Mb/s)** rather than SuperSpeed — the cable or the port is the suspect, not the camera. The two mono views are published too, so the stereo pair can be inspected from the browser. Wrist OAK-D Lite pending connection. `depthai-core` v2.33.0 built from source and installed at `~/depthai`; `depthai-python` bindings built against it and installed into `~/oak/.venv` (version string `2.33.0.0.dev0+<commit>` — the source build, not the wheel).
 
 1. **udev rule (once):** `/etc/udev/rules.d/80-oak.rules` → `SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"`, then `udevadm control --reload-rules && udevadm trigger --subsystem-match=usb`. Without it, a bootloader-state device can't be opened by non-root.
 2. **Fallback venv (works today):** `uv venv ~/oak/.venv --python 3.12` + `uv pip install --python ~/oak/.venv/bin/python "depthai<3" opencv-python-headless` (wheel 2.33.0.0 — same API as the source build).
@@ -200,7 +200,7 @@ The script is safe to run again and again. It: installs the compose v2 plugin if
 
 **Day-to-day:** `docker ps` shows the six `so100-*` containers; the containers come back up by themselves after a Xavier reboot (`restart: unless-stopped`). Open a shell inside one with `docker exec -it so100-arm bash`. To use ROS2 commands inside a shell, source the ROS environment first: `bash -c "source /opt/ros/humble/install/setup.bash && ros2 topic list"`.
 
-Verified 2026-11-09: shutdown button (:8099) and Terminal tab (:7681) confirmed working by the operator; six containers up — `so100-arm` (bus 6/6, `/joint_states` at 50 Hz), `so100-cams` (OAK capture 1/1), `so100-control`, `so100-perception`, `so100-web` (tabs page + RViz2 arm + rqt_graph + ttyd live), `so100-rosbridge` (:9090 serving `/joint_states` to a LAN PC at 50 Hz).
+Verified 2026-11-10: five tabs live (Stereo Cam and Point Cloud added), F710 torque on/off by holding B, cloud on the device's own intrinsics, colour↔depth homography solved at 0.69 px. Verified 2026-11-09: shutdown button (:8099) and Terminal tab (:7681) confirmed working by the operator; six containers up — `so100-arm` (bus 6/6, `/joint_states` at 50 Hz), `so100-cams` (OAK capture 1/1), `so100-control`, `so100-perception`, `so100-web` (tabs page + RViz2 arm + rqt_graph + ttyd live), `so100-rosbridge` (:9090 serving `/joint_states` to a LAN PC at 50 Hz).
 
 Notes (traps we hit — read before changing the stack):
 - Compose v2 is required — v1 rejects `device_cgroup_rules` with a misleading error.
@@ -276,15 +276,16 @@ Two rules learned the hard way:
 
 The pose comes from the arm side: `arm_bridge` publishes `/joint_states` at 50 Hz → `robot_state_publisher` publishes `/tf` and the latched `/robot_description` → RViz draws the model at those transforms.
 
-The model is **the SO-100 kinematic chain of the MuJoCo Menagerie model**
-(`trs_so_arm100`), which is the reference the twin was validated against. Every joint frame
-(`<origin xyz rpy>`) and every `<axis>` is copied one-to-one from that MJCF, so RViz and the
-MuJoCo twin execute the same mathematics:
+The model is **the SO-101**, generated straight from the MJCF the twin loads
+(`robotstudio_so101/so101.xml`) by `tools/mjcf_so101_to_urdf.py` — ADR-0021. It is not the
+SO-100: the two share joint names but not frames or axes, and using the SO-100 URDF drew a
+different robot and silently broke the hand-eye solve. FK from the generated URDF matches the
+twin to the millimetre:
 
 | Piece | Path | Notes |
 |---|---|---|
-| URDF | `docker/ws/arm/urdf/so100.urdf` | Meshes at `file:///srv/web/assets/*.obj`; joint names are LeRobot's |
-| Meshes | `docker/web/assets/*.obj` | OBJ conversion of the Menagerie STLs (RViz's STL loader fails silently on these files; OBJ loads fine) |
+| URDF | `docker/ws/arm/urdf/so101.urdf` | generated from the MJCF; meshes at `file:///srv/web/so101/meshes/*.obj`; joint names are LeRobot's |
+| Meshes | `docker/web/so101/meshes/*.obj` | 17 STL converted to OBJ (RViz's STL loader fails silently on these files; OBJ loads fine) |
 | Config | `docker/web/rviz.rviz` | Fixed Frame **base** (the URDF root link), Grid + TF + RobotModel + Image (compressed) displays, explicit Orbit view |
 
 Three config details that are easy to get wrong:
@@ -330,7 +331,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
    docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 run tf2_ros tf2_echo Base jaw'
    ```
    `Base` is the URDF root; `Moving Jaw` is the gripper link. A missing transform means the arm side, not RViz.
-6. **Open the page:** http://192.168.1.50/ — RViz tab first, then Graph, then Terminal.
+6. **Open the page:** http://192.168.1.50/ — RViz, Stereo Cam, Point Cloud, Graph, Terminal.
 7. **Raw captures without a browser** (useful when a tab is blank):
    ```bash
    docker exec so100-web bash -c 'DISPLAY=:10 import -window root /tmp/rviz.png; DISPLAY=:11 import -window root /tmp/graph.png'
@@ -354,18 +355,18 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
 
 ## Windows PC setup — teleop + visualization
 
-Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — tabs are RViz (headless RViz2 via noVNC) and a Terminal (ttyd); the RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs the native client (ADR-0017).
+Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — five tabs (RViz, Stereo Cam, Point Cloud, Graph, Terminal) and the torque switch. The RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs **no ROS on Windows**: the Python client talks to the rosbridge WebSocket (ADR-0020).
 
 ### MuJoCo (training, ADR-0016) — first milestone
 
-MuJoCo is already installed on the Windows PC. To verify the SO-100 model chain before any training, in a cmd/PowerShell:
+MuJoCo is already installed on the Windows PC. To verify the SO-101 model chain before any training, in a cmd/PowerShell:
 
 1. Install MuJoCo for Python (if not already):
    pip install mujoco
 2. Get the SO-ARM100 model from MuJoCo Menagerie (clone or download zip):
    git clone https://github.com/google-deepmind/mujoco_menagerie
 3. Run the repo's check script against the model:
-   python windows\mujoco_check.py C:\path\to\mujoco_menagerie\trs_so_arm100\scene.xml
+   python windows\mujoco_check.py C:\path\to\mujoco_menagerie\robotstudio_so101\scene.xml
 
 Expected output: "OK - model loaded, 6 joints, simulated 200 steps". That proves the sim can run the arm — the base for imitation-learning sessions later (Isaac Sim deferred for now by user decision).
 
@@ -377,9 +378,9 @@ The Xavier's `so100-rosbridge` container serves a WebSocket at ws://192.168.1.50
    ```
    pip install roslibpy "mujoco>=3,<4"
    ```
-2. Run the twin (any Menagerie SO-100-family model works; `trs_so_arm100` is the exact SO-100, `robotstudio_so101` the SO-101):
+2. Run the twin — this arm is the **SO-101**, so load `robotstudio_so101` (`trs_so_arm100` is the SO-100 and will map joints to the wrong frames):
    ```
-   python windows\mujoco_twin.py C:\path\to\mujoco_menagerie\trs_so_arm100\scene.xml
+   python windows\mujoco_twin.py C:\path\to\mujoco_menagerie\robotstudio_so101\scene.xml
    ```
 
 A MuJoCo window opens and the simulated arm follows the real one live. Internals, each of which cost debugging time on 2026-11-08:
@@ -400,7 +401,7 @@ Twin troubleshooting:
 | `RosTimeoutError: Failed to connect` | rosbridge down on the Xavier | `docker compose up -d rosbridge`; check `ss -tln \| grep 9090` on the Xavier |
 | window opens, arm never moves | old script or `viewer.launch` (blocking) | `git pull` — the current script uses `launch_passive` |
 | `mujoco ... has no viewer module` | MuJoCo 4.x installed | `pip install "mujoco>=3,<4"` |
-| `mapped 0/6 joints` warning | unknown model joint names | use the Menagerie SO-100/101 models; the alias table + fallback cover them |
+| `mapped 0/6 joints` warning | unknown model joint names | use `robotstudio_so101` — it is this robot; the alias table covers the rest |
 | a joint moves backwards | sign convention differs between model and arm | report it — a per-joint sign flip in the script fixes it |
 
 ### F710 teleop — the pad (ADR-0017, amended by ADR-0020)
@@ -524,14 +525,23 @@ One node (/oak_cams), one depthai pipeline per device:
 | Topic | Direction | What it carries |
 |---|---|---|
 | /oak/scene/color/compressed | out | scene color as JPEG (CompressedImage) |
+| /oak/scene/left/compressed, /oak/scene/right/compressed | out | the two **rectified** mono views the depth is computed from — what the Stereo Cam tab shows |
 | /oak/scene/depth | out | scene stereo depth, 16UC1 in millimetres, right-camera frame |
 | /oak/scene/confidence | out | stereo confidence map, 8UC1 (per-pixel depth certainty) |
-| /oak/scene/color/camera_info, /oak/scene/depth/camera_info | out | intrinsics — appear when calibration exists (Phase 4 easy_handeye) |
+| /oak/scene/color/camera_info, /oak/scene/depth/camera_info | out | intrinsics, straight from the device's own calibration at the resolution each stream runs at |
 | /oak/scene/imu | out | accel + gyro + rotation vector — only on units that carry an IMU (this POE unit has none) |
 | /oak/scene/points | out | point cloud (XYZ, metres) unprojected with the **depth camera's own calibration**, asked from the device at the resolution the map arrives at (`fx 833.00 fy 833.00 cx 639.23 cy 356.87` at 1280x720). No placeholders: the env vars are only a fallback for a unit with none |
 | /oak/gripper/* | out | the same set for the wrist Lite, once it is plugged in |
 
-It also broadcasts /tf_static with the camera frame offsets (placeholders until easy_handeye).
+It also broadcasts /tf_static with the camera frame offsets. Those are still nominal (the OAK's own extrinsics, not the hand-eye result), which is why the cloud is meaningful in the camera frame and not yet in `base`.
+
+Two plain-HTTP viewers run alongside the node in the same container, so the cameras can be
+inspected from any browser without ROS tooling:
+
+| Port | What it serves |
+|---|---|
+| **:8090** | `/` colour view with the aiming grid · `/stereo` the rectified L/R pair · `/<name>/stream`, `/<name>/snapshot`, `/<name>/state` for `color`, `left`, `right` |
+| **:8091** | the point cloud in 3D (three.js, `/cloud.bin` as `uint32 count + float32 xyz`, downsampled every 3rd point and clipped to the working volume) + `/state` |
 
 ### so100-web — the browser
 
@@ -568,7 +578,8 @@ Traps this project has actually hit, with their fixes — in one place:
 | OAK ~2–3 fps at 1080p+720p | USB2 link (480 M) instead of USB3 | check `lsusb -t` for a 5000M hub; move to a blue port |
 | `pip install depthai` on the cell image | no cp38 wheels above 2.30.0.0 | pin `depthai==2.30.0.0` in the cams container |
 | RViz arm malformed, links crossing through each other | joint positions fed in **degrees** into a radians consumer | run the `deg2rad.py` bridge and remap `joint_states` for `robot_state_publisher` |
-| RViz: display "Ok" but nothing renders | URDF rejected by urdfdom (e.g. empty `<joint>` stubs) — no error surfaces | use the canonical phosphobot SO-100 model; validate the URDF structure |
+| RViz: display "Ok" but nothing renders | URDF rejected by urdfdom, or the meshes failed to load (STL fails silently here) | regenerate with `tools/mjcf_so101_to_urdf.py` and keep the OBJ meshes; check `Global Status` |
+| RViz draws the arm as floating pieces | `/robot_description` comes from a *stale* publisher — the arm bridge used to serve its own copy from an old URDF | one URDF path everywhere: `so101.urdf`, in both the bridge and `robot_state_publisher` |
 | RViz: "Orbit could not be loaded" popup | missing `libignition-math6` at runtime | install `libignition-math6-dev` in the image |
 | RViz: "Could not resolve host: assets" | bare/relative mesh paths are treated as URLs | use `file:///srv/web/...` URIs (encode spaces as %20) |
 | RViz: view properties ignored | wrong key — humble expects `Views → Current` | fix the config key (a `Current View` key is silently dropped) |
@@ -582,5 +593,5 @@ Every architecture decision is proposed with 3 alternatives (pros, cons, recomme
 
 - `docs/PROMPT.md` — engineering prompt and project phases
 - `docs/architecture.md` — architecture overview, ADR index, open items
-- `docs/adr/` — Architecture Decision Records (0001–0020)
+- `docs/adr/` — Architecture Decision Records (0001–0021)
 - `docs/architecture-flow.svg` / `.png` — data-flow diagram
