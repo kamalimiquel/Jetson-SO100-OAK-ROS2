@@ -26,3 +26,8 @@ A web interface with three tabs: RViz, rqt_graph, and a terminal into the Xavier
 - The RViz tab reuses the ADR-0015 endpoint — same URL for Chromium on Windows and any browser on the LAN.
 - ttyd opens a shell inside the ROS2 container under a dedicated user; LAN-exposed only; ports documented in the README.
 - rqt_graph follows the same Xvfb/noVNC container pattern as RViz2.
+
+*Amended 2026-11-09:* the shutdown button (:8099) and the Terminal tab (:7681) were
+reported broken and are now confirmed working by the operator. The terminal is a
+writable shell inside the web container, so `ros2` commands work there but `docker`
+commands do not — use SSH for those.
