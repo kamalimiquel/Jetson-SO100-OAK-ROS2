@@ -135,7 +135,7 @@ The calibration file is overwritten in place, so keep a copy if you want to comp
 
 **`wrist_roll` always calibrates to `0…4095`** — that is correct, not a bug: it is a *continuous* joint (no hard stops), so its sweep covers the whole encoder turn. The only visible consequence is that its reported angle flips sign when it crosses the 0/4095 boundary; at teleop speeds that is invisible. Do not try to "fix" it by re-posing the wrist mid-range — re-homing shifts the value but the full-turn range comes back.
 
-**Current state on the Xavier:** uv 0.13.7 in `~/.local/bin`; venv `~/lerobot/.venv` (CPython 3.12.16, lerobot + torch 2.15); arm calibrated as `so100_cell` (2026-11-07).
+**Current state on the Xavier:** uv 0.13.7 in `~/.local/bin`; venv `~/lerobot/.venv` (CPython 3.12.16, lerobot 0.7.0, torch 2.15.0+cu132); arm calibrated as `so100_cell` (2026-11-07).
 
 ## Camera setup — depthai on the Xavier
 
@@ -495,29 +495,6 @@ Topics of this container, by node:
 **Utility:** this container alone turns the arm into a standard ROS2 device — anyone on domain 42 can see where it is (/joint_states), command it (/joint_targets) and render it in 3D (URDF + /tf), without ever knowing a serial port exists.
 
 
-### Depth: range, texture and what the cloud can and cannot see
-
-Two settings matter more than they look, and both are now on in `build_pipeline()`
-(`docker/ws/cams/oak_ros_node.py`):
-
-- **`setExtendedDisparity(True)`** — with the 7.5 cm baseline and the default disparity
-  range the stereo stops at about **0.65 m**, which is exactly where this cell works: the
-  arm, the gripper and anything on the bench in front of the camera fell inside the blind
-  band and came back invalid. Extended disparity halves the minimum range to ~0.33 m.
-- **`setLeftRightCheck(True)`** — kills the speckle that otherwise fills the cloud with
-  phantom points behind every edge.
-
-Measured on the bench (2026-11-10, `OAK-D-POE`, USB **High Speed** — that is why the
-streams run at 1–1.5 fps): the depth map's nearest valid pixels went from ~0.96 m to
-~0.56 m once extended disparity was enabled.
-
-**The cloud cannot see blank surfaces.** A printed ChArUco board held at 0.54 m — measured
-independently at 0.540 m by PnP on the colour image with 48 corners at 0.33 px — does not
-show up in the depth map at all: white paper under the lamp has no texture for the stereo
-matcher, so those pixels are invalid or fall back to the background. Expect the same with
-any white or glossy object, which matters for grasping: texture, edges or the left/right
-check are what produce depth, not brightness.
-
 ### so100-cams — the cameras
 
 One node (/oak_cams), one depthai pipeline per device:
@@ -542,6 +519,29 @@ inspected from any browser without ROS tooling:
 |---|---|
 | **:8090** | `/` colour view with the aiming grid · `/stereo` the rectified L/R pair · `/<name>/stream`, `/<name>/snapshot`, `/<name>/state` for `color`, `left`, `right` |
 | **:8091** | the point cloud in 3D (three.js, `/cloud.bin` as `uint32 count + float32 xyz`, downsampled every 3rd point and clipped to the working volume) + `/state` |
+
+### Depth: range, texture and what the cloud can and cannot see
+
+Two settings matter more than they look, and both are now on in `build_pipeline()`
+(`docker/ws/cams/oak_ros_node.py`):
+
+- **`setExtendedDisparity(True)`** — with the 7.5 cm baseline and the default disparity
+  range the stereo stops at about **0.65 m**, which is exactly where this cell works: the
+  arm, the gripper and anything on the bench in front of the camera fell inside the blind
+  band and came back invalid. Extended disparity halves the minimum range to ~0.33 m.
+- **`setLeftRightCheck(True)`** — kills the speckle that otherwise fills the cloud with
+  phantom points behind every edge.
+
+Measured on the bench (2026-11-10, `OAK-D-POE`, USB **High Speed** — that is why the
+streams run at 1–1.5 fps): the depth map's nearest valid pixels went from ~0.96 m to
+~0.56 m once extended disparity was enabled.
+
+**The cloud cannot see blank surfaces.** A printed ChArUco board held at 0.54 m — measured
+independently at 0.540 m by PnP on the colour image with 48 corners at 0.33 px — does not
+show up in the depth map at all: white paper under the lamp has no texture for the stereo
+matcher, so those pixels are invalid or fall back to the background. Expect the same with
+any white or glossy object, which matters for grasping: texture, edges or the left/right
+check are what produce depth, not brightness.
 
 ### so100-web — the browser
 
