@@ -12,6 +12,8 @@ Run:
     python windows\\f710_teleop_ws.py --host 192.168.1.50
 
 Modes (same behaviour as the C++ client in this folder):
+  cartesian-feel        left stick = pan/lift, right stick = elbow/roll,
+                        triggers = gripper, D-pad up/down = wrist_flex,
   joint-step (default)  D-pad L/R select joint 0..5, left stick Y moves it,
                         LB/RB close/open the gripper.
   cartesian-feel        START toggles: left X/Y -> pan/lift, right X/Y ->
@@ -139,6 +141,16 @@ class Teleop:
         prev, self.hat_x_prev = self.hat_x_prev, cur
         return cur if cur and not prev else 0
 
+    def hat_y(self):
+        """-1/0/+1 vertical D-pad, CONTINUOUS: it drives a joint while held,
+        so no edge guard like dpad_step(). SDL counts up as +1."""
+        if self.joystick is None:
+            return 0
+        if self.joystick.get_numhats() > 0:
+            return self.joystick.get_hat(0)[1]
+        up, down = self._button(11), self._button(12)     # button fallback
+        return (1 if up else 0) - (1 if down else 0)
+
     # ---- main loop
     def run(self):
         pygame.init()
@@ -208,6 +220,10 @@ class Teleop:
             trig -= (self.joystick.get_axis(4) + 1) / 2 if naxes > 4 else 0.0  # LT
             if abs(trig) > 0.05:
                 self.targets[5] += trig * GRIP_RATE
+                moved = True
+            hy = self.hat_y()
+            if hy:                                   # D-pad up/down
+                self.targets[3] += hy * STEP_MAX     # wrist_flex: nothing else drove it
                 moved = True
         else:
             d = self.dpad_step()
