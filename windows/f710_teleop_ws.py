@@ -12,8 +12,9 @@ Run:
     python windows\\f710_teleop_ws.py --host 192.168.1.50
 
 Modes (same behaviour as the C++ client in this folder):
-  cartesian-feel        left stick = pan/lift, right stick = elbow/roll,
-                        triggers = gripper, D-pad up/down = wrist_flex,
+  cartesian-feel        left stick = pan/lift, right stick X = elbow,
+                        right stick Y = roll, **hold LB + right stick Y = wrist_flex**,
+                        triggers = gripper, D-pad up/down = wrist_flex (if the pad has a hat),
   joint-step (default)  D-pad L/R select joint 0..5, left stick Y moves it,
                         LB/RB close/open the gripper.
   cartesian-feel        START toggles: left X/Y -> pan/lift, right X/Y ->
@@ -157,6 +158,8 @@ class Teleop:
         pygame.joystick.init()
         clock = pygame.time.Clock()
         print("F710 teleop — joint-step mode. START=toggle mode, X=record, B=replay. Ctrl+C to quit.")
+        print("  cartesian-feel: left stick pan/lift · right stick elbow/roll · "
+              "LB+right stick Y = wrist_flex · triggers gripper")
         try:
             while True:
                 pygame.event.pump()
@@ -211,9 +214,18 @@ class Teleop:
                 self.targets[0] += lx * FEEL_MAX
                 self.targets[1] -= ly * FEEL_MAX
                 moved = True
-            if rx or ry:
-                self.targets[2] += rx * FEEL_MAX
+            # right stick: elbow on X, roll on Y — and, with LB held, wrist_flex on Y.
+            # The stick is shared because the pad has no free axis left; LB is idle in
+            # this mode (the triggers own the gripper) and it is a button we know works.
+            if self.held(4):                      # LB = shift
+                if ry:
+                    self.targets[3] -= ry * STEP_MAX
+                    moved = True
+            elif ry:
                 self.targets[4] -= ry * FEEL_MAX
+                moved = True
+            if rx:
+                self.targets[2] += rx * FEEL_MAX
                 moved = True
             naxes = self.joystick.get_numaxes() if self.joystick else 0
             trig = (self.joystick.get_axis(5) + 1) / 2 if naxes > 5 else 0.0   # RT
@@ -222,8 +234,8 @@ class Teleop:
                 self.targets[5] += trig * GRIP_RATE
                 moved = True
             hy = self.hat_y()
-            if hy:                                   # D-pad up/down
-                self.targets[3] += hy * STEP_MAX     # wrist_flex: nothing else drove it
+            if hy:                                   # D-pad up/down, when the pad has a hat
+                self.targets[3] += hy * STEP_MAX
                 moved = True
         else:
             d = self.dpad_step()
