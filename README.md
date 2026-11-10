@@ -35,12 +35,25 @@ the URDF comes from, so it cannot drift.
 ## Implementation status
 
 - [x] Arm: LeRobot SDK (`~/lerobot/.venv`, py3.12) + calibration on the Xavier; all 6 motors verified over the bus (ADR-0006 amended — no adapter flash needed)
-- [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier; USB3 + wrist-Lite wiring check pending
+- [x] The arm is an **SO-101**, not an SO-100: URDF generated from `robotstudio_so101/so101.xml`, RViz draws the right robot, FK matches the MuJoCo twin to the millimetre (ADR-0021)
+- [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier
 - [x] Compose file + provisioning script for the **six** services (five cell domains + rosbridge)
 - [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); Windows twin mirrors /joint_states at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC)
-- [x] Web interface: **three tabs live** — RViz2 (arm + TF + camera), rqt_graph, terminal — via noVNC + ttyd (see "RViz tab") (ADR-0014/0015/0018)
-- [ ] Hand-eye calibration — printable ChArUco board ready (`docs/charuco-board.pdf`); scene OAK-D next, OpenCV solver (ADR-0011 amended: no easy_handeye build)
-- [ ] Windows: ROS2 Humble + VS Build Tools + SDL2 + firewall, F710 client, GPU check (ADR-0015…0017)
+- [x] Web interface: **five tabs live** — RViz2, Stereo Cam, Point Cloud, rqt_graph, terminal — plus the torque switch (ADR-0014/0015/0018)
+- [x] F710 teleop over rosbridge from the Windows PC (ADR-0020): all six joints and the gripper, torque on/off by holding B for 5 s
+- [x] Point cloud: unprojected with the depth camera's own intrinsics, extended disparity (range from ~0.65 m down to ~0.33 m), left/right check; scale measured at 0.315 m against PnP geometry — depth reads **+3.0%**, spread ±1% over 100k board pixels
+- [x] Colour ↔ depth **registration**: homography from the board, 48 correspondences, 0.69 px rms — `docs/calibration/color_to_depth.yaml`
+
+### Next
+
+- [ ] **Point cloud in the colour frame, coloured** — publish `/oak/scene/points` already transformed into the colour optical frame and carrying the pixel's RGB, so a cloud point and its pixel are the same thing. The homography that makes this possible is solved and unused; this is the step that turns "the camera sees" into "the object is *there*", and it is what lets a grasp be aimed at a segmented object instead of a hand-picked 3D guess. Unblocks: object segmentation in 3D, GraspGen targets, VLM pointing.
+- [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
+- [ ] **IK node (ADR-0009)** — SE(3) pose to joint angles, with the URDF limits; the missing middle between "the gripper is here" (FK, done) and "move the gripper there". Unblocks GraspGen, the VLM interface and autonomous episodes
+- [ ] **Episode recording + LeRobot export (ADR-0012)** — rosbag2 of the synchronised topics and an offline converter to the dataset format
+- [ ] **Hand-eye extrinsic** — 29.1 mm / 8.7 deg from the closed-form solver (best subset 25.4 mm); the bundle-adjustment refiner is marked untrusted, it reports 46 px where this data should reach ~1 px
+- [ ] **Gripper camera (ADR-0008)** — the node already publishes `/oak/gripper/*` when it finds a second device; blocked on hardware, only one OAK is plugged in
+- [ ] **GraspGen (ADR-0013)** and **policy training (ADR-0016)** — need the IK node and the recorder first
+- [ ] **C++ F710 client** — never compiled; the Python client covers the same ground today
 
 ## Jetson setup — uv + LeRobot SDK (arm)
 
