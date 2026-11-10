@@ -194,13 +194,15 @@ Notes (traps we hit — read before changing the stack):
 - dusty images ship an expired ROS apt key: `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles.
 - Docker auto-creates missing bind-mount folders root-owned — pre-create them (the provision script does).
 
-## Web interface — RViz · Graph · Terminal
+## Web interface — RViz · Stereo · Cloud · Graph · Terminal
 
-One page at **http://<xavier-ip>/** with three tabs, served by the `so100-web` container. The examples below use the generic address `192.168.1.50` — substitute your own Xavier's LAN address everywhere it appears.
+One page at **http://<xavier-ip>/** with five tabs, served by the `so100-web` container. The examples below use the generic address `192.168.1.50` — substitute your own Xavier's LAN address everywhere it appears.
 
 | Tab | URL (direct) | What you see |
 |---|---|---|
-| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-100 arm with its live pose, the grid, TF and the OAK-D camera image |
+| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF and the OAK-D camera image |
+| **Stereo Cam** | http://192.168.1.50:8090/stereo | the two **rectified** mono views (LEFT · CAM_B, RIGHT · CAM_C) — exactly the images the depth map is computed from, with their resolution and fps |
+| **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): drag to orbit, wheel to zoom, colour = distance from the cloud centre |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
 | **Terminal** | http://192.168.1.50:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced |
 

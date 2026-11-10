@@ -24,11 +24,15 @@
   <button id="torque" title="Energise the servos (arm is free to move by hand until then)">Torque brazo</button>
   <span class="sep"></span>
   <button class="active" data-tab="rviz">RViz</button>
+  <button data-tab="stereo">Stereo Cam</button>
+  <button data-tab="cloud">Point Cloud</button>
   <button data-tab="graph">Graph</button>
   <button data-tab="term">Terminal</button>
   <button id="shutdown">Shutdown Xavier NX</button>
 </nav>
 <iframe class="active" data-pane="rviz"></iframe>
+<iframe data-pane="stereo"></iframe>
+<iframe data-pane="cloud"></iframe>
 <iframe data-pane="graph"></iframe>
 <iframe data-pane="term"></iframe>
 <script>
@@ -37,6 +41,8 @@
   const HOST = location.hostname;
   const TAB_URLS = {
     rviz:  `http://${HOST}:6080/vnc.html?autoconnect=true&resize=scale`,
+    stereo: `http://${HOST}:8090/stereo`,
+    cloud:  `http://${HOST}:8091/`,
     graph: `http://${HOST}:6081/vnc.html?autoconnect=true&resize=scale`,
     term:  `http://${HOST}:7681`,
   };

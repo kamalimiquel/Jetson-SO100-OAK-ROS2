@@ -64,6 +64,15 @@ def build_pipeline() -> dai.Pipeline:
     xconf = p.createXLinkOut()
     xconf.setStreamName("confidence")
     sd.confidenceMap.link(xconf.input)
+    # the two rectified views the depth is actually computed from — what the "Stereo Cam"
+    # tab shows. setOutputRectified is off by default in 2.33.
+    sd.setOutputRectified(True)
+    xl = p.createXLinkOut()
+    xl.setStreamName("left")
+    sd.rectifiedLeft.link(xl.input)
+    xr = p.createXLinkOut()
+    xr.setStreamName("right")
+    sd.rectifiedRight.link(xr.input)
     return p
 
 
@@ -127,6 +136,8 @@ class OakNode(Node):
             qc = device.getOutputQueue("color", 2, False)
             qd = device.getOutputQueue("depth", 2, False)
             qconf = device.getOutputQueue("confidence", 2, False)
+            ql = device.getOutputQueue("left", 2, False)
+            qr = device.getOutputQueue("right", 2, False)
             calib = device.readCalibration()  # CalibrationHandler (empty if no factory calib)
             color_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RGB)) if calib else None
             right_i = _k(calib.getDefaultIntrinsics(dai.CameraBoardSocket.RIGHT)) if calib else None
@@ -148,7 +159,7 @@ class OakNode(Node):
             )
             self._publish_static_tfs(ns)
             stream = {
-                "ns": ns, "qc": qc, "qd": qd, "qconf": qconf,
+                "ns": ns, "qc": qc, "qd": qd, "qconf": qconf, "ql": ql, "qr": qr,
                 "device": device,
                 "calib": calib,
                 "k_cache": {},
@@ -235,6 +246,20 @@ class OakNode(Node):
                 if s["depth_info"]:
                     s["depth_info"].header.stamp = msg.header.stamp
                     self._pub(f"/oak/{ns}/depth/camera_info", CameraInfo).publish(s["depth_info"])
+            for side, q in (("left", s["ql"]), ("right", s["qr"])):
+                frames = q.tryGetAll()
+                if not frames:
+                    continue
+                ok, jpg = cv2.imencode(".jpg", frames[-1].getCvFrame(),
+                                       [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                if not ok:
+                    continue
+                msg = CompressedImage()
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.header.frame_id = f"{ns}_right_optical_frame"
+                msg.format = "jpeg"
+                msg.data = jpg.tobytes()
+                self._pub(f"/oak/{ns}/{side}/compressed", CompressedImage).publish(msg)
             if conf_frames:
                 conf = conf_frames[-1].getCvFrame()
                 msg = self.bridge.cv2_to_imgmsg(conf, encoding="mono8")
