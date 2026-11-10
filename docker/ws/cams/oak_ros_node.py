@@ -13,6 +13,7 @@ Env: OAK_SCENE_MXID (default 184430101111F90F00), OAK_GRIPPER_MXID (default:
      streams — depth is then proportional, not millimetres (logged).
 """
 
+import array
 import os
 
 import cv2
@@ -29,6 +30,8 @@ from geometry_msgs.msg import TransformStamped
 SCENE_MXID = os.environ.get("OAK_SCENE_MXID", "184430101111F90F00")
 GRIPPER_MXID = os.environ.get("OAK_GRIPPER_MXID", "")
 PUBLISH_HZ = 15.0
+CAMERA_FPS = 10.0   # ask the sensor for what we can publish: pulling 1080p at 30 fps
+                    # and throwing 2/3 of it away was burning two cores in getCvFrame()
 PCL_HZ = 3.0  # point cloud throttle — 720p clouds are heavy over the LAN
 
 
@@ -38,6 +41,7 @@ def build_pipeline() -> dai.Pipeline:
     color.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
     color.setInterleaved(False)
     color.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
+    color.setFps(CAMERA_FPS)
     xcolor = p.createXLinkOut()
     xcolor.setStreamName("color")
     color.video.link(xcolor.input)
@@ -104,7 +108,11 @@ def create_cloud_xyz32(header, pts_m):
     msg.point_step = 12
     msg.row_step = msg.point_step * msg.width
     msg.is_dense = True
-    msg.data = np.ascontiguousarray(pts_m, dtype=np.float32).tobytes()
+    # rclpy validates and converts a bytes/list into uint8[] one element at a time in this
+    # build (2 MB took 650 ms), and rejects numpy outright. array.array('B') is the fast
+    # path: it is stored as-is and serialised straight from the buffer (60 ms for 2 MB).
+    arr = np.ascontiguousarray(pts_m, dtype="<f4")
+    msg.data = array.array("B", arr.tobytes())
     return msg
 
 
@@ -232,7 +240,7 @@ class OakNode(Node):
                     msg.header.stamp = self.get_clock().now().to_msg()
                     msg.header.frame_id = f"{ns}_color_optical_frame"
                     msg.format = "jpeg"
-                    msg.data = jpg.tobytes()
+                    msg.data = array.array("B", jpg.tobytes())
                     self._pub(f"/oak/{ns}/color/compressed", CompressedImage).publish(msg)
                     if s["color_info"]:
                         s["color_info"].header.stamp = msg.header.stamp
@@ -258,7 +266,7 @@ class OakNode(Node):
                 msg.header.stamp = self.get_clock().now().to_msg()
                 msg.header.frame_id = f"{ns}_right_optical_frame"
                 msg.format = "jpeg"
-                msg.data = jpg.tobytes()
+                msg.data = array.array("B", jpg.tobytes())
                 self._pub(f"/oak/{ns}/{side}/compressed", CompressedImage).publish(msg)
             if conf_frames:
                 conf = conf_frames[-1].getCvFrame()
