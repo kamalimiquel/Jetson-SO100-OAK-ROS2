@@ -387,8 +387,32 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 **Controls** (identical to the C++ client):
 
 - **joint-step** (default): D-pad L/R picks joint 0–5, left stick Y moves it, LB/RB close/open the gripper.
-- **cartesian-feel**: START toggles — left stick = pan/lift, right stick = elbow/wrist_roll, triggers = gripper.
+- **cartesian-feel**: START toggles — left stick = pan/lift, right stick X = elbow, right stick Y = wrist_roll, **LB + right stick Y = wrist_flex**, triggers = gripper.
 - **record / replay**: X starts/stops recording the targets, B replays them.
+
+#### joint-step, the default mode
+
+It moves **one joint at a time**: the D-pad chooses which, and only the left stick's vertical
+axis drives it. The client starts in this mode; START switches to cartesian-feel and back.
+
+| Control | What it does |
+| :--- | :--- |
+| D-pad ← → | walks the selection through `shoulder_pan → shoulder_lift → elbow_flex → wrist_flex → wrist_roll → gripper` and prints the name |
+| left stick ↑↓ | moves **only** the selected joint |
+| LB / RB | close / open the gripper while held |
+
+Speed is **1° per tick at 50 Hz = 50 °/s** at full deflection, on a quadratic curve with a 15 %
+dead zone, so half stick is about 12 °/s and the centre gives fine control. Every value is clamped
+to ±170° for the five joints and 0–100 for the gripper, and nothing is published while the pad is
+idle (0.5 s after the last input the stream stops, so a lost controller cannot keep driving).
+
+The D-pad is read **edge-triggered**, one hop per push. Reading it every tick made a short tap jump
+three or four joints, which looked like the D-pad doing nothing.
+
+Why bother, when cartesian-feel is nicer? Because one joint at a time is the safe way to explore the
+workspace — you see exactly which axis responds and by how much, with no coupling — and it is the
+mode to record in: the targets stay clean and replay identically. Use joint-step to learn the arm
+and to capture episodes, cartesian-feel to work quickly by eye.
 
 **Safety**: `/joint_targets` is only sent after feedback arrives; per-tick deltas and the joint ranges are clamped, and the Jetson bridge enforces the real limits regardless.
 
