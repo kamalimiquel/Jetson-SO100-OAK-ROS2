@@ -1,0 +1,9 @@
+# colour(1920x1080) -> depth-view(1280x720) homography, from the ChArUco board
+# solved 2026-11-10 with 12 markers, residual rms 0.69 px
+# apply as: [u v 1]_depth ~ H @ [u v 1]_colour
+source: color
+target: depth
+matrix:
+  - [0.5713122643, -0.0103347992, 57.1923999387]
+  - [0.0096454253, 0.5571366964, 54.0997007993]
+  - [0.0000288993, 0.0000132288, 1.0000000000]
