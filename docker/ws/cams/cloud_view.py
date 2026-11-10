@@ -109,8 +109,7 @@ addEventListener('mousemove', e=>{
 renderer.domElement.addEventListener('wheel', e=>{
   sph.r *= (1 + Math.sign(e.deltaY)*0.1); sph.r = Math.max(0.25, Math.min(4, sph.r)); placeCam(); e.preventDefault();
 }, {passive:false});
-scene.add(new THREE.GridHelper(2, 20, 0x263042, 0x1b2434));
-scene.add(new THREE.AxesHelper(0.2));
+
 
 let pts = null, geom = null;
 function makeGeom(n){
@@ -147,9 +146,9 @@ async function tick(){
       const span = Math.max(1e-3, dmax-dmin);
       for (let i=0;i<n;i++){
         const t = (Math.hypot(pos[i*3]-cx, pos[i*3+1]-cy, pos[i*3+2]-cz) - dmin)/span;
-        col[i*3]   = Math.min(1, 0.10 + 1.75*t);
-        col[i*3+1] = Math.min(1, 0.95 - 0.55*Math.abs(t-0.45)*2);
-        col[i*3+2] = Math.max(0.10, 0.95 - 1.6*t);
+        col[i*3]   = 0.35 + 0.65*t;                       // near cyan -> far amber
+        col[i*3+1] = 0.80 + 0.20*Math.sin(t*Math.PI);
+        col[i*3+2] = 1.00 - 0.85*t;
       }
       geom.attributes.position.needsUpdate = true;
       geom.attributes.color.needsUpdate = true;
