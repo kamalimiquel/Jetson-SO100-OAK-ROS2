@@ -37,7 +37,14 @@ def main() -> None:
     arm.connect()  # calibrate=True by default; raises if the calib file is missing
     bus = arm.bus
     names = list(bus.motors.keys())
-    print(f"[joint_server] ready — {len(names)} motors, calibrated={arm.is_calibrated}", flush=True)
+    # Boot state is ALWAYS torque off: the arm must be free to move by hand until the
+    # operator presses the button in the web page. Never inherit the servos' own state.
+    try:
+        bus.disable_torque()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[joint_server] torque-off at boot failed: {exc}", flush=True)
+    print(f"[joint_server] ready — {len(names)} motors, calibrated={arm.is_calibrated}, torque=OFF",
+          flush=True)
     torque_on = False
 
     class Handler(BaseHTTPRequestHandler):
@@ -59,16 +66,32 @@ def main() -> None:
                     self._json({"angles": angles, "names": names})
                 except Exception as exc:  # noqa: BLE001
                     self._json({"error": str(exc)}, 500)
+            elif self.path == "/torque":
+                self._json({"torque": bool(torque_on)})
             elif self.path == "/status":
                 self._json({"connected": True, "calibrated": arm.is_calibrated})
             else:
                 self._json({"error": "not found"}, 404)
 
         def do_POST(self):
+            nonlocal torque_on
+            if self.path == "/torque":
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                    on = bool(json.loads(self.rfile.read(length) or b"{}").get("on"))
+                    if on:
+                        bus.enable_torque()
+                    else:
+                        bus.disable_torque()
+                    torque_on = on
+                    print(f"[joint_server] torque {'ENABLED' if on else 'DISABLED'}", flush=True)
+                    self._json({"torque": bool(torque_on)})
+                except Exception as exc:  # noqa: BLE001
+                    self._json({"error": str(exc)}, 500)
+                return
             if self.path != "/write":
                 self._json({"error": "not found"}, 404)
                 return
-            nonlocal torque_on
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 angles = json.loads(self.rfile.read(length) or b"{}")["angles"]
@@ -78,9 +101,10 @@ def main() -> None:
                 if len(angles) not in (5, len(names)) or len(angles) > len(names):
                     raise ValueError(f"expected 5 or {len(names)} angles, got {len(angles)}")
                 if not torque_on:
-                    bus.enable_torque()
-                    torque_on = True
-                    print("[joint_server] torque enabled", flush=True)
+                    # do not energise the servos behind the operator's back: the web
+                    # button is the gate, and the boot state is torque off
+                    self._json({"error": "torque is off — press 'Torque brazo' in the web page"}, 409)
+                    return
                 for name, value in zip(names, angles):
                     i = names.index(name)
                     value = float(value)

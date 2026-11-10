@@ -208,6 +208,21 @@ Plus a red **Shutdown Xavier NX** button on the right (it POSTs to the container
 
 The page derives the Xavier's address from its own URL (`location.hostname`), so it works from any IP without editing anything, and it loads the first tab (RViz) on page open.
 
+### Torque switch — the red button
+
+The first control in the bar, left of the tabs, is the arm's torque switch: **red **`Torque brazo`
+means the servos are free and the arm can be moved by hand, **orange** `Quitar torque` means they are
+energised and the arm holds its pose. It turns orange once pressed and back to red when pressed again.
+
+The arm always boots with **torque off**, and that is enforced twice: the joint server calls
+`disable_torque()` on its own startup and `/write` answers **409** with
+`torque is off — press 'Torque brazo' in the web page` until the button is used. So nothing can
+energise the arm behind the operator's back — not a teleop client left running, not a stale target.
+
+The browser talks to `:8092`, a four-line proxy in the arm container (`docker/ws/arm/torque_api.py`)
+that forwards only `/torque` to the loopback joint server on `:8002`. The page cannot move the arm,
+it can only switch the servos on and off.
+
 ### What runs inside `so100-web`
 
 ```
@@ -382,7 +397,9 @@ pip install pygame roslibpy
 python windows\f710_teleop_ws.py --host 192.168.1.50
 ```
 
-The pad must be in **X mode** (switch on its back). It waits for `/joint_states`, seeds the targets at the arm's real pose and then starts publishing `/joint_targets` (degrees, 6 values). Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
+The pad must be in **X mode** (switch on its back). It waits for `/joint_states`, seeds the targets at the arm's real pose and then starts publishing `/joint_targets` (degrees, 6 values).
+
+**Press `Torque brazo` in the web page first** — the arm boots with torque off and `/write` refuses until the servos are energised, so the pad will look dead otherwise. Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
 
 **Controls** (identical to the C++ client):
 

@@ -1,8 +1,9 @@
 #!/bin/bash
 # arm container entrypoint (image entrypoint already sourced the ROS env):
 #  1. LeRobot joint server (py3.12 venv, serial bus, loopback HTTP :8002)
-#  2. ROS2 arm bridge (py3.8 + rclpy)  -> /joint_states, /joint_targets, /robot_description
-#  3. robot_state_publisher            -> TF for Foxglove from the URDF + joint states
+#  2. torque switch for the web page (LAN :8092 -> loopback :8002)
+#  3. ROS2 arm bridge (py3.8 + rclpy)  -> /joint_states, /joint_targets, /robot_description
+#  4. robot_state_publisher            -> TF for RViz from the URDF + joint states
 set -e
 
 # lerobot looks for its calibration under $HOME/.cache/huggingface — the
@@ -11,6 +12,7 @@ export HOME=/home/maju
 
 /home/maju/lerobot/.venv/bin/python /opt/ws/arm/lerobot_joint_server.py &
 sleep 2
+python3 /opt/ws/arm/torque_api.py &
 python3 /opt/ws/arm/arm_bridge.py &
 
 # robot_state_publisher reads the robot_description PARAMETER (not the topic)

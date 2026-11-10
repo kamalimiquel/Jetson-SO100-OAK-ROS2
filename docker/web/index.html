@@ -9,12 +9,20 @@
   nav button { padding: 0.5em 1em; border: 0; border-radius: 4px; background: #2e3d4e; color: #d8e1ec; cursor: pointer; }
   nav button.active { background: #4a90d9; color: #fff; }
   nav button#shutdown { margin-left: auto; background: #c0392b; color: #fff; font-weight: bold; }
+  /* torque switch: red = servos free (boot state), orange = energised */
+  nav button#torque { background: #c0392b; color: #fff; font-weight: bold; margin-right: 0.9em;
+                      border: 1px solid #7f2a1f; }
+  nav button#torque.on { background: #e07b1f; border-color: #9c5413; }
+  nav button#torque:disabled { opacity: 0.6; cursor: progress; }
+  nav span.sep { width: 1px; background: #3c4c60; margin: 0.15em 0.4em; }
   iframe { flex: 1; border: 0; background: #10151c; display: none; }
   iframe.active { display: block; }
 </style>
 </head>
 <body>
 <nav>
+  <button id="torque" title="Energise the servos (arm is free to move by hand until then)">Torque brazo</button>
+  <span class="sep"></span>
   <button class="active" data-tab="rviz">RViz</button>
   <button data-tab="graph">Graph</button>
   <button data-tab="term">Terminal</button>
@@ -54,6 +62,49 @@
   // Load the initially active tab (RViz) right away.
   const initial = document.querySelector("nav button.active");
   if (initial) showTab(initial);
+
+  // Torque switch: the joint server is loopback-only, so the page talks to the arm
+  // container's tiny proxy on :8092. The arm always boots with torque OFF, so the
+  // state is read from the hardware on load rather than remembered here.
+  const torqueBtn = document.getElementById("torque");
+  const TORQUE_URL = `http://${HOST}:8092/torque`;
+
+  function paintTorque(on) {
+    torqueBtn.classList.toggle("on", on);
+    torqueBtn.textContent = on ? "Quitar torque" : "Torque brazo";
+  }
+
+  async function readTorque() {
+    try {
+      const r = await fetch(TORQUE_URL, { cache: "no-store" });
+      paintTorque(!!(await r.json()).torque);
+    } catch (e) {
+      paintTorque(false);          // unreachable means we cannot energise anything
+    }
+  }
+
+  torqueBtn.addEventListener("click", async () => {
+    const want = !torqueBtn.classList.contains("on");
+    torqueBtn.disabled = true;
+    try {
+      const r = await fetch(TORQUE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on: want }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || r.status);
+      paintTorque(!!data.torque);
+    } catch (e) {
+      alert("Torque: " + e.message);
+      readTorque();
+    } finally {
+      torqueBtn.disabled = false;
+    }
+  });
+
+  readTorque();
+  setInterval(readTorque, 5000);   // keep it honest if another client flips it
 
   // Shutdown: POST to the web container's endpoint, which SSHes to the host
   // and runs `sudo shutdown -h now`.

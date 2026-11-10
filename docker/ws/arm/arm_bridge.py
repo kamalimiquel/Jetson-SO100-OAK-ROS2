@@ -56,7 +56,15 @@ class ArmBridge(Node):
         try:
             self._http("POST", "/write", {"angles": list(msg.data)})
         except Exception as exc:  # noqa: BLE001
-            self.get_logger().warn(f"write failed: {exc}")
+            # torque off answers 409 on every tick: warn once per distinct message
+            msg = str(exc)
+            if msg != getattr(self, "_last_write_err", None):
+                self._last_write_err = msg
+                self.get_logger().warn(f"write failed: {msg}")
+            return
+        if getattr(self, "_last_write_err", None):
+            self._last_write_err = None
+            self.get_logger().info("write ok again")
 
     def tick(self):
         try:

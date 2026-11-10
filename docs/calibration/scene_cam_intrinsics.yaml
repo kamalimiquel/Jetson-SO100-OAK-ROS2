@@ -1,5 +1,5 @@
 # scene OAK-D intrinsics — cv2.aruco.calibrateCameraCharuco, rms 0.18 px
-# 12 views, {'squares': 5, 'square_m': 0.018, 'marker_m': 0.0135, 'dict': 'DICT_4X4_50'}
+# 12 views, {'squares': 5, 'square_m': 0.02, 'marker_m': 0.015, 'dict': 'DICT_4X4_50'}
 image_width: 1920
 image_height: 1080
 camera_name: scene_cam
