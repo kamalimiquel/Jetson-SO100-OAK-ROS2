@@ -213,11 +213,19 @@ One page at **http://<xavier-ip>/** with five tabs, served by the `so100-web` co
 
 | Tab | URL (direct) | What you see |
 |---|---|---|
-| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF and the OAK-D camera image |
+| **Terminal** | http://192.168.1.50:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced — the first tab, because it is the cheap one |
 | **Stereo Cam** | http://192.168.1.50:8090/stereo | the two **rectified** mono views (LEFT · CAM_B, RIGHT · CAM_C) — exactly the images the depth map is computed from, with their resolution and fps |
 | **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): drag to orbit, wheel to zoom, colour = distance from the cloud centre |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
-| **Terminal** | http://192.168.1.50:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced |
+| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF and the OAK-D camera image. **Started on demand** — see below |
+
+**RViz only runs while its tab is on screen.** It is the most expensive thing in the cell:
+software GL (`LIBGL_ALWAYS_SOFTWARE=1`, there is no GPU path for Qt here) keeps **~155 % of a
+core** busy just redrawing the arm. So `entry.sh` no longer starts it; the page POSTs
+`:8099/rviz/start` when the tab is opened, `/rviz/stop` when another tab is chosen, and stops it
+again on `pagehide`. The X display and its VNC front-end stay up, so switching back is a window
+appearing in ~10 s, not a container restart. The web container idles at **2 %** CPU instead of
+180 %.
 
 Plus a red **Shutdown Xavier NX** button on the right (it POSTs to the container's :8099 endpoint, which SSHes to the host and powers it off; the password lives only in a 600 file on the host, mounted read-only as a secret).
 
@@ -331,7 +339,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
    docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 run tf2_ros tf2_echo Base jaw'
    ```
    `Base` is the URDF root; `Moving Jaw` is the gripper link. A missing transform means the arm side, not RViz.
-6. **Open the page:** http://192.168.1.50/ — RViz, Stereo Cam, Point Cloud, Graph, Terminal.
+6. **Open the page:** http://192.168.1.50/ — Terminal, Stereo Cam, Point Cloud, Graph, RViz.
 7. **Raw captures without a browser** (useful when a tab is blank):
    ```bash
    docker exec so100-web bash -c 'DISPLAY=:10 import -window root /tmp/rviz.png; DISPLAY=:11 import -window root /tmp/graph.png'
@@ -542,6 +550,26 @@ show up in the depth map at all: white paper under the lamp has no texture for t
 matcher, so those pixels are invalid or fall back to the background. Expect the same with
 any white or glossy object, which matters for grasping: texture, edges or the left/right
 check are what produce depth, not brightness.
+
+
+### Cost: what the streams actually spend on the Xavier
+
+Measured on the bench (2026-11-10, Xavier NX, six cores). Two things dominate, and both are
+cheap to get wrong:
+
+- **The rclpy `uint8[]` setter walks the payload.** Assigning `bytes` to `msg.data` validates
+  and converts element by element, at roughly 300 ns per byte: a 2 MB `PointCloud2` cost
+  **650 ms**, a 300 KB JPEG **83 ms**. `array.array('B', ...)` is the fast path the setter
+  stores as-is — 61 ms and 0.3 ms. Before that fix the cams node published 1.2 fps and the
+  tick was 800 ms, of which 587 ms were the cloud's `msg.data` assignment alone.
+- **Ask the sensor for the rate you can publish.** The cameras ran at their default 30 fps and
+  two thirds of the frames were thrown away in `getCvFrame()`. `CAMERA_FPS = 10` cut that,
+  `DEPTH_HZ = 5` stops republishing the raw depth (2.7 MB per frame) faster than anything
+  consumes it, and `PCL_HZ = 3` throttles the cloud.
+
+Steady state with SuperSpeed USB, colour at 10 fps, stereo views at 11 fps, cloud at 2.6 fps:
+**cams ~215 % of a core, web ~2 % with RViz off (~160 % with it on)**. Docker reports CPU as a
+percentage of **one** core, so 215 % means "two cores and a bit" out of six.
 
 ### so100-web — the browser
 

@@ -23,18 +23,19 @@
 <nav>
   <button id="torque" title="Energise the servos (arm is free to move by hand until then)">Torque brazo</button>
   <span class="sep"></span>
-  <button class="active" data-tab="rviz">RViz</button>
+  <button class="active" data-tab="term">Terminal</button>
   <button data-tab="stereo">Stereo Cam</button>
   <button data-tab="cloud">Point Cloud</button>
   <button data-tab="graph">Graph</button>
-  <button data-tab="term">Terminal</button>
+  <button data-tab="rviz">RViz</button>
+  <span id="rvizstate" style="align-self:center;color:#8d99ad;font-size:12px"></span>
   <button id="shutdown">Shutdown Xavier NX</button>
 </nav>
-<iframe class="active" data-pane="rviz"></iframe>
+<iframe class="active" data-pane="term"></iframe>
 <iframe data-pane="stereo"></iframe>
 <iframe data-pane="cloud"></iframe>
 <iframe data-pane="graph"></iframe>
-<iframe data-pane="term"></iframe>
+<iframe data-pane="rviz"></iframe>
 <script>
   // No placeholder: the page derives the host from its own URL, so it works
   // from any address (LAN IP, hostname) without a provisioning-time rewrite.
@@ -46,6 +47,49 @@
     graph: `http://${HOST}:6081/vnc.html?autoconnect=true&resize=scale`,
     term:  `http://${HOST}:7681`,
   };
+
+  // RViz with software GL costs about two of the Xavier's six cores, so it only runs while
+  // its tab is on screen: opening the tab starts it, leaving the tab stops it.
+  const RVIZ_API = `http://${HOST}:8099`;
+  const rvizState = document.getElementById("rvizstate");
+  let rvizPoll = null;
+
+  function sayRviz(text) { if (rvizState) rvizState.textContent = text; }
+
+  async function rvizRunning() {
+    try {
+      const r = await fetch(`${RVIZ_API}/rviz/state`, { cache: "no-store" });
+      return !!(await r.json()).running;
+    } catch (e) { return false; }
+  }
+
+  async function rvizOn() {
+    sayRviz("RViz: arrancando…");
+    try { await fetch(`${RVIZ_API}/rviz/start`, { method: "POST" }); } catch (e) {}
+    // rviz2 needs ~10 s before the window shows up on the VNC display
+    let tries = 0;
+    clearInterval(rvizPoll);
+    rvizPoll = setInterval(async () => {
+      tries += 1;
+      if (await rvizRunning()) {
+        clearInterval(rvizPoll);
+        rvizPoll = null;
+        sayRviz("RViz: en marcha");
+        setTimeout(() => sayRviz(""), 4000);
+      } else if (tries > 40) {
+        clearInterval(rvizPoll);
+        rvizPoll = null;
+        sayRviz("RViz: no arranca");
+      }
+    }, 1000);
+  }
+
+  async function rvizOff() {
+    clearInterval(rvizPoll);
+    rvizPoll = null;
+    sayRviz("");
+    try { await fetch(`${RVIZ_API}/rviz/stop`, { method: "POST" }); } catch (e) {}
+  }
 
   function showTab(btn) {
     const tab = btn.dataset.tab;
@@ -59,13 +103,19 @@
       pane.addEventListener("load", () => { pane.focus(); });
     }
     pane.focus();
+    if (tab === "rviz") rvizOn(); else rvizOff();
   }
 
   document.querySelectorAll("nav button[data-tab]").forEach((btn) => {
     btn.addEventListener("click", () => showTab(btn));
   });
 
-  // Load the initially active tab (RViz) right away.
+  // Closing the page should not leave RViz burning CPU in the background.
+  addEventListener("pagehide", () => {
+    try { navigator.sendBeacon(`${RVIZ_API}/rviz/stop`); } catch (e) {}
+  });
+
+  // Load the initially active tab (Terminal) right away.
   const initial = document.querySelector("nav button.active");
   if (initial) showTab(initial);
 

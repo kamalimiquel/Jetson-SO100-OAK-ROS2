@@ -33,6 +33,7 @@ PUBLISH_HZ = 15.0
 CAMERA_FPS = 10.0   # ask the sensor for what we can publish: pulling 1080p at 30 fps
                     # and throwing 2/3 of it away was burning two cores in getCvFrame()
 PCL_HZ = 3.0  # point cloud throttle — 720p clouds are heavy over the LAN
+DEPTH_HZ = 5.0  # raw depth/confidence: 2.7 MB per frame, and nothing consumes them faster
 
 
 def build_pipeline() -> dai.Pipeline:
@@ -172,6 +173,8 @@ class OakNode(Node):
                 "calib": calib,
                 "k_cache": {},
                 "pcl_last": 0.0,
+                "depth_last": 0.0,
+                "conf_last": 0.0,
                 "cloud_warned": False,
                 "color_info": camera_info(
                     color_i[0], color_i[1], color_i[2], color_i[3],
@@ -245,7 +248,8 @@ class OakNode(Node):
                     if s["color_info"]:
                         s["color_info"].header.stamp = msg.header.stamp
                         self._pub(f"/oak/{ns}/color/camera_info", CameraInfo).publish(s["color_info"])
-            if depth_frames:
+            if depth_frames and now - s.get("depth_last", 0.0) >= 1.0 / DEPTH_HZ:
+                s["depth_last"] = now
                 depth = depth_frames[-1].getFrame()
                 msg = self.bridge.cv2_to_imgmsg(depth, encoding="mono16")
                 msg.header.stamp = self.get_clock().now().to_msg()
@@ -268,7 +272,8 @@ class OakNode(Node):
                 msg.format = "jpeg"
                 msg.data = array.array("B", jpg.tobytes())
                 self._pub(f"/oak/{ns}/{side}/compressed", CompressedImage).publish(msg)
-            if conf_frames:
+            if conf_frames and now - s.get("conf_last", 0.0) >= 1.0 / DEPTH_HZ:
+                s["conf_last"] = now
                 conf = conf_frames[-1].getCvFrame()
                 msg = self.bridge.cv2_to_imgmsg(conf, encoding="mono8")
                 msg.header.stamp = self.get_clock().now().to_msg()

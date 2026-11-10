@@ -35,7 +35,10 @@ python3 -m http.server 80 --directory /srv/web &
 
 source /opt/ros/humble/install/setup.bash
 export LIBGL_ALWAYS_SOFTWARE=1
-DISPLAY=:10 ros2 run rviz2 rviz2 -d /srv/web/rviz.rviz &
+# RViz is NOT started here: with software GL it eats two of the Xavier's six cores, so the
+# tabs page asks for it on :8099/rviz/start when its tab is opened and stops it on leave.
+# The X display :10 and its VNC front-end stay up, so starting it is a ~10 s window instead
+# of a container restart.
 command -v rqt_graph >/dev/null 2>&1 && {
   DISPLAY=:11 ros2 run rqt_graph rqt_graph &
   # rqt opens in a small window; wait for it, then stretch it to the display.

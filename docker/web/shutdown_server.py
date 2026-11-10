@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-"""Shutdown endpoint for the tabs page (port 8099, host network = LAN-visible).
+"""Power and RViz endpoints for the tabs page (port 8099, host network = LAN-visible).
 
 POST /shutdown -> SSH to the Xavier host (127.0.0.1 = the host, since the web
 container runs on host network) and run `sudo shutdown -h now`. The maju
 password comes from /run/secrets/shutdown-secret (600-perm file mounted from
 the host, never in the repo). GET /health returns 200 without doing anything.
+
+RViz is the most expensive thing in this cell — software GL on the Xavier's CPU. So it
+is not started with the container: the tabs page asks for it when its tab is opened and
+stops it when the tab is left.
+
+    GET  /rviz/state  -> {"running": bool, "pid": int|null}
+    POST /rviz/start  -> spawns rviz2 on display :10 (idempotent)
+    POST /rviz/stop   -> SIGTERM to rviz2, the display stays up for the next start
 """
 
 import json
@@ -13,6 +21,41 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SECRET = "/run/secrets/shutdown-secret"
+RVIZ_CMD = ("source /opt/ros/humble/install/setup.bash 2>/dev/null; "
+            "DISPLAY=:10 LIBGL_ALWAYS_SOFTWARE=1 exec rviz2 -d /srv/web/rviz.rviz")
+_rviz_lock = threading.Lock()
+
+
+def rviz_pid():
+    """PID of a running rviz2, or None. Matched on the binary, not on the launcher."""
+    try:
+        out = subprocess.run(["pgrep", "-f", "rviz2"], capture_output=True, timeout=5).stdout
+    except Exception:  # noqa: BLE001
+        return None
+    pids = [int(p) for p in out.split() if p.strip()]
+    return pids[0] if pids else None
+
+
+def rviz_start():
+    with _rviz_lock:
+        if rviz_pid():
+            return True
+        subprocess.Popen(["bash", "-lc", RVIZ_CMD], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    return True
+
+
+def rviz_stop():
+    with _rviz_lock:
+        if not rviz_pid():
+            return True
+        for sig in ("TERM", "KILL"):
+            subprocess.run(["pkill", "-%s" % sig, "-f", "rviz2"], capture_output=True, timeout=5)
+            for _ in range(25):
+                if not rviz_pid():
+                    return True
+                threading.Event().wait(0.1)
+    return rviz_pid() is None
 
 
 def read_password() -> str:
@@ -53,12 +96,28 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._cors(200)
             self.wfile.write(json.dumps({"ok": True}).encode())
+        elif self.path.startswith("/rviz/state"):
+            pid = rviz_pid()
+            self._cors(200)
+            self.wfile.write(json.dumps({"running": pid is not None, "pid": pid}).encode())
         else:
             self._cors(404)
             self.wfile.write(b'{"error": "not found"}')
 
     def do_POST(self):
-        if self.path != "/shutdown":
+        path = self.path.split("?")[0]
+        if path in ("/rviz/start", "/rviz/stop"):
+            try:
+                ok = rviz_start() if path.endswith("start") else rviz_stop()
+                pid = rviz_pid()
+                self._cors(200 if ok else 500)
+                self.wfile.write(json.dumps({"ok": ok, "running": pid is not None,
+                                             "pid": pid}).encode())
+            except Exception as exc:  # noqa: BLE001
+                self._cors(500)
+                self.wfile.write(json.dumps({"ok": False, "error": str(exc)}).encode())
+            return
+        if path != "/shutdown":
             self._cors(404)
             self.wfile.write(b'{"error": "not found"}')
             return
