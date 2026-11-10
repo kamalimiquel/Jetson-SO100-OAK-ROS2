@@ -49,6 +49,13 @@ def build_pipeline() -> dai.Pipeline:
     right.setResolution(dai.MonoCameraProperties.SensorResolution.THE_720_P)
     right.setBoardSocket(dai.CameraBoardSocket.RIGHT)
     sd = p.createStereoDepth()
+    # Default stereo stops at ~0.65 m (baseline 7.5 cm, disparity range 96): anything
+    # nearer — the arm, the gripper, the board on it — comes back as invalid or as
+    # background. Extended disparity doubles the range to ~0.33 m, which is where this
+    # cell actually works, and the left/right check kills the speckle that filled the
+    # cloud with phantom points.
+    sd.setExtendedDisparity(True)
+    sd.setLeftRightCheck(True)
     left.out.link(sd.left)
     right.out.link(sd.right)
     xd = p.createXLinkOut()
