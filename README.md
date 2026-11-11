@@ -321,7 +321,7 @@ are real ports on the host, so two containers cannot share one.
 | **80** | the tabs page (`index.html`) and the RViz/URDF assets | `so100-web` | the browser: http://<xavier>/ |
 | **6080** | noVNC of display **:10** — RViz2 | `so100-web` | the **RViz** tab |
 | **6081** | noVNC of display **:11** — rqt_graph | `so100-web` | the **Graph** tab |
-| **7681** | ttyd: a shell *inside the web container* | `so100-web` | the **Terminal** tab |
+| **7681** | ttyd: an SSH shell into the **Xavier host** (`maju@127.0.0.1`) | `so100-web` | the **Terminal** tab |
 | **8090** | MJPEG relé of the scene camera: `/`, `/stereo`, `/<view>/stream` | `so100-cams` | the **Stereo Cam & Depth** tab |
 | **8091** | the three.js point-cloud viewer | `so100-cams` | the **Point Cloud** tab |
 | **8093** | the wristcam focus test (on demand: `/start`, `/stop`) | `so100-web` | the **Wristcam focus test** tab |
@@ -330,13 +330,14 @@ are real ports on the host, so two containers cannot share one.
 | **9090** | rosbridge WebSocket | `so100-rosbridge` | the MuJoCo twin, the F710 client, anything on the LAN |
 | **8002** | the LeRobot joint server (**loopback only**, `127.0.0.1`) | `so100-arm` | the `:8092` proxy, host scripts |
 
-**Why `docker ps` says "command not found" in the Terminal tab.** That tab is ttyd **inside
-`so100-web`**: it is a shell in the container, not on the Xavier. The container has no Docker CLI and,
-deliberately, no `/var/run/docker.sock` — mounting the socket would give anything running in the web
-container (which also serves HTTP and the focus page) root-equivalent control of the host. To inspect
-containers, open an SSH session to the Xavier (`ssh maju@192.168.1.50`) or run `docker ...` from a
-terminal on the host; the Terminal tab is for `ros2`, for files inside the container and for the
-tabs' own logs.
+**The Terminal tab is a shell on the Xavier host, not inside `so100-web`.** It is ttyd running in
+`so100-web` on :7681, but its command SSHes to `maju@127.0.0.1` (the container shares the host's
+network namespace), so `docker ps` and everything else on the host works there. It needs `maju`'s
+password, which the entrypoint reads from a 600-permission file on the host
+(`/home/maju/.terminal-secret`, created by `provision-jetson.sh` from `TERMINAL_SECRET` and never
+committed) and passes to `sshpass`. If that secret is missing the tab falls back to a shell inside
+the container with a notice. Deliberately, `/var/run/docker.sock` is still **not** mounted into the
+container — the shell reaches the host over SSH with `maju`'s own rights, nothing more.
 
 ### 6.1 Deploying and creating the containers
 

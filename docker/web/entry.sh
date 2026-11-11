@@ -32,7 +32,14 @@ websockify --web /usr/share/novnc 6080 localhost:5910 &
 websockify --web /usr/share/novnc 6081 localhost:5911 &
 # The ROS env is a nicety here: if the source fails the shell must still open
 # (a failing `&&` chain exits bash and ttyd shows "press to reconnect").
-ttyd -W -p 7681 bash -lc 'source /opt/ros/humble/install/setup.bash 2>/dev/null; exec bash' &
+# The terminal tab shows the XAVIER HOST, not this container (user request). ttyd stays here
+# on :7681 but SSHes to the host's maju over loopback (we share its netns). The password is
+# read from a secret mounted from the host (like shutdown-secret, 600, never in the repo);
+# if it is missing the terminal falls back to this container's shell with a clear message.
+ttyd -W -p 7681 bash -lc 'P="$(cat /run/secrets/terminal-secret 2>/dev/null)"; \
+  if [ -n "$P" ]; then exec sshpass -p "$P" ssh -o StrictHostKeyChecking=no \
+       -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 maju@127.0.0.1; \
+  else echo "[terminal-secret no montado: caigo al shell de so100-web]"; exec bash; fi' &
 python3 /shutdown_server.py &
 # wristcam focus test (:8093): the HTTP end is always up, the subscriber+scorer only run
 # while the tab is open (POST /start, /stop) — see docker/web/wrist_focus.py.

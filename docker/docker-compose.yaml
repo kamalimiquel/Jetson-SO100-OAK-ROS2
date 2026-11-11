@@ -118,6 +118,8 @@ services:
       - ./state:/srv/state          # measurements written by the focus tab (CSV)
       # maju password for the shutdown button (600 on host, never in the repo)
       - /home/maju/.shutdown-secret:/run/secrets/shutdown-secret:ro
+      # maju password for the terminal tab (SSH to the host, 600 on host, never in the repo)
+      - /home/maju/.terminal-secret:/run/secrets/terminal-secret:ro
 
   # rosbridge (MuJoCo twin transport, WebSocket :9090). Standalone jammy image
   # because rosbridge_suite humble needs Python >=3.9 and the cell images are

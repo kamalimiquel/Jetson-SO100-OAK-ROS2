@@ -72,5 +72,15 @@ mkdir -p ../tools ../ws
 
 echo "== tabs page (self-configuring: derives the host from its URL) =="
 
+echo "== terminal tab -> host shell secret =="
+# The web container's ttyd (tab 'Terminal') SSHes to the host so the terminal shows the
+# XAVIER, not the inside of so100-web (user request). It needs maju's password, read from a
+# 600 file on the host (never in the repo). Supply it at deploy time, like SUDO_PASSWORD:
+#   TERMINAL_SECRET=<maju password> SUDO_PASSWORD=... bash scripts/provision-jetson.sh
+: "${TERMINAL_SECRET:?set TERMINAL_SECRET (=maju host password) so the terminal tab can SSH to the host}"
+umask 177
+printf '%s\n' "$TERMINAL_SECRET" > /home/maju/.terminal-secret
+echo "written /home/maju/.terminal-secret (600)"
+
 echo "== status =="
 docker ps --format "table {{.Names}}\t{{.Status}}"
