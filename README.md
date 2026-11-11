@@ -38,6 +38,7 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
   - [9.1 MuJoCo model check (ADR-0016)](#91-mujoco-model-check-adr-0016)
   - [9.2 MuJoCo twin — live mirror of the real arm (rosbridge WebSocket, ADR-0019)](#92-mujoco-twin--live-mirror-of-the-real-arm-rosbridge-websocket-adr-0019)
   - [9.3 F710 teleop — the pad (ADR-0017, amended by ADR-0020)](#93-f710-teleop--the-pad-adr-0017-amended-by-adr-0020)
+  - [9.4 Do you need ROS2 and the firewall on Windows at all?](#94-do-you-need-ros2-and-the-firewall-on-windows-at-all)
 - **[10. Perception — what the cloud sees, and its calibration](#10-perception--what-the-cloud-sees-and-its-calibration)**
   - [10.1 Depth: range, texture and what the cloud can and cannot see](#101-depth-range-texture-and-what-the-cloud-can-and-cannot-see)
   - [10.2 Cost: what the streams actually spend on the Xavier](#102-cost-what-the-streams-actually-spend-on-the-xavier)
@@ -589,7 +590,7 @@ Transport verified 2026-11-09: a target vector published through rosbridge reach
 2. Visual Studio Build Tools 2022 with the "Desktop development with C++" workload.
 3. SDL2 dev: SDL2-devel-2.30.x-VC.zip from libsdl.org → C:\dev\SDL2.
 4. F710: back switch to X (XInput), plug the receiver in.
-5. Firewall (elevated prompt): run windows/firewall-allow.cmd — opens UDP 7400–7450 for DDS on the private profile (the classic silent-failure point).
+5. Firewall (elevated prompt): run windows/firewall-allow.cmd — opens UDP 7400–7450 for DDS on the private profile (the classic silent-failure point). **All of this is only for this client — see §9.4.**
 
 **Build + run:** windows/build.cmd produces build\Release\f710_teleop.exe. Run it with the ROS2 environment active (call C:\dev\ros2_humble\local_setup.bat first).
 
@@ -598,6 +599,34 @@ Transport verified 2026-11-09: a target vector published through rosbridge reach
 **Safety:** the client publishes nothing until /joint_states arrives and starts from the arm's real position; deltas are clamped per tick and targets per joint limits — the Jetson bridge enforces the real limits regardless.
 
 **GPU check (Isaac Sim viability):** run windows/check-gpu.cmd — needs an NVIDIA RTX-class GPU and driver ≥ 535 for Isaac Sim.
+
+### 9.4 Do you need ROS2 and the firewall on Windows at all?
+
+Short answer: **not for anything the cell does today.** Everything the PC actually runs is either
+plain HTTP or the rosbridge WebSocket:
+
+| What you use on the PC | Transport | ROS2 on Windows? |
+|---|---|---|
+| the tabs — Terminal, Stereo Cam & Depth, Point Cloud, Graph, RViz | HTTP + noVNC | no |
+| MuJoCo twin | roslibpy → `ws://<xavier>:9090` | no |
+| F710 teleop, Python client | roslibpy → `ws://<xavier>:9090` | no |
+
+The ROS2 Humble install, the Visual Studio Build Tools, SDL2 and `windows/firewall-allow.cmd` of
+§9.3 exist for **one** thing: the C++ client, which speaks DDS directly instead of going through
+rosbridge. DDS finds its peers over **UDP 7400-7450**, so without that rule the client starts, looks
+connected and receives nothing — the silent failure the `.cmd` is there to prevent (it opens the
+range on the *private* profile only).
+
+That path has never been compiled, and the Python client already reaches the arm's full rate: 398
+`/joint_states` messages in 8 s (~50 Hz) through the WebSocket.
+
+**The one thing that would change this** is GraspGen (ADR-0013), which runs on the PC. Its transport
+is still open — the ADR says "LAN DDS/HTTP bridge node". Over HTTP or the rosbridge, Windows stays
+ROS-free; as a ROS node on domain 42, it needs the whole stack above.
+
+So install it when there is a measured reason — the Python client falling short on latency, or
+GraspGen going DDS — not before: it is several GB of downloads and a firewall change for what the
+browser and roslibpy already do.
 
 ## 10. Perception — what the cloud sees, and its calibration
 
