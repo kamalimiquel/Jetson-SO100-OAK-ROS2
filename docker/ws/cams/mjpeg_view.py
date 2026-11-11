@@ -29,6 +29,8 @@ STREAMS = {
     "right": "/oak/scene/right/compressed",
     # the colourised depth view published by oak_views — 5 Hz is plenty for a map
     "depth": "/oak/scene/depth/color/compressed",
+    # stereo confidence, straight from the device (8-bit, per-pixel depth certainty)
+    "confidence": "/oak/scene/confidence/compressed",
     # wrist camera (ADR-0022), a plain UVC webcam on the gripper
     "gripper": "/gripper/image/compressed",
 }
@@ -123,17 +125,19 @@ STEREO_PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>OAK ste
  .tag{position:absolute;left:8px;top:6px;padding:2px 7px;border-radius:4px;
       background:#0b1220cc;color:#3fb950;font-weight:700;letter-spacing:.04em}
  .tag.depth{color:#fbbf24}
+ .tag.conf{color:#a78bfa}
  .base{position:absolute;right:8px;top:6px;padding:2px 7px;border-radius:4px;
        background:#0b1220cc;color:#8d99ad;font-variant-numeric:tabular-nums}
  b{color:#3fb950} a{color:#d99036}
 </style></head><body>
-<header><b>stereo pair &amp; depth</b>
-  <span style="color:#8d99ad">the two rectified views the depth is computed from, and the depth map itself</span>
+<header><b>stereo &amp; depth</b>
+  <span style="color:#8d99ad">the rectified pair the stereo runs on, the depth map and its confidence</span>
   <span style="margin-left:auto"><a href="/">colour</a></span></header>
 <div class="pair">
-  <div class="cam"><img src="/left/stream"><div class="tag">LEFT · CAM_B</div><div class="base" id="ml"></div></div>
-  <div class="cam"><img src="/right/stream"><div class="tag">RIGHT · CAM_C</div><div class="base" id="mr"></div></div>
-  <div class="cam wide"><img src="/depth/stream"><div class="tag depth">DEPTH · 0–2 m</div><div class="base" id="md"></div></div>
+  <div class="cam"><img src="/left/stream"><div class="tag">Stereo L</div><div class="base" id="ml"></div></div>
+  <div class="cam"><img src="/right/stream"><div class="tag">Stereo R</div><div class="base" id="mr"></div></div>
+  <div class="cam"><img src="/depth/stream"><div class="tag depth">Depth · 0–2 m</div><div class="base" id="md"></div></div>
+  <div class="cam"><img src="/confidence/stream"><div class="tag conf">Confidence</div><div class="base" id="mc"></div></div>
 </div>
 <script>
 function poll(name, el){
@@ -142,7 +146,7 @@ function poll(name, el){
       s.w+'x'+s.h+' · '+s.fps.toFixed(1)+' fps'+(s.age > 3 ? ' · stale' : '');
   }).catch(()=>{});}, 1000);
 }
-poll('left', 'ml'); poll('right', 'mr'); poll('depth', 'md');
+poll('left', 'ml'); poll('right', 'mr'); poll('depth', 'md'); poll('confidence', 'mc');
 </script></body></html>"""
 
 

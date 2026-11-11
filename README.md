@@ -378,30 +378,29 @@ One page at **http://<xavier-ip>/** with five tabs, served by the `so100-web` co
 | Tab | URL (direct) | What you see |
 |---|---|---|
 | **Terminal** | http://192.168.1.50:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced — the first tab, because it is the cheap one |
-| **Stereo Cam & Depth** | http://192.168.1.50:8090/stereo | the two **rectified** mono views (LEFT · CAM_B, RIGHT · CAM_C) — exactly the images the depth map is computed from, each with its own rate — and, below them, the **depth map** (0–2 m, turbo colormap) |
+| **Stereo Cam & Depth** | http://192.168.1.50:8090/stereo | four panels, each labelled on the image: **Stereo L** and **Stereo R** (the rectified pair the depth is computed from), **Depth** (0–2 m, turbo colormap) and **Confidence** (the device's per-pixel certainty, mono). Each carries its own resolution and rate |
 | **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, **each point in the colour the camera saw there** |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
-| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF and the colour/confidence panels. **Started on demand** — see below |
+| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF, the scene **Colour camera** and the **Wrist camera** (the gripper webcam, ADR-0022). **Started on demand** — see below |
 
 What each tab actually looks like, captured on the bench (2026-11-10):
 
 | | |
 |---|---|
 | ![Terminal tab](docs/web-terminal.jpg) | ![Stereo Cam tab](docs/web-stereo.jpg) |
-| **Terminal** — a shell inside the web container: `ros2 topic list` shows the cell's topics | **Stereo Cam & Depth** — the rectified pair the depth is built from, and the depth map below |
+| **Terminal** — a shell inside the web container: `ros2 topic list` shows the cell's topics | **Stereo Cam & Depth** — four panels: the rectified pair, the depth map and its confidence (the mono views blurred here) |
 | ![Point Cloud tab](docs/web-pointcloud.jpg) | ![Graph tab](docs/web-graph.jpg) |
 | **Point Cloud** — the cloud in 3D, opening top-down on the bench; drag to orbit | **Graph** — rqt_graph: who publishes what to whom |
 | ![RViz tab](docs/web-rviz.jpg) | |
-| **RViz** — the SO-101 at its live pose, `Global Status: Ok` | |
+| **RViz** — the SO-101 at its live pose, the scene colour camera and the wrist camera | |
 
-**The depth map lives in the Stereo tab, not in RViz.** RViz here draws with llvmpipe (no
-GPU path for Qt on this board), and the image panels compete with the 3D view for the same
-software renderer: with three panels plus the arm the model silently stops being drawn
-(the counter drops to ~9 fps and the grid stays empty), with two it renders at 2 fps. So the
-depth display was removed from `rviz.rviz` and the depth map moved to the Stereo tab, where
-it costs nothing — that page is plain MJPEG. Colour and confidence stay in RViz, and if one of
-them ever comes up as "No Image", that is the same contention: restarting RViz usually
-settles it.
+**Depth and confidence live in the Stereo tab, not in RViz.** RViz here draws with llvmpipe (no
+GPU path for Qt on this board), and its image panels compete with the 3D view for the same
+software renderer: past two panels plus the arm, the model silently stops being drawn (the counter
+drops to ~9 fps and the grid stays empty); with two it renders at 2 fps. So both maps moved to the
+Stereo tab — four labelled panels on one plain-MJPEG page, free of renderer cost — and RViz keeps
+two panels: the scene colour camera and the **wrist camera**. If either comes up as "No Image",
+that is the same contention: restarting RViz usually settles it.
 
 **RViz only runs while its tab is on screen.** It is the most expensive thing in the cell:
 software GL (`LIBGL_ALWAYS_SOFTWARE=1`, there is no GPU path for Qt here) keeps **~155 % of a
@@ -936,7 +935,7 @@ inspected from any browser without ROS tooling:
 
 | Port | What it serves |
 |---|---|
-| **:8090** | `/` colour view with the aiming grid · `/stereo` the rectified pair + depth · `/<name>/stream`, `/<name>/snapshot`, `/<name>/state` for `color`, `left`, `right`, `depth`, **`gripper`** |
+| **:8090** | `/` colour view with the aiming grid · `/stereo` the four labelled panels (Stereo L/R, Depth, Confidence) · `/<name>/stream`, `/<name>/snapshot`, `/<name>/state` for `color`, `left`, `right`, `depth`, `confidence`, **`gripper`** |
 | **:8091** | the point cloud in 3D (three.js, `/cloud.bin` as `uint32 count + float32 xyz`, downsampled every 3rd point and clipped to the working volume) + `/state` |
 
 ### 11.3 so100-web — the browser
