@@ -802,10 +802,21 @@ not because the exposure changed.
 - The cleanest answer is a camera whose focus can be **set**: the 5M WebCam on this bench exposes
   `focus_absolute` 0-1023, so it can be focused at the real working distance and locked there
   (`curl 'http://127.0.0.1:8190/focus?v=350'` while pointing `camfocus` at it).
+- **The node side is live**: `wrist_cam` publishes `/gripper/image/compressed` at 10 Hz from
+  `/dev/so100_wrist` (§11.2), and the browser can see it at `:8090/gripper/stream`. What is missing
+  is physical — the camera is not on the arm, the focus has not been set with this procedure yet,
+  and there is no static transform from `moving_jaw_so101_v1` to `gripper_color_optical_frame`
+  because that needs the mount geometry.
 - The wrist camera is settled: a USB RGB webcam with manual focus, set at ≈12.5 cm and locked
   (ADR-0022 supersedes ADR-0008's OAK-D Lite, whose lens and stereo range both sit far beyond the
   wrist distance). That is why the 10-15 cm requirement is written as a *focus* requirement here,
   not as a depth range — and why `tools/camfocus.py` runs before the camera goes on the arm.
+
+![The wrist feed in the browser](docs/wrist-camera.png)
+
+*`/gripper/image/compressed` as it arrives today from the Logitech on the bench: 640x480 at 10 Hz,
+seen at `:8090/gripper/stream`. Blurred on purpose — the camera is not mounted and its focus has
+not been set; this is the pipeline, not the final view.*
 
 ### 10.6 The cloud in the colour frame, coloured
 
@@ -884,6 +895,19 @@ One node (/oak_cams), one depthai pipeline per device:
 | /oak/scene/points | out | point cloud in the **colour optical frame**, `x, y, z, rgb` (PCL layout): unprojected with the depth camera's own K (`fx 833.00 fy 833.00 cx 639.23 cy 356.87` at 1280x720), moved into the colour frame with the device extrinsic and coloured from the colour pixel it projects onto (§10.6) |
 | /oak/gripper/* | — | **unused**: the node would publish the same set for a second OAK, but the wrist camera is a USB webcam on its own UVC node (ADR-0022) |
 
+The container also runs **`wrist_cam`** (ADR-0022), the plain-UVC driver for the camera on the
+gripper:
+
+| Topic | Direction | What it carries |
+|---|---|---|
+| /gripper/image/compressed | out, 10 Hz | the wrist camera as JPEG (CompressedImage), frame `gripper_color_optical_frame` |
+| /gripper/camera_info | out | only once intrinsics exist in `WRIST_CALIB`; a made-up K would be worse than none |
+
+It opens `/dev/so100_wrist` (a udev symlink, so re-enumeration is harmless), asks V4L2 for MJPG at
+`WRIST_W`x`WRIST_H` and **logs what the driver actually gave** — the Logitech on this bench answers
+640x480 JPEG whatever you ask for. There is no static transform to the arm yet: that is the mount
+geometry, and it is the piece that would turn this feed into an eye-in-hand measurement.
+
 It also broadcasts /tf_static with the camera frame offsets. Those are still nominal (the OAK's own extrinsics, not the hand-eye result), which is why the cloud is meaningful in the camera frame and not yet in `base`.
 
 Two plain-HTTP viewers run alongside the node in the same container, so the cameras can be
@@ -891,7 +915,7 @@ inspected from any browser without ROS tooling:
 
 | Port | What it serves |
 |---|---|
-| **:8090** | `/` colour view with the aiming grid · `/stereo` the rectified L/R pair · `/<name>/stream`, `/<name>/snapshot`, `/<name>/state` for `color`, `left`, `right` |
+| **:8090** | `/` colour view with the aiming grid · `/stereo` the rectified pair + depth · `/<name>/stream`, `/<name>/snapshot`, `/<name>/state` for `color`, `left`, `right`, `depth`, **`gripper`** |
 | **:8091** | the point cloud in 3D (three.js, `/cloud.bin` as `uint32 count + float32 xyz`, downsampled every 3rd point and clipped to the working volume) + `/state` |
 
 ### 11.3 so100-web — the browser

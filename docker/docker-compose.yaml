@@ -46,10 +46,14 @@ services:
     volumes:
       # OAK devices (VID 03e7) + the cgroup rule below (ADR-0007).
       - /dev/bus/usb:/dev/bus/usb
+      # Wrist camera (ADR-0022): a udev symlink, so re-enumeration to another /dev/videoN does
+      # not need a compose edit. scripts/provision-jetson.sh writes the rule.
+      - /dev/so100_wrist:/dev/so100_wrist
       - ./ws:/opt/ws
       - ../tools:/opt/tools:ro
     device_cgroup_rules:
       - "c 189:* rmw"
+      - "c 81:* rmw"
     command: ["bash", "/opt/ws/cams/entry.sh"]
 
   perception:

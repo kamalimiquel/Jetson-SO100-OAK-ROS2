@@ -18,6 +18,22 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 COMPOSE=(docker compose)
 
+echo "== udev: wrist camera rule (ADR-0022) =="
+# The wrist camera is a plain UVC webcam; the symlink makes the device path stable, so a
+# re-enumeration to /dev/video6 does not break the container mount. Set WRIST_VID/WRIST_PID to
+# the unit you mount (default: the 5M WebCam, the one with a manual focus control).
+WRIST_VID="${WRIST_VID:-0bda}"
+WRIST_PID="${WRIST_PID:-5649}"
+if [ ! -f /etc/udev/rules.d/81-wrist-cam.rules ]; then
+  printf '%s\n' "SUBSYSTEM==\"video4linux\", ATTRS{idVendor}==\"$WRIST_VID\", ATTRS{idProduct}==\"$WRIST_PID\", ATTR{index}==\"0\", SYMLINK+=\"so100_wrist\"" \
+    | sudo_cmd tee /etc/udev/rules.d/81-wrist-cam.rules >/dev/null
+  sudo_cmd udevadm control --reload-rules
+  sudo_cmd udevadm trigger --subsystem-match=video4linux
+  echo "wrist udev rule added ($WRIST_VID:$WRIST_PID -> /dev/so100_wrist)"
+else
+  echo "already present"
+fi
+
 echo "== udev: OAK rule (VID 03e7) =="
 if [ ! -f /etc/udev/rules.d/80-oak.rules ]; then
   printf '%s\n' 'SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"' \

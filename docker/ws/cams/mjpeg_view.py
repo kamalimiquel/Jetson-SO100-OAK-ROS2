@@ -29,6 +29,8 @@ STREAMS = {
     "right": "/oak/scene/right/compressed",
     # the colourised depth view published by oak_views — 5 Hz is plenty for a map
     "depth": "/oak/scene/depth/color/compressed",
+    # wrist camera (ADR-0022), a plain UVC webcam on the gripper
+    "gripper": "/gripper/image/compressed",
 }
 DEFAULT = "color"
 
