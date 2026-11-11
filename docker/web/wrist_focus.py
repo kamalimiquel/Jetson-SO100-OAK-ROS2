@@ -166,8 +166,8 @@ def demo_worker():
         for i, line in enumerate(["SO-101  12.5 cm  focus", "sharpness target",
                                   "0123456789  abcdef", "/dev/so100_wrist"]):
             d.text((40, 90 + i * 60), line, fill=220)
-        if (n // 10) % 2:                             # two seconds sharp, two blurred
-            img = img.filter(ImageFilter.GaussianBlur(3.5))
+        if n % 37 == 0:                               # an occasional blurred frame, as a real
+            img = img.filter(ImageFilter.GaussianBlur(3.5))   # camera would give
         buf = io.BytesIO()
         img.convert("RGB").save(buf, format="JPEG", quality=85)
         ingest(buf.getvalue())
