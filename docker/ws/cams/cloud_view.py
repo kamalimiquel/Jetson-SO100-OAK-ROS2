@@ -5,7 +5,7 @@ a laptop. This serves the newest cloud as a compact binary over plain HTTP and a
 three.js page that renders it:
 
     http://<jetson-ip>:8091/          interactive 3D view
-    http://<jetson-ip>:8091/cloud.bin  uint32 count + float32 x,y,z per point
+    http://<jetson-ip>:8091/cloud.bin  uint32 count + float32 x,y,z + uint8 r,g,b per point
 
 The cloud is downsampled with a stride (default: keep every 3rd point) so a
 720p cloud stays interactive over WiFi. Colour is derived from distance in the
@@ -51,16 +51,32 @@ class CloudViewer(Node):
         usable = (len(raw) // step) * step
         pts = np.frombuffer(raw[:usable].tobytes(), dtype=np.float32)
         per = step // 4
-        pts = pts.reshape(-1, per)[:, :3]
-        pts = pts[::STRIDE]
-        pts = pts[np.isfinite(pts).all(axis=1)]
+        arr = pts.reshape(-1, per)
+        pts = arr[:, :3]
+        has_rgb = "rgb" in fields and per >= 4
+        rgb = None
+        if has_rgb:
+            packed = np.ascontiguousarray(arr[:, fields["rgb"] // 4]).view(np.uint32)
+            rgb = np.stack([(packed >> 16) & 0xFF, (packed >> 8) & 0xFF, packed & 0xFF],
+                           axis=1).astype(np.uint8)
+        keep = np.isfinite(pts).all(axis=1)
+        pts = pts[keep]
+        if rgb is not None:
+            rgb = rgb[keep]
         # keep the working volume only: the OAK frame is optical (z forward), and the
         # far/noisy points stretch the bounding box until the cloud renders as dust
-        pts = pts[(pts[:, 2] > 0.12) & (pts[:, 2] < 2.5)
-                  & (np.abs(pts[:, 0]) < 1.5) & (np.abs(pts[:, 1]) < 1.5)]
+        vol = ((pts[:, 2] > 0.12) & (pts[:, 2] < 2.5)
+               & (np.abs(pts[:, 0]) < 1.5) & (np.abs(pts[:, 1]) < 1.5))
+        pts = pts[vol]
+        if rgb is not None:                 # same mask on both, or the colours slide off
+            rgb = rgb[vol]
         if len(pts) == 0:
             return
-        payload = struct.pack("<I", len(pts)) + pts.astype("<f4").tobytes()
+        pts = pts[::STRIDE]
+        if rgb is not None:
+            rgb = rgb[::STRIDE]
+        payload = (struct.pack("<I", len(pts)) + pts.astype("<f4").tobytes()
+                   + (rgb.tobytes() if rgb is not None else b""))
         with _lock:
             _state.update(bin=payload, n=len(pts), stamp=time.time())
             _count["n"] += 1
@@ -122,7 +138,8 @@ function makeGeom(n){
   geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n*3), 3));
   geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n*3), 3));
-  const mat = new THREE.PointsMaterial({size:3.0, color:0x9fe8ff, sizeAttenuation:false});
+  const mat = new THREE.PointsMaterial({size:3.0, color:0xffffff, vertexColors:true,
+                                        sizeAttenuation:false});
   if (pts) scene.remove(pts);
   pts = new THREE.Points(geom, mat);
   scene.add(pts);
@@ -136,26 +153,36 @@ async function tick(){
       const n = dv.getUint32(0, true);
       if (!geom || geom.attributes.position.count !== n) makeGeom(n);
       const pos = geom.attributes.position.array, col = geom.attributes.color.array;
-      // two passes: read positions, then colour by distance from the cloud centre
-      // normalised to this frame, so contrast does not depend on scale
+      const hasRGB = buf.byteLength >= 4 + n*15;      // xyz float32 + rgb uint8 per point
       let cx=0, cy=0, cz=0;
       for (let i=0;i<n;i++){
-        const x = dv.getFloat32(4+i*12, true), y = dv.getFloat32(8+i*12, true), z = dv.getFloat32(12+i*12, true);
+        const o = 4 + i*12;
+        const x = dv.getFloat32(o, true), y = dv.getFloat32(o+4, true), z = dv.getFloat32(o+8, true);
         pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z; cx+=x; cy+=y; cz+=z;
       }
       cx/=n; cy/=n; cz/=n;
-      let dmin=1e9, dmax=1e-9;
-      for (let i=0;i<n;i++){
-        const d = Math.hypot(pos[i*3]-cx, pos[i*3+1]-cy, pos[i*3+2]-cz);
-        if (d<dmin) dmin=d; if (d>dmax) dmax=d;
-      }
-      const span = Math.max(1e-3, dmax-dmin);
-      for (let i=0;i<n;i++){
-        const t = (Math.hypot(pos[i*3]-cx, pos[i*3+1]-cy, pos[i*3+2]-cz) - dmin)/span;
-        // bright enough to read against the near-black background: pale cyan -> warm
-        col[i*3]   = 0.55 + 0.45*t;
-        col[i*3+1] = 0.88 + 0.12*Math.sin(t*Math.PI);
-        col[i*3+2] = 1.00 - 0.55*t;
+      if (hasRGB){
+        // the pixel's own colour, straight from the colour camera
+        const base = 4 + n*12;
+        for (let i=0;i<n;i++){
+          col[i*3]   = dv.getUint8(base + i*3)     / 255;
+          col[i*3+1] = dv.getUint8(base + i*3 + 1) / 255;
+          col[i*3+2] = dv.getUint8(base + i*3 + 2) / 255;
+        }
+      } else {
+        // fallback for an uncalibrated unit: distance shading, cyan -> warm
+        let dmin=1e9, dmax=1e-9;
+        for (let i=0;i<n;i++){
+          const d = Math.hypot(pos[i*3]-cx, pos[i*3+1]-cy, pos[i*3+2]-cz);
+          if (d<dmin) dmin=d; if (d>dmax) dmax=d;
+        }
+        const span = Math.max(1e-3, dmax-dmin);
+        for (let i=0;i<n;i++){
+          const t = (Math.hypot(pos[i*3]-cx, pos[i*3+1]-cy, pos[i*3+2]-cz) - dmin)/span;
+          col[i*3]   = 0.55 + 0.45*t;
+          col[i*3+1] = 0.88 + 0.12*Math.sin(t*Math.PI);
+          col[i*3+2] = 1.00 - 0.55*t;
+        }
       }
       geom.attributes.position.needsUpdate = true;
       geom.attributes.color.needsUpdate = true;

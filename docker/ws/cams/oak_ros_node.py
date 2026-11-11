@@ -117,6 +117,34 @@ def create_cloud_xyz32(header, pts_m):
     return msg
 
 
+def create_cloud_xyzrgb(header, pts_m, rgb_u8):
+    """PointCloud2 with the PCL layout x,y,z,rgb (rgb packed into a float32).
+
+    Consumers (rviz, Open3D, open3d-style readers, GraspGen's converters) expect exactly this
+    offset order, so it is built by hand rather than depending on sensor_msgs_py.
+    """
+    msg = PointCloud2()
+    msg.header = header
+    msg.height = 1
+    msg.width = len(pts_m)
+    msg.fields = [
+        PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+        PointField(name="rgb", offset=12, datatype=PointField.FLOAT32, count=1),
+    ]
+    msg.is_bigendian = False
+    msg.point_step = 16
+    msg.row_step = msg.point_step * msg.width
+    msg.is_dense = True
+    packed = np.zeros((len(pts_m), 4), dtype=np.float32)
+    packed[:, :3] = np.ascontiguousarray(pts_m, dtype=np.float32)
+    c = np.ascontiguousarray(rgb_u8, dtype=np.uint32)
+    packed[:, 3] = ((c[:, 0] << 16) | (c[:, 1] << 8) | c[:, 2]).view(np.float32)
+    msg.data = array.array("B", packed.astype("<f4").tobytes())
+    return msg
+
+
 def camera_info(fx, fy, cx, cy, w, h, frame_id):
     info = CameraInfo()
     info.width = w
@@ -172,6 +200,8 @@ class OakNode(Node):
                 "device": device,
                 "calib": calib,
                 "k_cache": {},
+                "color_bgr": None,
+                "colour_cache": {},
                 "pcl_last": 0.0,
                 "depth_last": 0.0,
                 "conf_last": 0.0,
@@ -237,6 +267,7 @@ class OakNode(Node):
             conf_frames = s["qconf"].tryGetAll()
             if color_frames:
                 frame = color_frames[-1].getCvFrame()
+                s["color_bgr"] = frame
                 ok, jpg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
                 if ok:
                     msg = CompressedImage()
@@ -347,12 +378,65 @@ class OakNode(Node):
             f"cx={k[2]:.2f} cy={k[3]:.2f}")
         return k
 
-    def _publish_cloud(self, s, depth, now):
-        """Host-side unprojection of the depth map.
+    def _colour_model(self, s, cw, ch):
+        """Colour intrinsics at the frame size, plus the depth→colour extrinsic, cached.
 
-        The map is 16UC1 in millimetres — a depth of 1000 is one metre — which is what
-        the stereo pipeline gives when the unit has a usable calibration; the scale env
-        var exists only to correct a unit whose depth comes out proportional."""
+        The cloud is built on the depth camera's geometry, but colour has to come from a pixel
+        of the *colour* camera: the device's own extrinsic is the exact relation between the two
+        sensors, so the board homography of §10.4 (a plane approximation) is not needed here.
+        Returns None when the unit has no usable calibration, in which case the cloud stays
+        uncoloured in the depth frame instead of being coloured wrongly.
+        """
+        key = (cw, ch)
+        cache = s["colour_cache"]
+        if key in cache:
+            return cache[key]
+        model = None
+        calib = s.get("calib")
+        if calib is not None:
+            try:
+                raw = calib.getCameraIntrinsics(dai.CameraBoardSocket.RGB, cw, ch)
+                k = (float(raw[0][0]), float(raw[1][1]), float(raw[0][2]), float(raw[1][2]))
+            except Exception:  # noqa: BLE001
+                k = None
+            if k and k[0] > 0:
+                try:
+                    m = np.array(calib.getCameraExtrinsics(dai.CameraBoardSocket.RIGHT,
+                                                           dai.CameraBoardSocket.RGB),
+                                 dtype=float)
+                except Exception:  # noqa: BLE001
+                    m = None
+                if m is not None:
+                    if m.shape == (4, 4):
+                        R, t = m[:3, :3], m[:3, 3]
+                    elif m.shape == (3, 4):
+                        R, t = m[:, :3], m[:, 3]
+                    else:
+                        R = t = None
+                    if R is not None:
+                        # depthai 2.x returns this translation in CENTIMETRES (the legacy
+                        # convention); the cloud is in metres, so 3.719 becomes 37.19 mm.
+                        t = np.asarray(t, dtype=float) * 0.01
+                        model = (k, R, t)
+                        self.get_logger().info(
+                            f"{s['ns']}: cloud colour model {cw}x{ch} fx={k[0]:.2f} "
+                            f"cx={k[2]:.2f} | depth→colour t=({t[0] * 1000:.1f}, "
+                            f"{t[1] * 1000:.1f}, {t[2] * 1000:.1f}) mm")
+        cache[key] = model
+        return model
+
+    def _publish_cloud(self, s, depth, now):
+        """Unproject the depth map, then colour every point from the colour camera.
+
+        Geometry is built on the depth camera's own K (the map arrives in the right camera's
+        geometry), moved into the colour camera's frame with the device extrinsic, and
+        projected with the colour K to fetch the pixel. The result is published in the *colour*
+        optical frame with the PCL `x, y, z, rgb` layout, so a cloud point and its pixel are the
+        same thing — the step that turns "the camera sees" into "the object is there".
+
+        Points that fall outside the colour image keep their geometry but are coloured dim grey,
+        because dropping them would leave holes in the shape a grasp is aimed at.
+        """
         ns = s["ns"]
         env = f"OAK_{ns.upper()}"
         h, w = depth.shape
@@ -367,12 +451,36 @@ class OakNode(Node):
         x = (uu - cx) * z / fx
         y = (vv - cy) * z / fy
         pts = np.stack([x[valid], y[valid], z[valid]], axis=1)
-        if len(pts):
-            header = Header()
-            header.stamp = self.get_clock().now().to_msg()
+        if not len(pts):
+            return
+
+        header = Header()
+        header.stamp = self.get_clock().now().to_msg()
+        colour = s.get("color_bgr")
+        model = self._colour_model(s, colour.shape[1], colour.shape[0]) if colour is not None else None
+        if model is None:
             header.frame_id = f"{ns}_right_optical_frame"
             self._pub(f"/oak/{ns}/points", PointCloud2).publish(create_cloud_xyz32(header, pts))
             s["pcl_last"] = now
+            return
+
+        (kfx, kfy, kcx, kcy), R, t = model
+        p = pts @ R.T + t
+        zc = p[:, 2]
+        rgb = np.full((len(p), 3), 80, dtype=np.uint8)
+        front = zc > 0.05
+        if front.any():
+            u = kfx * p[front, 0] / zc[front] + kcx
+            v = kfy * p[front, 1] / zc[front] + kcy
+            ch, cw = colour.shape[:2]
+            inside = (u >= 0) & (u < cw - 1) & (v >= 0) & (v < ch - 1)
+            idx = np.flatnonzero(front)[inside]
+            if len(idx):
+                bgr = colour[v[inside].astype(np.int32), u[inside].astype(np.int32)]
+                rgb[idx] = bgr[:, ::-1]          # BGR -> RGB
+        header.frame_id = f"{ns}_color_optical_frame"
+        self._pub(f"/oak/{ns}/points", PointCloud2).publish(create_cloud_xyzrgb(header, p, rgb))
+        s["pcl_last"] = now
 
     def _pub(self, topic, cls):
         pub = getattr(self, "_pubcache", None)

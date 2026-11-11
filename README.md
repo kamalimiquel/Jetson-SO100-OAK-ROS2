@@ -45,6 +45,7 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
   - [10.3 Hand-eye — where the camera sits in the arm's frame](#103-hand-eye--where-the-camera-sits-in-the-arms-frame)
   - [10.4 Depth scale, and colour to depth registration](#104-depth-scale-and-colour-to-depth-registration)
   - [10.5 The gripper camera — is it in focus at 10-15 cm?](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm)
+  - [10.6 The cloud in the colour frame, coloured](#106-the-cloud-in-the-colour-frame-coloured)
 - **[11. Node and topic reference](#11-node-and-topic-reference)**
   - [11.1 so100-arm — the arm](#111-so100-arm--the-arm)
   - [11.2 so100-cams — the cameras](#112-so100-cams--the-cameras)
@@ -98,9 +99,10 @@ seen working on this hardware, so trust it over the plan when they disagree.
 - [x] Point cloud: unprojected with the depth camera's own intrinsics, extended disparity (range from ~0.65 m down to ~0.33 m), left/right check; scale measured at 0.315 m against PnP geometry — depth reads **+3.0%**, spread ±1% over 100k board pixels
 - [x] Colour ↔ depth **registration**: homography from the board, 48 correspondences, 0.69 px rms — `docs/calibration/color_to_depth.yaml`
 
+- [x] **Point cloud in the colour frame, coloured** — `/oak/scene/points` carries `x, y, z, rgb` in `scene_color_optical_frame`, built from the device's depth→colour extrinsic and the colour intrinsics (§10.6). Verified on the bench 2026-11-11: 56k points at ~2 Hz, colours on the objects. Unblocks object segmentation in 3D, GraspGen targets and VLM pointing
+
 ### 2.3 Next
 
-- [ ] **Point cloud in the colour frame, coloured** — publish `/oak/scene/points` already transformed into the colour optical frame and carrying the pixel's RGB, so a cloud point and its pixel are the same thing. The homography that makes this possible is solved and unused; this is the step that turns "the camera sees" into "the object is *there*", and it is what lets a grasp be aimed at a segmented object instead of a hand-picked 3D guess. Unblocks: object segmentation in 3D, GraspGen targets, VLM pointing.
 - [ ] **The arm's silhouette in the cloud** — the SO-101's black plastic returns no depth, so the arm is a hole at the near edge of the cloud instead of a body (visible as the dark blob at the bottom of the Point Cloud tab). Project the URDF links through the same intrinsics the cloud is unprojected with — the transform is invertible, so this is a mask, not a second pipeline — and either mark the missing points or draw the model over the cloud. It is what lets the operator see where the arm sits relative to the objects, and the same mask is what a grasp planner needs to reject points that are the robot and not the scene.
 - [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
 - [ ] **IK node (ADR-0009)** — SE(3) pose to joint angles, with the URDF limits; the missing middle between "the gripper is here" (FK, done) and "move the gripper there". Unblocks GraspGen, the VLM interface and autonomous episodes
@@ -376,7 +378,7 @@ One page at **http://<xavier-ip>/** with five tabs, served by the `so100-web` co
 |---|---|---|
 | **Terminal** | http://192.168.1.50:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced — the first tab, because it is the cheap one |
 | **Stereo Cam & Depth** | http://192.168.1.50:8090/stereo | the two **rectified** mono views (LEFT · CAM_B, RIGHT · CAM_C) — exactly the images the depth map is computed from, each with its own rate — and, below them, the **depth map** (0–2 m, turbo colormap) |
-| **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, colour = distance from the cloud centre |
+| **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, **each point in the colour the camera saw there** |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
 | **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF and the colour/confidence panels. **Started on demand** — see below |
 
@@ -723,8 +725,8 @@ repeated at ~0.40 m (§2.3).
 
 **Registration.** Colour and depth sensors are 37 mm apart, so a pixel is not a pixel. The
 homography from the board — 48 correspondences, 0.69 px rms — lives in
-`docs/calibration/color_to_depth.yaml`. It is solved and **not used yet**: the cloud is still
-uncoloured, which is the first item in §2.3.
+`docs/calibration/color_to_depth.yaml`. It stays the right tool for 2D overlays (drawing a depth
+contour on the colour image); the cloud itself is coloured by a different, exact route — §10.6.
 
 ### 10.5 The gripper camera — is it in focus at 10-15 cm?
 
@@ -805,6 +807,40 @@ not because the exposure changed.
   wrist distance). That is why the 10-15 cm requirement is written as a *focus* requirement here,
   not as a depth range — and why `tools/camfocus.py` runs before the camera goes on the arm.
 
+### 10.6 The cloud in the colour frame, coloured
+
+`/oak/scene/points` is now published **in the colour camera's optical frame** as `x, y, z, rgb`
+(PCL layout, `rgb` packed into a float32 at offset 12). A point and the pixel it came from are the
+same thing, which is what a grasp aimed at a segmented object needs.
+
+How it is built, and why not with the homography of §10.4:
+
+1. The depth map arrives in the **right camera's** geometry, so the point is unprojected with that
+   camera's intrinsics (`fx 833.00 …`), exactly as before.
+2. The device's own **extrinsic** depth→colour moves it into the colour frame: `t = (37.2, 0.1,
+   -3.2) mm` on this unit — the two sensors are that far apart, which is why a pixel is not a pixel
+   (§10.4).
+3. The colour **intrinsics** at the colour stream's resolution (`fx 1545.36 cx 948.02` at
+   1920x1080) project the point to a pixel, and the pixel's BGR is written into `rgb`.
+
+The board homography would also map depth pixels to colour pixels, but only as a plane
+approximation: it is exact for something lying on the plane the board was on and drifts for
+anything in front of it. The extrinsic + intrinsics route is exact everywhere, so that is what the
+cloud uses; the homography stays for 2D work.
+
+**One trap worth writing down**: `calib.getCameraExtrinsics()` in depthai 2.x returns the
+translation in **centimetres**, while the cloud is in metres. Used as-is it moved the whole cloud
+3.7 m sideways — the log line `depth→colour t=(37.2, 0.1, -3.2) mm` after the ×0.01 is the check.
+
+Points that project **outside** the colour image keep their geometry but are coloured dim grey
+(80, 80, 80): dropping them would leave holes exactly where the depth camera sees more than the
+colour one, and a grasp is aimed at the shape. On a unit with no usable calibration the node falls
+back to the old uncoloured `xyz` cloud in the depth frame rather than colouring it wrongly.
+
+Verified 2026-11-11 on the bench: `frame_id: scene_color_optical_frame`, fields
+`x,y,z,rgb` at offsets 0/4/8/12, ~2 Hz, 56k points, median range 1.11 m, and the colours land on
+the objects in the Point Cloud tab (counters, sticky notes, the red part on the bench).
+
 ## 11. Node and topic reference
 
 Each container is one job and publishes a small, fixed set of topics. This is the reference for
@@ -845,7 +881,7 @@ One node (/oak_cams), one depthai pipeline per device:
 | /oak/scene/confidence | out | stereo confidence map, 8UC1 (per-pixel depth certainty) |
 | /oak/scene/color/camera_info, /oak/scene/depth/camera_info | out | intrinsics, straight from the device's own calibration at the resolution each stream runs at |
 | /oak/scene/imu | out | accel + gyro + rotation vector — only on units that carry an IMU (this POE unit has none) |
-| /oak/scene/points | out | point cloud (XYZ, metres) unprojected with the **depth camera's own calibration**, asked from the device at the resolution the map arrives at (`fx 833.00 fy 833.00 cx 639.23 cy 356.87` at 1280x720). No placeholders: the env vars are only a fallback for a unit with none |
+| /oak/scene/points | out | point cloud in the **colour optical frame**, `x, y, z, rgb` (PCL layout): unprojected with the depth camera's own K (`fx 833.00 fy 833.00 cx 639.23 cy 356.87` at 1280x720), moved into the colour frame with the device extrinsic and coloured from the colour pixel it projects onto (§10.6) |
 | /oak/gripper/* | — | **unused**: the node would publish the same set for a second OAK, but the wrist camera is a USB webcam on its own UVC node (ADR-0022) |
 
 It also broadcasts /tf_static with the camera frame offsets. Those are still nominal (the OAK's own extrinsics, not the hand-eye result), which is why the cloud is meaningful in the camera frame and not yet in `base`.
