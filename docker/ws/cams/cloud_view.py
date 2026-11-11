@@ -89,12 +89,13 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(1);
 document.body.appendChild(renderer.domElement);
-// Fixed opening view: the cloud is in the camera's optical frame, ~1.4 m ahead of the
-// sensor, so these numbers put the bench in the middle with the same framing every time.
-// (Auto-fitting the bounding sphere made the view jump from load to load, because the far
-// noise changes what "fits".)
-const target = new THREE.Vector3(-0.036, 0.052, 1.414);
-let sph = {r:2.27, th:-1.2, ph:0.9};
+// Zenithal opening view: the cloud is in the camera's optical frame and the sensor looks
+// down at the bench, so looking along +z is looking straight down on the workbench and the
+// arm. cam.up is flipped because in an optical frame +y points *down* the image.
+const target = new THREE.Vector3(-0.29, 0.0, 1.33);
+let sph = {r:1.60, th:0.0, ph:0.02};
+cam.up.set(0, -1, 0);
+const FOV_DEG = 55;
 function placeCam(){
   cam.position.set(
     target.x + sph.r*Math.sin(sph.ph)*Math.cos(sph.th),

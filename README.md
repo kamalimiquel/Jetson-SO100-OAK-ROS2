@@ -72,7 +72,7 @@ the URDF comes from, so it cannot drift.
 - [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier
 - [x] Compose file + provisioning script for the **six** services (five cell domains + rosbridge)
 - [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); Windows twin mirrors /joint_states at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC)
-- [x] Web interface: **five tabs live** — RViz2, Stereo Cam, Point Cloud, rqt_graph, terminal — plus the torque switch (ADR-0014/0015/0018)
+- [x] Web interface: **five tabs live** — Terminal, Stereo Cam & Depth, Point Cloud, Graph, RViz — plus the torque switch (ADR-0014/0015/0018)
 - [x] F710 teleop over rosbridge from the Windows PC (ADR-0020): all six joints and the gripper, torque on/off by holding B for 5 s
 - [x] Point cloud: unprojected with the depth camera's own intrinsics, extended disparity (range from ~0.65 m down to ~0.33 m), left/right check; scale measured at 0.315 m against PnP geometry — depth reads **+3.0%**, spread ±1% over 100k board pixels
 - [x] Colour ↔ depth **registration**: homography from the board, 48 correspondences, 0.69 px rms — `docs/calibration/color_to_depth.yaml`
@@ -246,7 +246,7 @@ One page at **http://<xavier-ip>/** with five tabs, served by the `so100-web` co
 |---|---|---|
 | **Terminal** | http://192.168.1.50:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced — the first tab, because it is the cheap one |
 | **Stereo Cam & Depth** | http://192.168.1.50:8090/stereo | the two **rectified** mono views (LEFT · CAM_B, RIGHT · CAM_C) — exactly the images the depth map is computed from, each with its own rate — and, below them, the **depth map** (0–2 m, turbo colormap) |
-| **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): drag to orbit, wheel to zoom, colour = distance from the cloud centre |
+| **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, colour = distance from the cloud centre |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
 | **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF and the colour/confidence panels. **Started on demand** — see below |
 
@@ -257,7 +257,7 @@ What each tab actually looks like, captured on the bench (2026-11-10):
 | ![Terminal tab](docs/web-terminal.jpg) | ![Stereo Cam tab](docs/web-stereo.jpg) |
 | **Terminal** — a shell inside the web container: `ros2 topic list` shows the cell's topics | **Stereo Cam & Depth** — the rectified pair the depth is built from, and the depth map below |
 | ![Point Cloud tab](docs/web-pointcloud.jpg) | ![Graph tab](docs/web-graph.jpg) |
-| **Point Cloud** — the cloud in 3D, drag to orbit, wheel to zoom | **Graph** — rqt_graph: who publishes what to whom |
+| **Point Cloud** — the cloud in 3D, opening top-down on the bench; drag to orbit | **Graph** — rqt_graph: who publishes what to whom |
 | ![RViz tab](docs/web-rviz.jpg) | |
 | **RViz** — the SO-101 at its live pose, `Global Status: Ok` | |
 
@@ -390,7 +390,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
    docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 run tf2_ros tf2_echo Base jaw'
    ```
    `Base` is the URDF root; `Moving Jaw` is the gripper link. A missing transform means the arm side, not RViz.
-6. **Open the page:** http://192.168.1.50/ — Terminal, Stereo Cam, Point Cloud, Graph, RViz.
+6. **Open the page:** http://192.168.1.50/ — Terminal, Stereo Cam & Depth, Point Cloud, Graph, RViz.
 7. **Raw captures without a browser** (useful when a tab is blank):
    ```bash
    docker exec so100-web bash -c 'DISPLAY=:10 import -window root /tmp/rviz.png; DISPLAY=:11 import -window root /tmp/graph.png'
@@ -414,7 +414,7 @@ And the one trap that cost the most time: **a URDF that `urdfdom` rejects render
 
 ## 7. Windows PC setup — teleop + visualization
 
-Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — five tabs (RViz, Stereo Cam, Point Cloud, Graph, Terminal) and the torque switch. The RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs **no ROS on Windows**: the Python client talks to the rosbridge WebSocket (ADR-0020).
+Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — five tabs (Terminal, Stereo Cam & Depth, Point Cloud, Graph, RViz) and the torque switch. The RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs **no ROS on Windows**: the Python client talks to the rosbridge WebSocket (ADR-0020).
 
 ### 7.1 MuJoCo (training, ADR-0016) — first milestone
 
