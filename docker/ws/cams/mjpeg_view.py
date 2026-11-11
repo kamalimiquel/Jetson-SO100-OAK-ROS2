@@ -4,7 +4,7 @@ Re-serves the latest JPEG of three streams so the framing can be checked from an
 browser on the LAN without ROS tooling:
 
     http://<jetson-ip>:8090/               colour page, with the aiming grid
-    http://<jetson-ip>:8090/stereo         the two rectified views the stereo runs on
+    http://<jetson-ip>:8090/stereo         the two rectified views plus the depth map
     http://<jetson-ip>:8090/<name>/stream  MJPEG stream (name = color | left | right)
     http://<jetson-ip>:8090/<name>/snapshot  one JPEG
     http://<jetson-ip>:8090/<name>/state     size, fps, age
@@ -27,6 +27,8 @@ STREAMS = {
     "color": "/oak/scene/color/compressed",
     "left": "/oak/scene/left/compressed",
     "right": "/oak/scene/right/compressed",
+    # the colourised depth view published by oak_views — 5 Hz is plenty for a map
+    "depth": "/oak/scene/depth/color/compressed",
 }
 DEFAULT = "color"
 
@@ -113,20 +115,23 @@ STEREO_PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>OAK ste
  header{padding:9px 14px;background:#141b2a;border-bottom:1px solid #263042;
         display:flex;gap:18px;align-items:center}
  .pair{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px}
+ .pair .wide{grid-column:1 / span 2}
  .cam{position:relative;background:#0f1828;border:1px solid #263042;border-radius:6px;overflow:hidden}
  .cam img{display:block;width:100%;height:auto}
  .tag{position:absolute;left:8px;top:6px;padding:2px 7px;border-radius:4px;
       background:#0b1220cc;color:#3fb950;font-weight:700;letter-spacing:.04em}
+ .tag.depth{color:#fbbf24}
  .base{position:absolute;right:8px;top:6px;padding:2px 7px;border-radius:4px;
        background:#0b1220cc;color:#8d99ad;font-variant-numeric:tabular-nums}
  b{color:#3fb950} a{color:#d99036}
 </style></head><body>
-<header><b>stereo pair</b>
-  <span style="color:#8d99ad">rectified left / right — exactly the images the depth is computed from</span>
+<header><b>stereo pair &amp; depth</b>
+  <span style="color:#8d99ad">the two rectified views the depth is computed from, and the depth map itself</span>
   <span style="margin-left:auto"><a href="/">colour</a></span></header>
 <div class="pair">
   <div class="cam"><img src="/left/stream"><div class="tag">LEFT · CAM_B</div><div class="base" id="ml"></div></div>
   <div class="cam"><img src="/right/stream"><div class="tag">RIGHT · CAM_C</div><div class="base" id="mr"></div></div>
+  <div class="cam wide"><img src="/depth/stream"><div class="tag depth">DEPTH · 0–2 m</div><div class="base" id="md"></div></div>
 </div>
 <script>
 function poll(name, el){
@@ -135,7 +140,7 @@ function poll(name, el){
       s.w+'x'+s.h+' · '+s.fps.toFixed(1)+' fps'+(s.age > 3 ? ' · stale' : '');
   }).catch(()=>{});}, 1000);
 }
-poll('left', 'ml'); poll('right', 'mr');
+poll('left', 'ml'); poll('right', 'mr'); poll('depth', 'md');
 </script></body></html>"""
 
 

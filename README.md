@@ -29,7 +29,7 @@ the URDF comes from, so it cannot drift.
 - **[4. Camera setup — depthai on the Xavier](#4-camera-setup--depthai-on-the-xavier)**
 - **[5. Container stack — how the Xavier runs the robot](#5-container-stack--how-the-xavier-runs-the-robot)**
   - [5.1 How to create the containers](#51-how-to-create-the-containers)
-- **[6. Web interface — Terminal · Stereo · Cloud · Graph · RViz](#6-web-interface--terminal--stereo--cloud--graph--rviz)**
+- **[6. Web interface — Terminal · Stereo & Depth · Cloud · Graph · RViz](#6-web-interface--terminal--stereo--depth--cloud--graph--rviz)**
   - [6.1 Torque switch — the red button](#61-torque-switch--the-red-button)
   - [6.2 What runs inside `so100-web`](#62-what-runs-inside-so100-web)
   - [6.3 The image: the **desktop** dusty image, no compiling](#63-the-image-the-desktop-dusty-image-no-compiling)
@@ -238,28 +238,37 @@ Notes (traps we hit — read before changing the stack):
 - dusty images ship an expired ROS apt key: `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles.
 - Docker auto-creates missing bind-mount folders root-owned — pre-create them (the provision script does).
 
-## 6. Web interface — Terminal · Stereo · Cloud · Graph · RViz
+## 6. Web interface — Terminal · Stereo & Depth · Cloud · Graph · RViz
 
 One page at **http://<xavier-ip>/** with five tabs, served by the `so100-web` container. The examples below use the generic address `192.168.1.50` — substitute your own Xavier's LAN address everywhere it appears.
 
 | Tab | URL (direct) | What you see |
 |---|---|---|
 | **Terminal** | http://192.168.1.50:7681 | a writable shell **inside the web container**, with the ROS2 environment sourced — the first tab, because it is the cheap one |
-| **Stereo Cam** | http://192.168.1.50:8090/stereo | the two **rectified** mono views (LEFT · CAM_B, RIGHT · CAM_C) — exactly the images the depth map is computed from, with their resolution and fps |
+| **Stereo Cam & Depth** | http://192.168.1.50:8090/stereo | the two **rectified** mono views (LEFT · CAM_B, RIGHT · CAM_C) — exactly the images the depth map is computed from, each with its own rate — and, below them, the **depth map** (0–2 m, turbo colormap) |
 | **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): drag to orbit, wheel to zoom, colour = distance from the cloud centre |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
-| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF and the OAK-D camera image. **Started on demand** — see below |
+| **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the SO-101 arm with its live pose, the grid, TF and the colour/confidence panels. **Started on demand** — see below |
 
 What each tab actually looks like, captured on the bench (2026-11-10):
 
 | | |
 |---|---|
 | ![Terminal tab](docs/web-terminal.jpg) | ![Stereo Cam tab](docs/web-stereo.jpg) |
-| **Terminal** — a shell inside the web container: `ros2 topic list` shows the cell's topics | **Stereo Cam** — the rectified pair the depth is built from, each with its own rate |
+| **Terminal** — a shell inside the web container: `ros2 topic list` shows the cell's topics | **Stereo Cam & Depth** — the rectified pair the depth is built from, and the depth map below |
 | ![Point Cloud tab](docs/web-pointcloud.jpg) | ![Graph tab](docs/web-graph.jpg) |
 | **Point Cloud** — the cloud in 3D, drag to orbit, wheel to zoom | **Graph** — rqt_graph: who publishes what to whom |
 | ![RViz tab](docs/web-rviz.jpg) | |
 | **RViz** — the SO-101 at its live pose, `Global Status: Ok` | |
+
+**The depth map lives in the Stereo tab, not in RViz.** RViz here draws with llvmpipe (no
+GPU path for Qt on this board), and the image panels compete with the 3D view for the same
+software renderer: with three panels plus the arm the model silently stops being drawn
+(the counter drops to ~9 fps and the grid stays empty), with two it renders at 2 fps. So the
+depth display was removed from `rviz.rviz` and the depth map moved to the Stereo tab, where
+it costs nothing — that page is plain MJPEG. Colour and confidence stay in RViz, and if one of
+them ever comes up as "No Image", that is the same contention: restarting RViz usually
+settles it.
 
 **RViz only runs while its tab is on screen.** It is the most expensive thing in the cell:
 software GL (`LIBGL_ALWAYS_SOFTWARE=1`, there is no GPU path for Qt here) keeps **~155 % of a
