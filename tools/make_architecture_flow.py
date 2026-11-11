@@ -20,7 +20,10 @@ HEAD = "#1a2436"
 GREEN_F, GREEN_S, GREEN_T = "#10251a", "#3fb950", "#7ee2a8"
 AMBER_F, AMBER_S, AMBER_T = "#2a2113", "#d99036", "#f0b866"
 GREY_F, GREY_S, GREY_T = "#171a21", "#6b7280", "#9aa4b2"
-BLUE_S = "#4b8bd6"
+BLUE_S = "#4b8bd6"          # generic / DDS over the LAN
+USB3 = "#4b8bd6"            # USB 3, 5 Gb/s  — the only link that needs a USB3 cable
+USBFS = "#a374e0"           # USB full speed, 12 Mb/s — serial adapter and the wrist webcam
+DDS = "#7c8ba1"             # the internal ROS2 spine
 
 out = []
 
@@ -80,6 +83,15 @@ for i, (kind, txt) in enumerate([("green", "live / verified"),
     box(1215, y, 18, 12, kind, r=3)
     text(1239, y + 11, txt, 12)
 
+# link types: the wire tells you the bus, the same colours on the three device arrows
+for i, (col, txt) in enumerate([(USB3, "USB 3 · 5 Gb/s"),
+                               (USBFS, "USB full speed · 12 Mb/s"),
+                               (DDS, "DDS / HTTP over the LAN")]):
+    y = 108 + i * 18
+    add('<path d="M 1215 %d L 1233 %d" stroke="%s" stroke-width="2.4"/>'
+        % (y + 6, y + 6, col))
+    text(1241, y + 10, txt, 11.5)
+
 # ----------------------------------------------------------------- frames
 frames = [(30, 110, 360, 1150, "DEVICES"),
           (410, 110, 780, 1150, "JETSON XAVIER NX 16 GB — Docker, one container per job"),
@@ -90,16 +102,16 @@ for x, y, w, h, title in frames:
     text(x + 12, y + 23, title, 14, INK, bold=True)
 
 # ----------------------------------------------------------------- devices
-card(50, 170, 320, 92, "SO-101 arm — 6 axes",
-     ["Feetech ST3215 bus · /dev/so100_arm (ttyACM0)",
-      "calibrated as so100_cell · torque off at boot"])
+card(50, 170, 320, 92, "SO-100 arm — 6 axes",
+     ["Feetech bus over a CH9102 USB-serial adapter (12 Mb/s)",
+      "/dev/so100_arm (ttyACM0) · calibrated as so100_cell"])
 card(50, 285, 320, 92, "OAK-D POE — scene camera",
      ["colour IMX378 + 2× OV9282, 7.5 cm baseline",
-      "USB High Speed (480 Mb/s) · ~1-2 fps depth"])
+      "USB 3 at 5 Gb/s — needs the USB 3 cable of §3.1"])
 card(50, 400, 320, 106, "USB RGB webcam — wrist", [
      "mounted on the moving jaw, 640x480 at 10 Hz (ADR-0022)",
-     "what RViz shows: the jaws and the object between them",
-     "focus at 10-15 cm: measure with the §10.5 procedure", ], "green")
+     "UVC, USB full speed (12 Mb/s) — firmware limits the rate",
+     "focus at 10-15 cm: measure with the §10.5 procedure"], "green")
 
 # ----------------------------------------------------------------- containers
 card(430, 170, 350, 120, "so100-arm", [
@@ -158,18 +170,23 @@ card(1230, 630, 380, 92, "Policy training (MuJoCo)", [
 # one spine on the right of the Jetson column: every container ties into the ROS2 bus there,
 # instead of six long lines crossing the picture
 SPINE = 1120
-add('<path d="M %d 1055 L %d 216" stroke="%s" stroke-width="2" fill="none"/>' % (SPINE, SPINE, BLUE_S))
+add('<path d="M %d 1055 L %d 216" stroke="%s" stroke-width="2" fill="none"/>' % (SPINE, SPINE, DDS))
 for y in (230, 390, 550, 674, 813, 952):          # arm, cams, control, perception, web, rosbridge
     add('<path d="M 780 %d L %d %d" stroke="%s" stroke-width="1.4" fill="none"/>'
-        % (y, SPINE, y, BLUE_S))
+        % (y, SPINE, y, DDS))
 
-arrow(370, 216, 430, 216)                          # arm → its container
-arrow(370, 331, 430, 331)                          # OAK → cams
-arrow(370, 453, 430, 392, AMBER_S)                 # wrist webcam → cams
-label(378, 430, "USB", AMBER_T, 10, "start")
+# device → container, coloured and labelled by the bus it actually runs on (lsusb -t,
+# 2026-11-11): the OAK negotiates 5000M, while the arm's serial adapter and the wrist webcam
+# both sit on a 12M hub — they are USB full-speed devices, not USB 2 High Speed.
+arrow(370, 216, 430, 216, USBFS)
+label(400, 210, "12 Mb/s", USBFS, 9.5)
+arrow(370, 331, 430, 331, USB3)
+label(400, 325, "5 Gb/s", USB3, 9.5)
+arrow(370, 453, 430, 392, USBFS)
+label(404, 424, "12 Mb/s", USBFS, 9.5)
 
-arrow(SPINE, 1055, SPINE, 1030)                    # spine → bus band
-arrow(SPINE, 600, 1205, 600)                       # the cell over the LAN
+arrow(SPINE, 1055, SPINE, 1030, DDS)               # spine → bus band
+arrow(SPINE, 600, 1205, 600, DDS)                  # the cell over the LAN
 label(1163, 590, "LAN", DIM, 10)
 label(1163, 618, ":9090 · :80", DIM, 9.5)
 

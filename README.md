@@ -165,6 +165,21 @@ the later chapters assume it, and the failure they produce points somewhere else
 | Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§7](#7-verifying-the-data-flow) (Terminal, Stereo Cam & Depth, Point Cloud, Wristcam focus test, Graph, RViz), the MuJoCo twin and the F710 pad |
 | Pad | Logitech F710, back switch in **X** mode | `/joint_targets` over rosbridge |
 | Board | ChArUco `(5,5)`, 0.018 m squares, 0.0135 m markers, `DICT_4X4_50`, printed at a 100 mm side — a ready-to-print page is [docs/charuco-board.pdf](docs/charuco-board.pdf) | hand-eye and depth-scale runs ([§10](#10-perception--what-the-cloud-sees-and-its-calibration)) |
+**The three connections, and the speed each one really negotiates.** These are measured, not assumed
+(`lsusb -t` on the Xavier, 2026-11-11) — which is why the data flow in [§2](#2-status-and-what-is-next)
+colours each arrow by its bus:
+
+| Device | Port on the Xavier | Negotiated link | What that means in practice |
+|---|---|---|---|
+| **SO-100 arm** | `/dev/so100_arm` → `ttyACM0` | USB **full speed, 12 Mb/s** (CH9102 USB-serial, `cdc_acm`) | plenty for six servos at 50 Hz; the protocol is small packets, not bandwidth |
+| **OAK-D POE** | `usbfs` (libusb) | USB **3, 5 Gb/s** (`5000M`) | the only link that needs a USB 3 cable; on a 480 Mb/s port the colour and depth streams stop keeping up |
+| **Wrist webcam** | `/dev/so100_wrist` | USB **full speed, 12 Mb/s** (UVC, `gspca`) | it is a 12 Mb/s device, so this is not a bandwidth problem to solve: 640×480 MJPG at 10 Hz is what it can do, and MJPG is what makes it possible at all |
+
+A USB **full speed** link is not a fault: 12 Mb/s is the old USB 1.1 rate, and cheap serial adapters and
+simple webcams still negotiate it. What matters is not mixing them up — the OAK is the one device whose
+behaviour changes completely with the cable.
+
+
 
 ### 3.2 Host software
 
