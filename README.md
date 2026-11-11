@@ -392,7 +392,7 @@ What each tab actually looks like, captured on the bench (2026-11-10):
 | ![Point Cloud tab](docs/web-pointcloud.jpg) | ![Graph tab](docs/web-graph.jpg) |
 | **Point Cloud** — the cloud in 3D, opening top-down on the bench; drag to orbit | **Graph** — rqt_graph: who publishes what to whom |
 | ![RViz tab](docs/web-rviz.jpg) | |
-| **RViz** — the SO-101 at its live pose, the scene colour camera and the wrist camera | |
+| **RViz** — the SO-101 at its live pose, the scene colour camera and the wrist camera (both blurred here) | |
 
 **Depth and confidence live in the Stereo tab, not in RViz.** RViz here draws with llvmpipe (no
 GPU path for Qt on this board), and its image panels compete with the 3D view for the same
