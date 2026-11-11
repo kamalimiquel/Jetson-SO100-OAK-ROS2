@@ -108,7 +108,7 @@ seen working on this hardware, so trust it over the plan when they disagree.
 
 - [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
 - [ ] **Episode recording + LeRobot export (ADR-0012)** — rosbag2 of the synchronised topics and an offline converter to the dataset format
-- [ ] **Hand-eye extrinsic** — 29.1 mm / 8.7 deg from the closed-form solver (best subset 25.4 mm); the bundle-adjustment refiner is marked untrusted, it reports 46 px where this data should reach ~1 px
+- [ ] **Hand-eye extrinsic — needs a new capture** — the 2026-11-09 dataset does not close: the board lands 694 mm from the jaw with a 300 mm spread, so the poses and the frames are not from the same instants (§10.3). Bolt the board to the jaw, read the pose at the shot, and run `tools/handeye_bundle.py`, which reports the leave-one-out error instead of a spread that looks small on bad data. Until then no node consumes an extrinsic, which is the safe state
 - [ ] **Gripper camera (ADR-0008, superseded by ADR-0022)** — a USB RGB webcam with manual focus, set at 10-15 cm; not mounted yet. The focus procedure it has to pass is in §10.5, and `tools/camfocus.py` is the tool that measures it
 - [ ] **GraspGen (ADR-0013)** and **policy training (ADR-0016)** — need the IK node and the recorder first
 - [ ] **C++ F710 client** — never compiled; the Python client covers the same ground today
@@ -707,10 +707,23 @@ visible and stable, the tilt is under 55 deg, and the frame is fresh;
 are kept in `docs/calibration/datasets/2026-11-09-so101/` (`poses.json` + 12 JPGs) so a solver can
 be re-run without the hardware present.
 
-**Solve.** `tools/handeye_solve.py`, closed form with outlier rejection: **29.1 mm and 8.7 deg**,
-25.4 mm on the best subset. The same data against the SO-100 model gave 15x worse, which is what
-made the SO-101 discovery visible in the first place. FK is read from the URDF the arm bridge
-publishes, never from a copied kinematic chain.
+**The dataset does not close — and that is the finding.** Re-examined 2026-11-11 with
+`tools/handeye_bundle.py`, which solves the same problem properly (closed form, then a joint bundle
+adjustment of the camera-in-base and the board-on-jaw over every corner, then a leave-one-out
+test): with the best closed form the board ends up **694 mm from the jaw with a 300 mm spread**
+across views. A 100 mm board held in the jaws cannot be there, so the poses and the images do not
+belong to the same instants. The relative rotations *do* agree (median 2.5 deg), so the motion is
+coherent and the failure is in the pose pairing, not in the geometry.
+
+That also disposes of the old figure: **29.1 mm / 8.7 deg** came from a spread metric that stays
+small on inconsistent data, so it was never a measurement of accuracy. The extrinsic in
+`docs/calibration/scene_cam_extrinsic.yaml` is marked **not usable** — nobody should consume it.
+
+What a valid capture needs: the board **bolted to the jaw** (not held, not resting on the bench) and
+the joint pose read at the instant of the shot. `handeye_bundle.py` is ready for it and reports the
+hold-out error, which is the number that matters — solving on 11 views and predicting the 12th.
+
+FK is read from the URDF the arm bridge publishes, never from a copied kinematic chain.
 
 `tools/handeye_refine.py` (bundle adjustment) is **not trusted**: it reports 46 px where this
 dataset should reach ~1 px. It has to be validated against a synthetic dataset before its output
