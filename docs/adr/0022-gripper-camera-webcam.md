@@ -1,8 +1,10 @@
 # ADR-0022: Gripper camera — USB RGB webcam focused at 10-15 cm
 
 - Status: Accepted — **amended 2026-11-11**: the webcam is mounted on the moving jaw and
-  streams at 10 Hz (`/gripper/image/compressed`, 640x480); the *measured* focus and the static TF
-  from `moving_jaw_so101_v1` are still open
+  streams at 10 Hz (`/gripper/image/compressed`, 640x480) with its frame in the TF tree —
+  `moving_jaw_so101_v1 → gripper_color_optical_frame` published once on `/tf_static` (nominal
+  bracket offsets, `WRIST_TF_*` in compose, README §10.5). Still open: the *measured* focus and the
+  measured offsets replacing the nominal ones
 - Date: 2026-11-11
 - Decided by: user
 - Supersedes: ADR-0008 (wrist OAK-D Lite)

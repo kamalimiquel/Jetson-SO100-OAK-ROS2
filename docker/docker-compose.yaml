@@ -15,6 +15,15 @@ services:
     environment:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      # Static transform of the wrist webcam (ADR-0022): metres from the moving-jaw link to the
+      # lens, then rpy to the optical convention. Nominal bracket values — measure and override,
+      # README §10.5. Set here (not in the entrypoint) so the numbers live beside the hardware.
+      - WRIST_TF_X=0.0
+      - WRIST_TF_Y=-0.028
+      - WRIST_TF_Z=0.035
+      - WRIST_TF_ROLL=3.14159
+      - WRIST_TF_PITCH=0.0
+      - WRIST_TF_YAW=0.0
     devices:
       # Stable symlink (udev rule from scripts/provision-jetson.sh): the adapter re-enumerates
       # to ttyACM1 when anything else on the USB tree is plugged or unplugged, and a container

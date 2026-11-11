@@ -26,4 +26,15 @@ python3 /opt/ws/arm/deg2rad.py &
    echo "rsp: retrying in 2s"; sleep 2
  done) &
 
+# 5. Wrist camera frame (ADR-0022) — a STATIC transform, published once on /tf_static.
+#    The webcam is clipped to the moving jaw, so its pose relative to that link never changes:
+#    x/y/z are metres from the jaw link origin to the lens centre, and the rpy turns the link's
+#    axes into the optical convention (z forward out of the lens, x right, y down the image).
+#    These are the NOMINAL values of the printed bracket. Measure yours and override them from
+#    docker-compose (WRIST_TF_X … WRIST_TF_YAW); the procedure is in README §10.5.
+ros2 run tf2_ros static_transform_publisher \
+  --x "${WRIST_TF_X:-0.0}" --y "${WRIST_TF_Y:-0.028}" --z "${WRIST_TF_Z:-0.035}" \
+  --roll "${WRIST_TF_ROLL:-3.14159}" --pitch "${WRIST_TF_PITCH:-0.0}" --yaw "${WRIST_TF_YAW:-0.0}" \
+  --frame-id moving_jaw_so101_v1 --child-frame-id gripper_color_optical_frame &
+
 wait

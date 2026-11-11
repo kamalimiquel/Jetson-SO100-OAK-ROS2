@@ -803,13 +803,46 @@ not because the exposure changed.
   (`curl 'http://127.0.0.1:8190/focus?v=350'` while pointing `camfocus` at it).
 - **The node side is live**: `wrist_cam` publishes `/gripper/image/compressed` at 10 Hz from
   `/dev/so100_wrist` (§11.2), and the browser can see it at `:8090/gripper/stream`. It is mounted on
-  the moving jaw; what is missing is the *measured* focus — run the procedure below and keep the
-  CSV — and the static transform from `moving_jaw_so101_v1` to `gripper_color_optical_frame`, which
-  needs the mount geometry (the bracket's offsets from the jaw axis).
+  the moving jaw, its frame is in the TF tree, and what is left is the *measured* focus — run the
+  procedure below and keep the CSV — plus replacing the nominal transform with the measured one.
 - The wrist camera is settled: a USB RGB webcam with manual focus, set at ≈12.5 cm and locked
   (ADR-0022 supersedes ADR-0008's OAK-D Lite, whose lens and stereo range both sit far beyond the
   wrist distance). That is why the 10-15 cm requirement is written as a *focus* requirement here,
   not as a depth range — and why `tools/camfocus.py` runs before the camera goes on the arm.
+
+**The wrist camera's static transform — what it is and where it lives.** TF is the tree of poses
+ROS uses to place anything in 3D: every edge holds the position and orientation of one frame
+relative to another, and with the whole tree a point can be carried from any frame to any other.
+It comes in two channels:
+
+- **`/tf`, dynamic** — changes all the time. `robot_state_publisher` recomputes it at 50 Hz from the
+  joint angles: `base → shoulder → upper_arm → lower_arm → wrist → gripper → moving_jaw_so101_v1`.
+- **`/tf_static`, static** — **published once** and never again, with a *latched* QoS so a node that
+  starts an hour later still receives it the moment it subscribes. It is for what is bolted to
+  something that moves: a camera, a bracket, an IMU.
+
+A webcam clipped to the jaw does not move relative to the jaw, so its pose belongs in `/tf_static`;
+repeating the same six numbers 50 times a second would be noise. Those numbers are the transform
+below: **x, y, z** in metres from the `moving_jaw_so101_v1` link origin to the centre of the lens,
+then **roll, pitch, yaw** to rotate that link's axes into the *optical* convention (z out of the
+lens, x to the right of the image, y down it). It is what puts `gripper_color_optical_frame` — the
+frame `wrist_cam` stamps on every image — into the tree. Without it the image arrives tagged with a
+frame nobody can find: RViz can only show it unanchored, and nothing can carry a wrist-camera point
+into `base`.
+
+The numbers live in `docker/docker-compose.yaml` as `WRIST_TF_X / Y / Z / ROLL / PITCH / YAW`, and
+the arm entrypoint hands them to `ros2 run tf2_ros static_transform_publisher` with
+`--frame-id moving_jaw_so101_v1 --child-frame-id gripper_color_optical_frame`. The defaults are the
+**nominal** bracket values: they put the frame where the print says the lens is. Measure your own
+build and replace them — no code changes, one line each:
+
+```
+ros2 run tf2_ros tf2_echo moving_jaw_so101_v1 gripper_color_optical_frame   # constant pose = static
+ros2 run tf2_ros tf2_echo base gripper_color_optical_frame                  # the whole chain resolves
+```
+
+Verified on the cell 2026-11-11: the first answers `[0.000, -0.028, 0.035]`, rpy `[180°, 0, 0]`, the
+same on every query; the second resolves `base → … → jaw → lens` at `[0.103, -0.024, 0.478]` m.
 
 ![The wrist feed in the browser](docs/wrist-camera.png)
 
@@ -904,10 +937,14 @@ gripper:
 
 It opens `/dev/so100_wrist` (a udev symlink, so re-enumeration is harmless), asks V4L2 for MJPG at
 `WRIST_W`x`WRIST_H` and **logs what the driver actually gave** — the Logitech on this bench answers
-640x480 JPEG whatever you ask for. There is no static transform to the arm yet: that is the mount
-geometry, and it is the piece that would turn this feed into an eye-in-hand measurement.
+640x480 JPEG whatever you ask for. Its frame is in the TF tree: `/tf_static` carries
+`moving_jaw_so101_v1 → gripper_color_optical_frame` with the nominal bracket offsets (§10.5), so the
+feed is already anchored to the moving jaw and can become an eye-in-hand measurement once those six
+numbers are measured.
 
-It also broadcasts /tf_static with the camera frame offsets. Those are still nominal (the OAK's own extrinsics, not the hand-eye result), which is why the cloud is meaningful in the camera frame and not yet in `base`.
+Separately, `/tf_static` also carries the **scene** camera's own offsets (`scene_camera_link` and
+friends): those come from the device's built-in extrinsics, not from the hand-eye result, which is
+why the cloud is exact in the camera frame and not yet in `base`.
 
 Two plain-HTTP viewers run alongside the node in the same container, so the cameras can be
 inspected from any browser without ROS tooling:

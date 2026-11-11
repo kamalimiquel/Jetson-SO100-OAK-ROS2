@@ -182,7 +182,7 @@ label(1000, 1236, "HTTP — the grasp request (to be written)", GREY_T, 10)
 add('<rect x="30" y="1286" width="1600" height="34" rx="6" fill="#101725" stroke="%s"/>' % FRAME)
 text(44, 1308, "Left to build:  grasp pipeline (GraspGen client) · episode recording + LeRobot "
                "export · hand-eye extrinsic (needs a new capture, README §10.3) · wrist camera "
-               "focus measurement and its TF · arm repaint", 12, DIM)
+               "focus measurement · arm repaint", 12, DIM)
 
 add("</svg>")
 open("docs/architecture-flow.svg", "w").write("\n".join(out) + "\n")
