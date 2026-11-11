@@ -19,7 +19,7 @@ Design and implement end-to-end the hardware/software architecture of the roboti
 
 - **SO-100 arm** (The Robot Studio, 6 axes: 5 DOF + gripper, Feetech ST3215 servos on a serial bus; shows up as `/dev/ttyACM0`, VID `1a86`, CH9102 chip).
 - **OAK-D POE camera connected via USB-C** (the POE variant carries data over USB-C just like the standard one; vendor `03e7`).
-- **OAK-D Lite wrist camera** (second OAK-D, mounted on the gripper).
+- **USB RGB webcam on the wrist** (mounted on the gripper, manual focus set at 10-15 cm — ADR-0022, superseding the OAK-D Lite).
 - **Jetson Xavier NX 16 GB**, Ubuntu 20.04, JetPack 5.1.5 — connected to all three devices. ⚠️ The Xavier NX has no JetPack 6: the ROS2 ceiling is set by JetPack, not by preference.
 - **Windows 11 Home PC** on the same LAN: visualize the arm's position, train policies (MuJoCo and/or Isaac Sim), and teleoperate with a **Logitech F710**.
 - Local development in `/home/miquel/Projects`.
@@ -85,7 +85,7 @@ Status: DONE — ADR-0006 (LeRobot SDK + rclpy bridge; amended: no adapter flash
 2. **`depthai-core` built from source + custom node**: full control; the serious route. CHOSEN (node in Python, ADR-0007).
 3. UVC mode + `usb_cam`: zero dependencies, but stereo depth is lost. Emergency only.
 In Docker: mount `/dev/bus/usb` + cgroup rule `c 189:* rmw`, or the camera will not open. Check the USB3 link before blaming the driver.
-**3c. Gripper camera**: decided — a second OAK-D (**Lite**, wrist-mounted) driven by the same custom depthai node (ADR-0008), namespaced `/oak/gripper`. Mind the USB3 bandwidth budget and the Lite's shorter minimum stereo range. (Alternative kept on file: UVC cam + `usb_cam`.)
+**3c. Gripper camera**: decided — a **USB RGB webcam** with manual focus, mounted on the gripper and locked at 10-15 cm (≈12.5 cm mid-band). ADR-0022 supersedes ADR-0008's OAK-D Lite, whose fixed lens and stereo range both sit far beyond that distance; the wrist feed is plain V4L2/UVC, no depthai. Prove the focus with `tools/camfocus.py` before the camera goes on the arm (README §10.5).
 
 ### Phase 4 — VLM-oriented control concept
 3 alternatives:
@@ -93,7 +93,7 @@ In Docker: mount `/dev/bus/usb` + cgroup rule `c 189:* rmw`, or the camera will 
 2. **Cartesian 6-DoF API**: ROS2 `move_to_pose(x,y,z,roll,pitch,yaw)` actions with IK (MoveIt/TRAC-IK/ikpy), calibrated camera↔base TF, published state.
 3. Skill library (grasp, place, push...) on top of 2: the VLM only picks skill + waypoint; more robust, more work.
 Note: a pose→joint-angle converter will be needed when VLM/GraspGen outputs SE(3) poses (ADR-0009 consequences).
-Child decisions (also 1-of-3): camera mounting — eye-to-hand (OAK-D fixed on the scene) / eye-in-hand / **both (CHOSEN: fixed scene OAK-D + wrist OAK-D Lite, ADR-0010)**; extrinsic calibration with easy_handeye + ChArUco (CHOSEN, ADR-0011); and recording of synchronized episodes (rosbag: images + joint state + actions) convertible to LeRobot format (CHOSEN: rosbag2 + conversion, ADR-0012).
+Child decisions (also 1-of-3): camera mounting — eye-to-hand (OAK-D fixed on the scene) / eye-in-hand / **both (CHOSEN: fixed scene OAK-D + USB RGB webcam on the wrist, ADR-0010 as amended by ADR-0022)**; extrinsic calibration with easy_handeye + ChArUco (CHOSEN, ADR-0011); and recording of synchronized episodes (rosbag: images + joint state + actions) convertible to LeRobot format (CHOSEN: rosbag2 + conversion, ADR-0012).
 GraspGen (NVlabs — diffusion 6-DoF grasp generation from object point clouds + segmentation masks; client-server mode, ~20 Hz on a desktop GPU, USD export for Isaac Sim) is the grasp-model target; it runs on the Windows PC (CHOSEN, ADR-0013).
 
 ### Phase 5 — RViz on the Xavier

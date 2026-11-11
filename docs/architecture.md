@@ -6,7 +6,7 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 
 - **Jetson Xavier NX 16 GB** — Ubuntu 20.04, JetPack 5.1.5, Docker + nvidia-container-toolkit. Runs the whole ROS2 stack: Humble in containers, FastDDS, domain 42. LAN address assigned at provisioning.
 - **Windows 11 Home PC** — visualization (Chromium/noVNC), GraspGen server, F710 C++ client, training (MuJoCo + Isaac Sim).
-- **Devices** — SO-100 arm (serial `ttyACM0`), OAK-D scene (USB3), OAK-D Lite wrist (USB3).
+- **Devices** — SO-100 arm (serial `ttyACM0`), OAK-D scene (USB3), USB RGB webcam on the wrist (manual focus at 10-15 cm, ADR-0022).
 
 ## Containers on the Xavier (compose, one per domain — ADR-0003, ADR-0019)
 
@@ -46,9 +46,9 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 | 0005 | Docker IPC: `--ipc=host` |
 | 0006 | SO-100 driver: LeRobot firmware + SDK, rclpy bridge |
 | 0007 | OAK-D driver: depthai-core from source + custom Python node |
-| 0008 | Gripper camera: OAK-D Lite on the shared depthai node |
+| 0008 | Gripper camera: OAK-D Lite on the shared depthai node — **superseded by 0022** |
 | 0009 | Control concept: joint-space API |
-| 0010 | Camera mounting: both (fixed scene OAK-D + wrist Lite) |
+| 0010 | Camera mounting: both (fixed scene OAK-D + wrist webcam, amended by 0022) |
 | 0011 | Extrinsic calibration: easy_handeye + ChArUco |
 | 0012 | Episode recording: rosbag2 + offline conversion to LeRobot |
 | 0013 | GraspGen runs on the Windows PC (client-server over LAN) |
@@ -59,14 +59,16 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 | 0018 | Web interface: noVNC tabs + ttyd terminal |
 | 0019 | MuJoCo twin transport: rosbridge WebSocket (jammy container, `ipc: host`, kinematic mirror) |
 | 0020 | F710 teleop over the same rosbridge (Python client); C++ client kept as alternative |
+| 0021 | SO-101 model: URDF generated from the MJCF, not the SO-100 one |
+| 0022 | Gripper camera: USB RGB webcam focused at 10-15 cm (supersedes 0008) |
 
 ## Open items before implementation (v0.1)
 
 - [x] Configure the SO-100 motors (`lerobot-setup-motors`: unique IDs + baudrate in servo EEPROM) and run LeRobot calibration. (ADR-0006 amended: the CH9102 adapter has no firmware to flash. IDs already 1–6; calibrated on the Xavier as id `so100_cell`.)
-- [x] Build `depthai-core` from source on the NX. (v2.33.0 installed at `~/depthai` + bindings in `~/oak/.venv`; USB3/Lite link verification pending the owner's cabling.)
+- [x] Build `depthai-core` from source on the NX. (v2.33.0 installed at `~/depthai` + bindings in `~/oak/.venv`; USB3 link verification pending the owner's cabling.)
 - [x] Compose file + provisioning script for the six services. (docker/docker-compose.yaml + scripts/provision-jetson.sh deployed on the Xavier; six containers, verified — see README "Container stack".)
 - [x] MuJoCo twin over rosbridge WebSocket (ADR-0019). (so100-rosbridge live at ws://:9090; Windows twin mirrors /joint_states — verified 2026-11-08.)
 - [x] RViz2 tab live: source-built rviz2 in the web image (prebuilt workspace fast path), arm model from phosphobot's canonical SO-100 assets — see README "RViz tab".
-- [ ] Hand-eye calibration of the **scene OAK-D only** with the printable ChArUco board (`docs/charuco-board.pdf`, done) and the OpenCV solver — ADR-0011 amended 2026-11-09: `cv2.calibrateHandEye` in the perception container instead of easy_handeye/aruco_ros, same image set also yields the camera intrinsics. Wrist OAK-D Lite deferred until it is mounted.
+- [ ] Hand-eye calibration of the **scene OAK-D only** with the printable ChArUco board (`docs/charuco-board.pdf`, done) and the OpenCV solver — ADR-0011 amended 2026-11-09: `cv2.calibrateHandEye` in the perception container instead of easy_handeye/aruco_ros, same image set also yields the camera intrinsics. The wrist camera is now a USB RGB webcam (ADR-0022): focus it and lock it at 10-15 cm before mounting (README §10.5).
 - [ ] Windows: ROS2 Humble binary + VS Build Tools + SDL2, firewall rules for DDS.
 - [ ] Check the Windows PC GPU for Isaac Sim viability.

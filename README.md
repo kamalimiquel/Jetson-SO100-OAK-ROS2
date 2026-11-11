@@ -1,6 +1,6 @@
 # Jetson-SO100-OAK-ROS2
 
-Robotic manipulation cell: an **SO-101 arm** + **OAK-D POE camera (USB-C)** + an **OAK-D Lite wrist camera**, governed by a **Jetson Xavier NX 16 GB** (Ubuntu 20.04, JetPack 5.1.5) running **ROS2 Humble in Docker containers**.
+Robotic manipulation cell: an **SO-101 arm** + **OAK-D POE camera (USB-C)** + a **USB RGB webcam on the wrist, manually focused at 10-15 cm** (ADR-0022), governed by a **Jetson Xavier NX 16 GB** (Ubuntu 20.04, JetPack 5.1.5) running **ROS2 Humble in Docker containers**.
 
 A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium), GraspGen inference, policy training (MuJoCo / Isaac Sim) and teleoperation with a Logitech F710.
 
@@ -77,7 +77,7 @@ seen working on this hardware, so trust it over the plan when they disagree.
 - [x] Phase 0: repo + engineering prompt (`docs/PROMPT.md`)
 - [x] Phase 1: ROS2 Humble in containers, FastDDS, domain 42 (ADR-0001, ADR-0002)
 - [x] Phase 2: Docker — per-domain containers, zero-copy, `--ipc=host` (ADR-0003…0005)
-- [x] Phase 3: drivers — LeRobot (arm), depthai-core (scene OAK-D; the wrist camera waits for hardware) (ADR-0006…0008)
+- [x] Phase 3: drivers — LeRobot (arm), depthai-core (scene OAK-D; the wrist camera is a plain UVC webcam, ADR-0022) (ADR-0006…0008, ADR-0022)
 - [ ] Phase 4: control — joint-space API and camera mounting done; hand-eye at 29 mm, and the IK node, episode recording and GraspGen still to build (ADR-0009…0013)
 - [x] Phase 5: RViz — headless RViz2 + noVNC (ADR-0014)
 - [x] Phase 6: Windows — noVNC in Chromium, MuJoCo twin, F710 teleop over rosbridge (ADR-0015…0017, amended by ADR-0020)
@@ -105,7 +105,7 @@ seen working on this hardware, so trust it over the plan when they disagree.
 - [ ] **IK node (ADR-0009)** — SE(3) pose to joint angles, with the URDF limits; the missing middle between "the gripper is here" (FK, done) and "move the gripper there". Unblocks GraspGen, the VLM interface and autonomous episodes
 - [ ] **Episode recording + LeRobot export (ADR-0012)** — rosbag2 of the synchronised topics and an offline converter to the dataset format
 - [ ] **Hand-eye extrinsic** — 29.1 mm / 8.7 deg from the closed-form solver (best subset 25.4 mm); the bundle-adjustment refiner is marked untrusted, it reports 46 px where this data should reach ~1 px
-- [ ] **Gripper camera (ADR-0008)** — the node already publishes `/oak/gripper/*` when it finds a second device; blocked on hardware, only one OAK is plugged in. Its focus at 10-15 cm is a separate question and has to be measured on the unit (§10.5)
+- [ ] **Gripper camera (ADR-0008, superseded by ADR-0022)** — a USB RGB webcam with manual focus, set at 10-15 cm; not mounted yet. The focus procedure it has to pass is in §10.5, and `tools/camfocus.py` is the tool that measures it
 - [ ] **GraspGen (ADR-0013)** and **policy training (ADR-0016)** — need the IK node and the recorder first
 - [ ] **C++ F710 client** — never compiled; the Python client covers the same ground today
 
@@ -120,7 +120,7 @@ the later chapters assume it, and the failure they produce points somewhere else
 |---|---|---|
 | Arm | SO-101 follower, six Feetech servos, 12 V supply | `/dev/ttyACM0` on the Xavier (CH9102 USB-serial, VID `1a86`) |
 | Scene camera | OAK-D POE (IMX378 colour + 2x OV9282 mono, 7.5 cm baseline) over USB-C | opened by the cams container |
-| Wrist camera | OAK-D Lite | still pending — only one OAK is plugged in (ADR-0008) |
+| Wrist camera | USB RGB webcam, manual focus set at 10-15 cm | not mounted yet; the focus requirement and how it is proven are in §10.5 (ADR-0022) |
 | Host | Jetson Xavier NX 16 GB, JetPack 5.1.5 (Ubuntu 20.04) | the six containers |
 | Operator PC | Windows 11, or anything with Chromium, on the same LAN | the tabs, MuJoCo, the F710 |
 | Pad | Logitech F710, back switch in **X** mode | `/joint_targets` over rosbridge |
@@ -234,7 +234,7 @@ The calibration file is overwritten in place, so keep a copy if you want to comp
 
 ## 5. Camera bring-up — depthai on the Xavier
 
-**State:** scene OAK-D-POE (IMX378 colour + two OV9282 mono, 7.5 cm baseline) capturing colour 1920x1080 and depth 1280x720 at **1.0-1.5 fps**, limited by the link negotiating **High Speed (480 Mb/s)** rather than SuperSpeed — the cable or the port is the suspect, not the camera. The two mono views are published too, so the stereo pair can be inspected from the browser. Wrist OAK-D Lite pending connection. `depthai-core` v2.33.0 built from source and installed at `~/depthai`; `depthai-python` bindings built against it and installed into `~/oak/.venv` (version string `2.33.0.0.dev0+<commit>` — the source build, not the wheel).
+**State:** scene OAK-D-POE (IMX378 colour + two OV9282 mono, 7.5 cm baseline) capturing colour 1920x1080 and depth 1280x720 at **1.0-1.5 fps**, limited by the link negotiating **High Speed (480 Mb/s)** rather than SuperSpeed — the cable or the port is the suspect, not the camera. The two mono views are published too, so the stereo pair can be inspected from the browser. The wrist camera is a plain USB RGB webcam, not an OAK (ADR-0022), and is not mounted yet. `depthai-core` v2.33.0 built from source and installed at `~/depthai`; `depthai-python` bindings built against it and installed into `~/oak/.venv` (version string `2.33.0.0.dev0+<commit>` — the source build, not the wheel).
 
 1. **udev rule (once):** `/etc/udev/rules.d/80-oak.rules` → `SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"`, then `udevadm control --reload-rules && udevadm trigger --subsystem-match=usb`. Without it, a bootloader-state device can't be opened by non-root.
 2. **Fallback venv (works today):** `uv venv ~/oak/.venv --python 3.12` + `uv pip install --python ~/oak/.venv/bin/python "depthai<3" opencv-python-headless` (wheel 2.33.0.0 — same API as the source build).
@@ -771,9 +771,10 @@ not because the exposure changed.
 - The cleanest answer is a camera whose focus can be **set**: the 5M WebCam on this bench exposes
   `focus_absolute` 0-1023, so it can be focused at the real working distance and locked there
   (`curl 'http://127.0.0.1:8190/focus?v=350'` while pointing `camfocus` at it).
-- The OAK-D Lite of ADR-0008 is fixed focus and its stereo minimum sits well beyond 10 cm. The same
-  measurement has to be run on the real unit before the wrist mount is designed — a datasheet minimum
-  range is not a statement about focus.
+- The wrist camera is settled: a USB RGB webcam with manual focus, set at ≈12.5 cm and locked
+  (ADR-0022 supersedes ADR-0008's OAK-D Lite, whose lens and stereo range both sit far beyond the
+  wrist distance). That is why the 10-15 cm requirement is written as a *focus* requirement here,
+  not as a depth range — and why `tools/camfocus.py` runs before the camera goes on the arm.
 
 ## 11. Node and topic reference
 
@@ -816,7 +817,7 @@ One node (/oak_cams), one depthai pipeline per device:
 | /oak/scene/color/camera_info, /oak/scene/depth/camera_info | out | intrinsics, straight from the device's own calibration at the resolution each stream runs at |
 | /oak/scene/imu | out | accel + gyro + rotation vector — only on units that carry an IMU (this POE unit has none) |
 | /oak/scene/points | out | point cloud (XYZ, metres) unprojected with the **depth camera's own calibration**, asked from the device at the resolution the map arrives at (`fx 833.00 fy 833.00 cx 639.23 cy 356.87` at 1280x720). No placeholders: the env vars are only a fallback for a unit with none |
-| /oak/gripper/* | out | the same set for the wrist Lite, once it is plugged in |
+| /oak/gripper/* | — | **unused**: the node would publish the same set for a second OAK, but the wrist camera is a USB webcam on its own UVC node (ADR-0022) |
 
 It also broadcasts /tf_static with the camera frame offsets. Those are still nominal (the OAK's own extrinsics, not the hand-eye result), which is why the cloud is meaningful in the camera frame and not yet in `base`.
 

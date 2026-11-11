@@ -1,6 +1,6 @@
 # ADR-0010: Camera mounting
 
-- Status: Accepted
+- Status: Accepted — **amended 2026-11-11 by ADR-0022**: the eye-in-hand camera is a USB RGB webcam, not an OAK-D Lite
 - Date: 2026-11-07
 - Decided by: user (alternative 3 of 3)
 

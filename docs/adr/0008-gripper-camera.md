@@ -1,6 +1,6 @@
 # ADR-0008: Gripper camera — OAK-D Lite on the shared depthai node
 
-- Status: Accepted
+- Status: Accepted — **superseded 2026-11-11 by ADR-0022**: the wrist camera is a USB RGB webcam with manual focus at 10-15 cm, not an OAK-D Lite
 - Date: 2026-11-07
 - Decided by: user (after discussing GraspGen input requirements)
 

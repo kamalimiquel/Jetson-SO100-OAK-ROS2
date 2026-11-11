@@ -1,6 +1,6 @@
 # ADR-0011: Extrinsic calibration method
 
-- Status: Accepted — **amended 2026-11-09**: solved with OpenCV, not easy_handeye
+- Status: Accepted — **amended 2026-11-09**: solved with OpenCV, not easy_handeye; **amended 2026-11-11 by ADR-0022**: the wrist camera is a USB RGB webcam
 - Date: 2026-11-07
 - Decided by: user (alternative 1 of 3)
 
