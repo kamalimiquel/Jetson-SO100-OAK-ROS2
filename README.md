@@ -51,6 +51,7 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
   - [11.2 so100-cams — the cameras](#112-so100-cams--the-cameras)
   - [11.3 so100-web — the browser](#113-so100-web--the-browser)
   - [11.4 so100-rosbridge — the WebSocket bridge (MuJoCo twin, ADR-0019)](#114-so100-rosbridge--the-websocket-bridge-mujoco-twin-adr-0019)
+  - [11.5 so100-control — the IK node (ADR-0009)](#115-so100-control--the-ik-node-adr-0009)
 - **[12. Troubleshooting](#12-troubleshooting)**
   - [12.1 The tabs](#121-the-tabs)
   - [12.2 Everything else](#122-everything-else)
@@ -101,11 +102,11 @@ seen working on this hardware, so trust it over the plan when they disagree.
 
 - [x] **Point cloud in the colour frame, coloured** — `/oak/scene/points` carries `x, y, z, rgb` in `scene_color_optical_frame`, built from the device's depth→colour extrinsic and the colour intrinsics (§10.6). Verified on the bench 2026-11-11: 56k points at ~2 Hz, colours on the objects. Unblocks object segmentation in 3D, GraspGen targets and VLM pointing
 
+- [x] **IK node (ADR-0009)** — `so100-control` runs `ik`: a pose on `/ik/target` (in `base`) becomes joint angles on `/ik/solution`, and on `/joint_targets` only when `IK_APPLY=1`. Damped least squares with the geometric Jacobian and the URDF limits, ~30 ms per solve. Verified 2026-11-11: round trip over 200 random poses — median **0.00 mm**, p95 **0.46 mm**, worst 0.49 mm; a 2 m target is correctly refused; live test returns the arm's own pose in 1 iteration. The jaw is held, never solved
+
 ### 2.3 Next
 
-- [ ] **The arm's silhouette in the cloud** — the SO-101's black plastic returns no depth, so the arm is a hole at the near edge of the cloud instead of a body (visible as the dark blob at the bottom of the Point Cloud tab). Project the URDF links through the same intrinsics the cloud is unprojected with — the transform is invertible, so this is a mask, not a second pipeline — and either mark the missing points or draw the model over the cloud. It is what lets the operator see where the arm sits relative to the objects, and the same mask is what a grasp planner needs to reject points that are the robot and not the scene.
 - [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
-- [ ] **IK node (ADR-0009)** — SE(3) pose to joint angles, with the URDF limits; the missing middle between "the gripper is here" (FK, done) and "move the gripper there". Unblocks GraspGen, the VLM interface and autonomous episodes
 - [ ] **Episode recording + LeRobot export (ADR-0012)** — rosbag2 of the synchronised topics and an offline converter to the dataset format
 - [ ] **Hand-eye extrinsic** — 29.1 mm / 8.7 deg from the closed-form solver (best subset 25.4 mm); the bundle-adjustment refiner is marked untrusted, it reports 46 px where this data should reach ~1 px
 - [ ] **Gripper camera (ADR-0008, superseded by ADR-0022)** — a USB RGB webcam with manual focus, set at 10-15 cm; not mounted yet. The focus procedure it has to pass is in §10.5, and `tools/camfocus.py` is the tool that measures it
@@ -121,7 +122,7 @@ the later chapters assume it, and the failure they produce points somewhere else
 
 | Item | Detail | What it becomes |
 |---|---|---|
-| Arm | SO-101 follower, six Feetech servos, 12 V supply | `/dev/ttyACM0` on the Xavier (CH9102 USB-serial, VID `1a86`) |
+| Arm | SO-101 follower, six Feetech servos, 12 V supply | `/dev/so100_arm` on the Xavier — a udev symlink, because the CH9102 adapter (VID `1a86`) re-enumerates; inside the container it is still `/dev/ttyACM0` |
 | Scene camera | OAK-D POE (IMX378 colour + 2x OV9282 mono, 7.5 cm baseline) over USB-C | opened by the cams container |
 | Wrist camera | USB RGB webcam, manual focus set at 10-15 cm | not mounted yet; the focus requirement and how it is proven are in §10.5 (ADR-0022) |
 | Host | Jetson Xavier NX 16 GB, JetPack 5.1.5 (Ubuntu 20.04) | the six containers |
@@ -662,7 +663,9 @@ check are what produce depth, not brightness.
 **Nor can it see the robot itself.** The SO-101's black plastic absorbs the pattern: the arm
 comes back as a hole, so in the Point Cloud tab it reads as a silhouette at the near edge
 rather than as a body. Nothing to tune — it is the same "texture or edges, not brightness"
-rule, applied to the arm. Filling it by projecting the URDF is on the list in §2.3.
+rule, applied to the arm. The fix is physical: the arm gets repainted in a colour that returns
+the stereo pattern, which is far cheaper than projecting the URDF through a hand-eye transform
+that is still at 29 mm.
 
 ### 10.2 Cost: what the streams actually spend on the Xavier
 
@@ -931,7 +934,47 @@ RViz2 (from the desktop image) runs headless on Xvfb :10 and is streamed via noV
 
 Its topics (/client_count, /connected_clients) are bookkeeping only. Any client on the LAN (roslibpy on Windows, a browser, another robot) can now consume the whole cell over one WebSocket.
 
-so100-perception and so100-control carry no nodes yet (grasp pipeline and joint API + rosbag2 come in later phases).
+so100-perception carries no nodes yet (the grasp pipeline comes with GraspGen, ADR-0013).
+so100-control runs the **IK node** described next.
+
+### 11.5 so100-control — the IK node (ADR-0009)
+
+The arm speaks joint space (`/joint_targets`, degrees); anything that wants to say "put the
+gripper *there*" needs the inverse of FK, and this is it. Nothing else: it does not plan, it does
+not touch torque, and it publishes no motion command unless `IK_APPLY=1`.
+
+| Topic | Direction | What it carries |
+|---|---|---|
+| /ik/target | in | `PoseStamped` of the tool tip, `frame_id: base` (anything else is refused — no extrinsics are applied here) |
+| /ik/solution | out | `Float64MultiArray`, the 5 solved joint angles in degrees, always |
+| /ik/status | out | `String`: `ok=… pos_err=… ori_err=… iters=… q_deg=[…]` |
+| /joint_targets | out | 6 values — only with `IK_APPLY=1`, and only when the solve is within tolerance |
+
+**Method**: damped least squares (Levenberg-style damping, raised when a joint limit eats the
+step) on the URDF chain, using the **geometric Jacobian** computed in the same pass as the FK.
+Multi-start — the current pose, mid-range, and four lift variants — because a 5-DOF chain has
+plenty of local minima; the candidate nearest the seed wins.
+
+**Five degrees of freedom cannot satisfy six constraints**, so orientation is weighted as
+metres-per-radian (`ORI_WEIGHT = 0.12`) and the residuals are *reported* rather than glossed over:
+`/ik/status` always says how far the answer is from the request. `IK_TOL_MM` / `IK_TOL_DEG`
+(default 2 mm / 2°) decide when a solve counts as reached.
+
+**The jaw is never commanded**: the URDF's last revolute joint is held at its current value and the
+solution covers the other five — the same rule the calibration tools follow.
+
+Two tests ship with it, both runnable without hardware:
+
+```
+docker exec so100-control bash -c "source /opt/ros/humble/install/setup.bash &&     python3 /opt/tools/ik_selftest.py"      # FK parity, 200-pose round trip, unreachable target
+docker exec so100-control bash -c "source /opt/ros/humble/install/setup.bash &&     python3 /opt/tools/ik_livetest.py"      # asks the running node for the arm's own pose
+```
+
+Measured 2026-11-11: FK at the zero pose puts the jaw at `[316.6, 17.6, 255.5] mm`, **0.7 mm** from
+the documented model; round trip over 200 random poses gives **median 0.00 mm / p95 0.46 mm / max
+0.49 mm** and 0.01° of orientation error, recovering the original joints to 0.3°; 200 solves take
+**6.1 s** (~30 ms each); a target 2 m away is refused with a 1951 mm residual; and the live test
+returns `ok=True pos_err=0.0 mm ori_err=0.0 deg iters=1` with the arm's own angles.
 
 ## 12. Troubleshooting
 
@@ -967,6 +1010,7 @@ Traps this project has actually hit, with their fixes — in one place:
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| arm bridge: `joint server unreachable (HTTP Error 500)`, `/read` answers `I/O error`, `/joint_states` stops | the CH9102 adapter re-enumerated — plugging anything else on the USB tree moved it from `ttyACM0` to `ttyACM1` — and the container keeps the dead node | recreate `so100-arm` against the udev symlink: `devices: /dev/so100_arm:/dev/ttyACM0` (the provision script writes the rule) |
 | ROS container: `apt-get update` fails with EXPKEYSIG | dusty images ship an expired ROS key | `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles |
 | compose rejects `device_cgroup_rules` with a misleading error | compose v1 | install the compose v2 plugin (user-level, no sudo — the provision script does it) |
 | bind-mount folder appears but is unwritable | docker auto-created it root-owned | pre-create `tools/` and `ws/` before `up` (the provision script does) |

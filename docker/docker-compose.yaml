@@ -16,7 +16,10 @@ services:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     devices:
-      - /dev/ttyACM0:/dev/ttyACM0
+      # Stable symlink (udev rule from scripts/provision-jetson.sh): the adapter re-enumerates
+      # to ttyACM1 when anything else on the USB tree is plugged or unplugged, and a container
+      # started against the old node keeps a dead device forever.
+      - /dev/so100_arm:/dev/ttyACM0
     volumes:
       # Host LeRobot venv (py3.12) + the uv-managed CPython it symlinks to + calibration.
       - /home/maju/lerobot/.venv:/home/maju/lerobot/.venv:ro
@@ -78,9 +81,11 @@ services:
     environment:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - IK_APPLY=0
     volumes:
       - ./ws:/opt/ws
-    command: ["sleep", "infinity"]
+      - ../tools:/opt/tools:ro
+    command: ["bash", "/opt/ws/control/entry.sh"]
 
   web:
     build:

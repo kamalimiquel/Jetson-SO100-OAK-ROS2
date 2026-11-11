@@ -18,6 +18,21 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 COMPOSE=(docker compose)
 
+echo "== udev: arm serial symlink =="
+# The CH9102 adapter comes back as ttyACM1 whenever something else is plugged into the USB
+# tree, leaving the arm container bound to a dead node. A symlink makes the path stable.
+ARM_VID="${ARM_VID:-1a86}"
+ARM_PID="${ARM_PID:-55d3}"
+if [ ! -f /etc/udev/rules.d/81-so100-arm.rules ]; then
+  printf '%s\n' "SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"$ARM_VID\", ATTRS{idProduct}==\"$ARM_PID\", SYMLINK+=\"so100_arm\"" \
+    | sudo_cmd tee /etc/udev/rules.d/81-so100-arm.rules >/dev/null
+  sudo_cmd udevadm control --reload-rules
+  sudo_cmd udevadm trigger --subsystem-match=tty
+  echo "arm udev rule added ($ARM_VID:$ARM_PID -> /dev/so100_arm)"
+else
+  echo "already present"
+fi
+
 echo "== udev: wrist camera rule (ADR-0022) =="
 # The wrist camera is a plain UVC webcam; the symlink makes the device path stable, so a
 # re-enumeration to /dev/video6 does not break the container mount. Set WRIST_VID/WRIST_PID to
