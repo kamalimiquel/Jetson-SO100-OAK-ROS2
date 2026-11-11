@@ -960,6 +960,14 @@ not because the exposure changed.
 The pose of the camera on the jaw is a **static transform** — what that is, where the numbers
 live and how they were checked is in [§10.7](#107-static-transforms--and-the-wrist-cameras).
 
+**Measuring it from the browser.** The **Wristcam focus test** tab (port 8093) does the same job
+as the bench tool, from the live ROS topic instead of the device: the score of the newest frame, the
+best seen so far, and a button per distance that writes the *median of the last scores* to
+`docker/state/wristcam-focus.csv` on the Xavier. It starts when the tab is opened and stops when it
+is left, plus a 45 s idle watchdog, so nothing decodes images while the tab is closed. Two things it
+cannot fix: the room has to be lit (a dark scene scores ~1.5 whatever the focus), and the distance
+still has to change by moving the arm, not the camera.
+
 ![The wrist feed in the browser](docs/wrist-camera.png)
 
 *`/gripper/image/compressed` as it arrives today, with the camera on the moving jaw: 640x480 at
