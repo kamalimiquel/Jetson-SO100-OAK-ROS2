@@ -72,6 +72,11 @@ command -v rqt_graph >/dev/null 2>&1 && {
      sleep 4
    done
    sleep 8
+   # rqt builds its graph once at startup and then only patches it: nodes that were not
+   # discovered in that first pass never show up (deg2rad and ik were missing until a manual
+   # "reload" was pressed). The toolbar button at 509,64 re-queries the whole graph.
+   DISPLAY=:11 xdotool mousemove 509 64 click 1 >/dev/null 2>&1 || true
+   sleep 3
    for pass in 1 2; do
      DISPLAY=:11 xdotool mousemove 512 72 click 1 >/dev/null 2>&1 || true
      sleep 2

@@ -74,7 +74,7 @@ text(36, 68, "ROS2 Humble · FastDDS · domain 42 · one container per job · ge
              "tools/make_architecture_flow.py", 13)
 
 for i, (kind, txt) in enumerate([("green", "live / verified"),
-                                ("amber", "code done, hardware or capture pending"),
+                                ("amber", "code done, hardware still pending"),
                                 ("grey", "missing")]):
     y = 40 + i * 20
     box(1215, y, 18, 12, kind, r=3)
@@ -97,9 +97,9 @@ card(50, 285, 320, 92, "OAK-D POE — scene camera",
      ["colour IMX378 + 2× OV9282, 7.5 cm baseline",
       "USB High Speed (480 Mb/s) · ~1-2 fps depth"])
 card(50, 400, 320, 106, "USB RGB webcam — wrist", [
-     "node live at 10 Hz (ADR-0022, replaces the OAK-D Lite)",
-     "not mounted on the arm yet; focus at 10-15 cm pending",
-     "procedure: README §10.5"], "amber")
+     "mounted on the moving jaw, 640x480 at 10 Hz (ADR-0022)",
+     "what RViz shows: the jaws and the object between them",
+     "focus at 10-15 cm: measure with the §10.5 procedure", ], "green")
 
 # ----------------------------------------------------------------- containers
 card(430, 170, 350, 120, "so100-arm", [
@@ -136,8 +136,7 @@ card(430, 904, 350, 96, "so100-rosbridge", [
 # ROS2 bus band
 box(430, 1024, 740, 62, "green")
 text(444, 1046, "ROS2 bus — FastDDS · domain 42 · network + ipc host", 14, GREEN_T, bold=True)
-text(444, 1066, "twenty-two nodes and the topics above, discovered from every container and from "
-                "the LAN", 11)
+text(444, 1066, "thirteen nodes standing today — sixteen when RViz is up — discovered from every container ", 11)
 
 # ----------------------------------------------------------------- windows
 card(1230, 170, 380, 92, "Browser on the PC", [
@@ -183,7 +182,7 @@ label(1000, 1236, "HTTP — the grasp request (to be written)", GREY_T, 10)
 add('<rect x="30" y="1286" width="1600" height="34" rx="6" fill="#101725" stroke="%s"/>' % FRAME)
 text(44, 1308, "Left to build:  grasp pipeline (GraspGen client) · episode recording + LeRobot "
                "export · hand-eye extrinsic (needs a new capture, README §10.3) · wrist camera "
-               "mounting and focus · arm repaint", 12, DIM)
+               "focus measurement and its TF · arm repaint", 12, DIM)
 
 add("</svg>")
 open("docs/architecture-flow.svg", "w").write("\n".join(out) + "\n")

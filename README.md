@@ -112,7 +112,7 @@ seen working on this hardware, so trust it over the plan when they disagree.
 - [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
 - [ ] **Episode recording + LeRobot export (ADR-0012)** — rosbag2 of the synchronised topics and an offline converter to the dataset format
 - [ ] **Hand-eye extrinsic — needs a new capture** — the 2026-11-09 dataset does not close: the board lands 694 mm from the jaw with a 300 mm spread, so the poses and the frames are not from the same instants (§10.3). Bolt the board to the jaw, read the pose at the shot, and run `tools/handeye_bundle.py`, which reports the leave-one-out error instead of a spread that looks small on bad data. Until then no node consumes an extrinsic, which is the safe state
-- [ ] **Gripper camera (ADR-0008, superseded by ADR-0022)** — a USB RGB webcam with manual focus, set at 10-15 cm; not mounted yet. The focus procedure it has to pass is in §10.5, and `tools/camfocus.py` is the tool that measures it
+- [ ] **Gripper camera focus (ADR-0022)** — the USB RGB webcam is **mounted on the moving jaw** and streams at 10 Hz; what is still missing is the *measured* focus at 10-15 cm, with the procedure and the CSV in §10.5 (`tools/camfocus.py`)
 - [ ] **GraspGen (ADR-0013)** and **policy training (ADR-0016)** — need the IK node and the recorder first
 
 ## 3. Prerequisites
@@ -126,7 +126,7 @@ the later chapters assume it, and the failure they produce points somewhere else
 |---|---|---|
 | Arm | SO-101 follower, six Feetech servos, 12 V supply | `/dev/so100_arm` on the Xavier — a udev symlink, because the CH9102 adapter (VID `1a86`) re-enumerates; inside the container it is still `/dev/ttyACM0` |
 | Scene camera | OAK-D POE (IMX378 colour + 2x OV9282 mono, 7.5 cm baseline) over USB-C | opened by the cams container |
-| Wrist camera | USB RGB webcam, manual focus set at 10-15 cm | not mounted yet; the focus requirement and how it is proven are in §10.5 (ADR-0022) |
+| Wrist camera | USB RGB webcam, manual focus set at 10-15 cm | mounted on the moving jaw, streaming at 10 Hz; the focus requirement and how it is proven are in §10.5 (ADR-0022) |
 | Host | Jetson Xavier NX 16 GB, JetPack 5.1.5 (Ubuntu 20.04) | the six containers |
 | Operator PC | Windows 11, or anything with Chromium, on the same LAN | the tabs, MuJoCo, the F710 |
 | Pad | Logitech F710, back switch in **X** mode | `/joint_targets` over rosbridge |
@@ -240,7 +240,7 @@ The calibration file is overwritten in place, so keep a copy if you want to comp
 
 ## 5. Camera bring-up — depthai on the Xavier
 
-**State:** scene OAK-D-POE (IMX378 colour + two OV9282 mono, 7.5 cm baseline) capturing colour 1920x1080 and depth 1280x720 at **1.0-1.5 fps**, limited by the link negotiating **High Speed (480 Mb/s)** rather than SuperSpeed — the cable or the port is the suspect, not the camera. The two mono views are published too, so the stereo pair can be inspected from the browser. The wrist camera is a plain USB RGB webcam, not an OAK (ADR-0022), and is not mounted yet. `depthai-core` v2.33.0 built from source and installed at `~/depthai`; `depthai-python` bindings built against it and installed into `~/oak/.venv` (version string `2.33.0.0.dev0+<commit>` — the source build, not the wheel).
+**State:** scene OAK-D-POE (IMX378 colour + two OV9282 mono, 7.5 cm baseline) capturing colour 1920x1080 and depth 1280x720 at **1.0-1.5 fps**, limited by the link negotiating **High Speed (480 Mb/s)** rather than SuperSpeed — the cable or the port is the suspect, not the camera. The two mono views are published too, so the stereo pair can be inspected from the browser. The wrist camera is a plain USB RGB webcam, not an OAK (ADR-0022), mounted on the moving jaw and streaming at 10 Hz — the RViz panel shows the jaws and the object between them. `depthai-core` v2.33.0 built from source and installed at `~/depthai`; `depthai-python` bindings built against it and installed into `~/oak/.venv` (version string `2.33.0.0.dev0+<commit>` — the source build, not the wheel).
 
 1. **udev rule (once):** `/etc/udev/rules.d/80-oak.rules` → `SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"`, then `udevadm control --reload-rules && udevadm trigger --subsystem-match=usb`. Without it, a bootloader-state device can't be opened by non-root.
 2. **Fallback venv (works today):** `uv venv ~/oak/.venv --python 3.12` + `uv pip install --python ~/oak/.venv/bin/python "depthai<3" opencv-python-headless` (wheel 2.33.0.0 — same API as the source build).
@@ -802,10 +802,10 @@ not because the exposure changed.
   `focus_absolute` 0-1023, so it can be focused at the real working distance and locked there
   (`curl 'http://127.0.0.1:8190/focus?v=350'` while pointing `camfocus` at it).
 - **The node side is live**: `wrist_cam` publishes `/gripper/image/compressed` at 10 Hz from
-  `/dev/so100_wrist` (§11.2), and the browser can see it at `:8090/gripper/stream`. What is missing
-  is physical — the camera is not on the arm, the focus has not been set with this procedure yet,
-  and there is no static transform from `moving_jaw_so101_v1` to `gripper_color_optical_frame`
-  because that needs the mount geometry.
+  `/dev/so100_wrist` (§11.2), and the browser can see it at `:8090/gripper/stream`. It is mounted on
+  the moving jaw; what is missing is the *measured* focus — run the procedure below and keep the
+  CSV — and the static transform from `moving_jaw_so101_v1` to `gripper_color_optical_frame`, which
+  needs the mount geometry (the bracket's offsets from the jaw axis).
 - The wrist camera is settled: a USB RGB webcam with manual focus, set at ≈12.5 cm and locked
   (ADR-0022 supersedes ADR-0008's OAK-D Lite, whose lens and stereo range both sit far beyond the
   wrist distance). That is why the 10-15 cm requirement is written as a *focus* requirement here,
@@ -813,9 +813,9 @@ not because the exposure changed.
 
 ![The wrist feed in the browser](docs/wrist-camera.png)
 
-*`/gripper/image/compressed` as it arrives today from the Logitech on the bench: 640x480 at 10 Hz,
-seen at `:8090/gripper/stream`. Blurred on purpose — the camera is not mounted and its focus has
-not been set; this is the pipeline, not the final view.*
+*`/gripper/image/compressed` as it arrives today, with the camera on the moving jaw: 640x480 at
+10 Hz, seen at `:8090/gripper/stream`. Blurred on purpose — it is the pipeline, not the final view;
+the focus is only proved once the procedure above has been run and its CSV kept.*
 
 ### 10.6 The cloud in the colour frame, coloured
 
