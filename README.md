@@ -49,6 +49,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [10.4 Depth scale, and colour to depth registration](#104-depth-scale-and-colour-to-depth-registration)
   - [10.5 The gripper camera — is it in focus at 10-15 cm?](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm)
   - [10.6 The cloud in the colour frame, coloured](#106-the-cloud-in-the-colour-frame-coloured)
+  - [10.7 Static transforms — and the wrist camera's](#107-static-transforms--and-the-wrist-cameras)
 - **[11. Node and topic reference](#11-node-and-topic-reference)**
   - [11.1 so100-arm — the arm](#111-so100-arm--the-arm)
   - [11.2 so100-cams — the cameras](#112-so100-cams--the-cameras)
@@ -810,39 +811,8 @@ not because the exposure changed.
   wrist distance). That is why the 10-15 cm requirement is written as a *focus* requirement here,
   not as a depth range — and why `tools/camfocus.py` runs before the camera goes on the arm.
 
-**The wrist camera's static transform — what it is and where it lives.** TF is the tree of poses
-ROS uses to place anything in 3D: every edge holds the position and orientation of one frame
-relative to another, and with the whole tree a point can be carried from any frame to any other.
-It comes in two channels:
-
-- **`/tf`, dynamic** — changes all the time. `robot_state_publisher` recomputes it at 50 Hz from the
-  joint angles: `base → shoulder → upper_arm → lower_arm → wrist → gripper → moving_jaw_so101_v1`.
-- **`/tf_static`, static** — **published once** and never again, with a *latched* QoS so a node that
-  starts an hour later still receives it the moment it subscribes. It is for what is bolted to
-  something that moves: a camera, a bracket, an IMU.
-
-A webcam clipped to the jaw does not move relative to the jaw, so its pose belongs in `/tf_static`;
-repeating the same six numbers 50 times a second would be noise. Those numbers are the transform
-below: **x, y, z** in metres from the `moving_jaw_so101_v1` link origin to the centre of the lens,
-then **roll, pitch, yaw** to rotate that link's axes into the *optical* convention (z out of the
-lens, x to the right of the image, y down it). It is what puts `gripper_color_optical_frame` — the
-frame `wrist_cam` stamps on every image — into the tree. Without it the image arrives tagged with a
-frame nobody can find: RViz can only show it unanchored, and nothing can carry a wrist-camera point
-into `base`.
-
-The numbers live in `docker/docker-compose.yaml` as `WRIST_TF_X / Y / Z / ROLL / PITCH / YAW`, and
-the arm entrypoint hands them to `ros2 run tf2_ros static_transform_publisher` with
-`--frame-id moving_jaw_so101_v1 --child-frame-id gripper_color_optical_frame`. The defaults are the
-**nominal** bracket values: they put the frame where the print says the lens is. Measure your own
-build and replace them — no code changes, one line each:
-
-```
-ros2 run tf2_ros tf2_echo moving_jaw_so101_v1 gripper_color_optical_frame   # constant pose = static
-ros2 run tf2_ros tf2_echo base gripper_color_optical_frame                  # the whole chain resolves
-```
-
-Verified on the cell 2026-11-11: the first answers `[0.000, -0.028, 0.035]`, rpy `[180°, 0, 0]`, the
-same on every query; the second resolves `base → … → jaw → lens` at `[0.103, -0.024, 0.478]` m.
+The pose of the camera on the jaw is a **static transform** — what that is, where the numbers
+live and how they were checked is in §10.7.
 
 ![The wrist feed in the browser](docs/wrist-camera.png)
 
@@ -883,6 +853,48 @@ back to the old uncoloured `xyz` cloud in the depth frame rather than colouring 
 Verified 2026-11-11 on the bench: `frame_id: scene_color_optical_frame`, fields
 `x,y,z,rgb` at offsets 0/4/8/12, ~2 Hz, 56k points, median range 1.11 m, and the colours land on
 the objects in the Point Cloud tab (counters, sticky notes, the red part on the bench).
+
+### 10.7 Static transforms — and the wrist camera's
+
+TF is the tree of poses ROS uses to place anything in 3D: every edge holds the position and
+orientation of one frame relative to another, and with the whole tree a point can be carried from
+any frame to any other. It comes in two channels:
+
+- **`/tf`, dynamic** — changes all the time. `robot_state_publisher` recomputes it at 50 Hz from the
+  joint angles: `base → shoulder → upper_arm → lower_arm → wrist → gripper → moving_jaw_so101_v1`.
+- **`/tf_static`, static** — **published once** and never again, with a *latched* QoS so a node that
+  starts an hour later still receives it the moment it subscribes. It is for what is bolted to
+  something that moves: a camera, a bracket, an IMU.
+
+A webcam clipped to the jaw does not move relative to the jaw, so its pose belongs in `/tf_static`;
+repeating the same six numbers 50 times a second would be noise. Those numbers are the transform
+below: **x, y, z** in metres from the `moving_jaw_so101_v1` link origin to the centre of the lens,
+then **roll, pitch, yaw** to rotate that link's axes into the *optical* convention (z out of the
+lens, x to the right of the image, y down it). It is what puts `gripper_color_optical_frame` — the
+frame `wrist_cam` stamps on every image — into the tree. Without it the image arrives tagged with a
+frame nobody can find: RViz can only show it unanchored, and nothing can carry a wrist-camera point
+into `base`.
+
+The numbers live in `docker/docker-compose.yaml` as `WRIST_TF_X / Y / Z / ROLL / PITCH / YAW`, and
+the arm entrypoint hands them to `ros2 run tf2_ros static_transform_publisher` with
+`--frame-id moving_jaw_so101_v1 --child-frame-id gripper_color_optical_frame`. The defaults are the
+**nominal** bracket values: they put the frame where the print says the lens is. Measure your own
+build and replace them — no code changes, one line each:
+
+```
+ros2 run tf2_ros tf2_echo moving_jaw_so101_v1 gripper_color_optical_frame   # constant pose = static
+ros2 run tf2_ros tf2_echo base gripper_color_optical_frame                  # the whole chain resolves
+```
+
+Verified on the cell 2026-11-11: the first answers `[0.000, -0.028, 0.035]`, rpy `[180°, 0, 0]`, the
+same on every query; the second resolves `base → … → jaw → lens` at `[0.103, -0.024, 0.478]` m.
+
+**Where these numbers came from, and what is still nominal.** The six values in `docker-compose.yaml`
+are the *printed bracket's* offsets: they place the frame where the drawing says the lens is, which
+is enough for the frame to be usable and for the image to be anchored to the jaw. They are not a
+measurement of this particular build. Take a ruler to the bracket (or read the offsets off the CAD)
+and edit the six `WRIST_TF_*` lines — no code, no rebuild. Until then, treat anything that depends on
+the camera's exact position (an eye-in-hand grasp, a measured depth of the jaws) as approximate.
 
 ## 11. Node and topic reference
 
