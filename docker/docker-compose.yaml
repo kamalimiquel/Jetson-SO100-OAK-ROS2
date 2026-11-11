@@ -115,6 +115,7 @@ services:
       # `docker compose up -d --force-recreate web`, ten seconds instead of a full build.
       - ./web/entry.sh:/entry.sh:ro
       - ./web/shutdown_server.py:/shutdown_server.py:ro
+      - ./state:/srv/state          # measurements written by the focus tab (CSV)
       # maju password for the shutdown button (600 on host, never in the repo)
       - /home/maju/.shutdown-secret:/run/secrets/shutdown-secret:ro
 

@@ -26,6 +26,7 @@
   <button class="active" data-tab="term">Terminal</button>
   <button data-tab="stereo">Stereo Cam &amp; Depth</button>
   <button data-tab="cloud">Point Cloud</button>
+  <button data-tab="focus">Wristcam focus test</button>
   <button data-tab="graph">Graph</button>
   <button data-tab="rviz">RViz</button>
   <span id="rvizstate" style="align-self:center;color:#8d99ad;font-size:12px"></span>
@@ -34,6 +35,7 @@
 <iframe class="active" data-pane="term"></iframe>
 <iframe data-pane="stereo"></iframe>
 <iframe data-pane="cloud"></iframe>
+<iframe data-pane="focus"></iframe>
 <iframe data-pane="graph"></iframe>
 <iframe data-pane="rviz"></iframe>
 <script>
@@ -44,12 +46,25 @@
     rviz:  `http://${HOST}:6080/vnc.html?autoconnect=true&resize=scale`,
     stereo: `http://${HOST}:8090/stereo`,
     cloud:  `http://${HOST}:8091/`,
+    focus:  `http://${HOST}:8093/`,
     graph: `http://${HOST}:6081/vnc.html?autoconnect=true&resize=scale`,
     term:  `http://${HOST}:7681`,
   };
 
   // RViz with software GL costs about two of the Xavier's six cores, so it only runs while
   // its tab is on screen: opening the tab starts it, leaving the tab stops it.
+  // The wrist-camera focus test scores 10 frames/s from the camera topic, so it has the same
+  // rule as RViz: /start when the tab is opened, /stop when it is left (and on pagehide).
+  const FOCUS_API = `http://${HOST}:8093`;
+
+  function focusOn() {
+    try { fetch(`${FOCUS_API}/start`, { method: "POST" }); } catch (e) {}
+  }
+
+  function focusOff() {
+    try { navigator.sendBeacon(`${FOCUS_API}/stop`); } catch (e) {}
+  }
+
   const RVIZ_API = `http://${HOST}:8099`;
   const rvizState = document.getElementById("rvizstate");
   let rvizPoll = null;
@@ -104,6 +119,7 @@
     }
     pane.focus();
     if (tab === "rviz") rvizOn(); else rvizOff();
+    if (tab === "focus") focusOn(); else focusOff();
   }
 
   document.querySelectorAll("nav button[data-tab]").forEach((btn) => {
@@ -113,6 +129,7 @@
   // Closing the page should not leave RViz burning CPU in the background.
   addEventListener("pagehide", () => {
     try { navigator.sendBeacon(`${RVIZ_API}/rviz/stop`); } catch (e) {}
+    try { navigator.sendBeacon(`${FOCUS_API}/stop`); } catch (e) {}
   });
 
   // A ?tab= name (or #name) opens straight into that tab — handy for bookmarks, docs

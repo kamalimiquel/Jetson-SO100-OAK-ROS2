@@ -34,6 +34,9 @@ websockify --web /usr/share/novnc 6081 localhost:5911 &
 # (a failing `&&` chain exits bash and ttyd shows "press to reconnect").
 ttyd -W -p 7681 bash -lc 'source /opt/ros/humble/install/setup.bash 2>/dev/null; exec bash' &
 python3 /shutdown_server.py &
+# wristcam focus test (:8093): the HTTP end is always up, the subscriber+scorer only run
+# while the tab is open (POST /start, /stop) — see docker/web/wrist_focus.py.
+python3 /srv/web/wrist_focus.py --csv /srv/state/wristcam-focus.csv &
 python3 -m http.server 80 --directory /srv/web &
 
 source /opt/ros/humble/install/setup.bash
