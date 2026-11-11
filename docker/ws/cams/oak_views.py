@@ -19,6 +19,7 @@ from sensor_msgs.msg import Image, CompressedImage
 
 FPS = 5.0
 CLIP_M = 2.0          # depth range shown: 0 .. 2 m
+VIEW_W, VIEW_H = 1280, 720
 
 
 class StreamsToJpeg(Node):
