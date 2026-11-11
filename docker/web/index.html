@@ -21,7 +21,7 @@
 </head>
 <body>
 <nav>
-  <button id="torque" title="Energise the servos (arm is free to move by hand until then)">Torque brazo</button>
+  <button id="torque" title="Energise the servos (arm is free to move by hand until then)">Arm torque</button>
   <span class="sep"></span>
   <button class="active" data-tab="term">Terminal</button>
   <button data-tab="stereo">Stereo Cam &amp; Depth</button>
@@ -147,7 +147,7 @@
 
   function paintTorque(on) {
     torqueBtn.classList.toggle("on", on);
-    torqueBtn.textContent = on ? "Quitar torque" : "Torque brazo";
+    torqueBtn.textContent = on ? "Arm torque free" : "Arm torque";
   }
 
   async function readTorque() {
