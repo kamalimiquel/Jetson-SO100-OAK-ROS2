@@ -72,14 +72,27 @@ command -v rqt_graph >/dev/null 2>&1 && {
      sleep 4
    done
    sleep 8
-   # rqt builds its graph once at startup and then only patches it: nodes that were not
-   # discovered in that first pass never show up (deg2rad and ik were missing until a manual
-   # "reload" was pressed). The toolbar button at 509,64 re-queries the whole graph.
-   DISPLAY=:11 xdotool mousemove 509 64 click 1 >/dev/null 2>&1 || true
-   sleep 3
-   for pass in 1 2; do
-     DISPLAY=:11 xdotool mousemove 512 72 click 1 >/dev/null 2>&1 || true
-     sleep 2
+   # The tab opens in the view the cell is read in: "Nodes/Topics (all)" (the default
+   # "Nodes only" hides every node whose topics have no partner, which is most of the arm
+   # side) and no "Dead sinks" filter. rqt does not persist these, so they are clicked here.
+   DISPLAY=:11 xdotool mousemove 100 40 click 1 >/dev/null 2>&1 || true
+   sleep 1
+   DISPLAY=:11 xdotool key Down >/dev/null 2>&1 || true
+   DISPLAY=:11 xdotool key Down >/dev/null 2>&1 || true
+   DISPLAY=:11 xdotool key Return >/dev/null 2>&1 || true
+   sleep 2
+   DISPLAY=:11 xdotool mousemove 52 103 click 1 >/dev/null 2>&1 || true
+   sleep 2
+   # rqt builds its graph once at startup and only patches it afterwards, so nodes missed in
+   # that first pass (deg2rad, ik) never appear until the graph is re-queried — that is the
+   # toolbar reload at 509,64.
+   # The reload re-queries the graph and, with "Fit" still ticked (the default), that update is
+   # what re-runs the fit at the full window size. It is repeated because rqt's discovery of the
+   # quieter participants (arm_bridge, ik, deg2rad) takes tens of seconds: the first reloads find
+   # only the camera nodes, a later one finds the whole cell.
+   for round in 1 2 3 4; do
+     DISPLAY=:11 xdotool mousemove 509 64 click 1 >/dev/null 2>&1 || true
+     sleep 15
    done) &
 }
 
