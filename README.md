@@ -80,6 +80,7 @@ the URDF comes from, so it cannot drift.
 ### 2.1 Next
 
 - [ ] **Point cloud in the colour frame, coloured** — publish `/oak/scene/points` already transformed into the colour optical frame and carrying the pixel's RGB, so a cloud point and its pixel are the same thing. The homography that makes this possible is solved and unused; this is the step that turns "the camera sees" into "the object is *there*", and it is what lets a grasp be aimed at a segmented object instead of a hand-picked 3D guess. Unblocks: object segmentation in 3D, GraspGen targets, VLM pointing.
+- [ ] **The arm's silhouette in the cloud** — the SO-101's black plastic returns no depth, so the arm is a hole at the near edge of the cloud instead of a body (visible as the dark blob at the bottom of the Point Cloud tab). Project the URDF links through the same intrinsics the cloud is unprojected with — the transform is invertible, so this is a mask, not a second pipeline — and either mark the missing points or draw the model over the cloud. It is what lets the operator see where the arm sits relative to the objects, and the same mask is what a grasp planner needs to reject points that are the robot and not the scene.
 - [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
 - [ ] **IK node (ADR-0009)** — SE(3) pose to joint angles, with the URDF limits; the missing middle between "the gripper is here" (FK, done) and "move the gripper there". Unblocks GraspGen, the VLM interface and autonomous episodes
 - [ ] **Episode recording + LeRobot export (ADR-0012)** — rosbag2 of the synchronised topics and an offline converter to the dataset format
@@ -606,6 +607,11 @@ show up in the depth map at all: white paper under the lamp has no texture for t
 matcher, so those pixels are invalid or fall back to the background. Expect the same with
 any white or glossy object, which matters for grasping: texture, edges or the left/right
 check are what produce depth, not brightness.
+
+**Nor can it see the robot itself.** The SO-101's black plastic absorbs the pattern: the arm
+comes back as a hole, so in the Point Cloud tab it reads as a silhouette at the near edge
+rather than as a body. Nothing to tune — it is the same "texture or edges, not brightness"
+rule, applied to the arm. Filling it by projecting the URDF is on the list in §2.1.
 
 
 ### 8.4 Cost: what the streams actually spend on the Xavier
