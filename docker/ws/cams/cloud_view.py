@@ -116,7 +116,7 @@ function makeGeom(n){
   geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n*3), 3));
   geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n*3), 3));
-  const mat = new THREE.PointsMaterial({size:0.012, vertexColors:true, sizeAttenuation:true});
+  const mat = new THREE.PointsMaterial({size:3.0, color:0x9fe8ff, sizeAttenuation:false});
   if (pts) scene.remove(pts);
   pts = new THREE.Points(geom, mat);
   scene.add(pts);
@@ -146,9 +146,10 @@ async function tick(){
       const span = Math.max(1e-3, dmax-dmin);
       for (let i=0;i<n;i++){
         const t = (Math.hypot(pos[i*3]-cx, pos[i*3+1]-cy, pos[i*3+2]-cz) - dmin)/span;
-        col[i*3]   = 0.35 + 0.65*t;                       // near cyan -> far amber
-        col[i*3+1] = 0.80 + 0.20*Math.sin(t*Math.PI);
-        col[i*3+2] = 1.00 - 0.85*t;
+        // bright enough to read against the near-black background: pale cyan -> warm
+        col[i*3]   = 0.55 + 0.45*t;
+        col[i*3+1] = 0.88 + 0.12*Math.sin(t*Math.PI);
+        col[i*3+2] = 1.00 - 0.55*t;
       }
       geom.attributes.position.needsUpdate = true;
       geom.attributes.color.needsUpdate = true;

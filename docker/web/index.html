@@ -115,8 +115,11 @@
     try { navigator.sendBeacon(`${RVIZ_API}/rviz/stop`); } catch (e) {}
   });
 
-  // Load the initially active tab (Terminal) right away.
-  const initial = document.querySelector("nav button.active");
+  // A ?tab= name (or #name) opens straight into that tab — handy for bookmarks, docs
+  // screenshots and for pointing someone at the camera without explaining the UI.
+  const wanted = new URLSearchParams(location.search).get("tab") || location.hash.slice(1);
+  const initial = (wanted && document.querySelector(`nav button[data-tab="${wanted}"]`))
+    || document.querySelector("nav button.active");
   if (initial) showTab(initial);
 
   // Torque switch: the joint server is loopback-only, so the page talks to the arm

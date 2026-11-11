@@ -12,12 +12,12 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 0.85
+      Distance: 1.35
       Focal Point:
-        X: 0.15
+        X: 0.10
         Y: 0.0
-        Z: 0.13
-      Pitch: 0.30
+        Z: 0.25
+      Pitch: 0.35
       Yaw: 3.6
     Saved: ~
   Displays:
@@ -32,7 +32,7 @@ Visualization Manager:
       Show Axes: false
       Show Names: false
     - Class: rviz_default_plugins/RobotModel
-      Name: SO-100
+      Name: SO-101
       Description Source: Topic
       Description Topic:
         Depth: 5
@@ -46,18 +46,21 @@ Visualization Manager:
       Enabled: true
     - Class: rviz_default_plugins/Image
       Name: Scene color
+      Enabled: false
       Topic:
         Value: /oak/scene/color/compressed
       Transport Hint: compressed
-      Enabled: true
+      Enabled: false
     - Class: rviz_default_plugins/Image
       Name: Scene depth
+      Enabled: false
       Topic:
         Value: /oak/scene/depth/color/compressed
       Transport Hint: compressed
       Enabled: true
     - Class: rviz_default_plugins/Image
       Name: Scene confidence
+      Enabled: false
       Topic:
         Value: /oak/scene/confidence/compressed
       Transport Hint: compressed
