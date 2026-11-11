@@ -80,7 +80,8 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>OAK point clou
 <script src="/three.min.js"></script>
 <script>
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x0b1220, 0.9);
+// no fog: with density 0.9 everything past ~2 m washed out to the background colour,
+// and the cloud sits 1.5-2.5 m from the sensor
 const cam = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.01, 20);
 cam.position.set(0, -0.9, 0.55);
 const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -88,8 +89,12 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(1);
 document.body.appendChild(renderer.domElement);
-const target = new THREE.Vector3(0, 0, 0.4);
-let sph = {r:1.05, th:-1.2, ph:0.9};
+// Fixed opening view: the cloud is in the camera's optical frame, ~1.4 m ahead of the
+// sensor, so these numbers put the bench in the middle with the same framing every time.
+// (Auto-fitting the bounding sphere made the view jump from load to load, because the far
+// noise changes what "fits".)
+const target = new THREE.Vector3(-0.036, 0.052, 1.414);
+let sph = {r:2.27, th:-1.2, ph:0.9};
 function placeCam(){
   cam.position.set(
     target.x + sph.r*Math.sin(sph.ph)*Math.cos(sph.th),
@@ -154,12 +159,7 @@ async function tick(){
       geom.attributes.position.needsUpdate = true;
       geom.attributes.color.needsUpdate = true;
       geom.computeBoundingSphere();
-      if (!window.__fitted && geom.boundingSphere){
-        const bs = geom.boundingSphere;                 // frame the cloud once
-        target.copy(bs.center);
-        sph.r = Math.max(0.35, bs.radius * 1.25);
-        placeCam(); window.__fitted = true;
-      }
+
       document.getElementById('info').textContent = n.toLocaleString() + ' puntos';
     }
   }catch(e){ document.getElementById('info').textContent = 'sin datos'; }
