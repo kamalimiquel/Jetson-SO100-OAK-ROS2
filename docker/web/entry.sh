@@ -13,7 +13,10 @@ set -e
 rm -f /tmp/.X10-lock /tmp/.X11-lock /tmp/.X11-unix/X10 /tmp/.X11-unix/X11 2>/dev/null || true
 
 Xvfb :10 -screen 0 1280x800x24 -ac &
-Xvfb :11 -screen 1 1280x800x24 -ac &
+# :11 was started as `-screen 1`, i.e. a server with no screen 0: clients fell back to the
+# default 1280x1024x24 (which is why the Graph tab is 1280x1024, not the 1280x800 above) and
+# Qt could not size its window properly. Define screen 0 explicitly.
+Xvfb :11 -screen 0 1280x1024x24 -ac &
 # Wait for X to accept connections instead of a fixed sleep (advisorily from the
 # reference patch: xdpyinfo returns only once the server is ready).
 for d in :10 :11; do
@@ -40,13 +43,37 @@ export LIBGL_ALWAYS_SOFTWARE=1
 # The X display :10 and its VNC front-end stay up, so starting it is a ~10 s window instead
 # of a container restart.
 command -v rqt_graph >/dev/null 2>&1 && {
+  # rqt_gui rejects -geometry (it has its own argparse), so the window is stretched with
+  # xdotool. It fits the graph once, while it is still empty and the window is still small,
+  # and never re-fits by itself, so after the stretch the graph stays microscopic — wait for
+  # the cell's nodes and toggle "Fit" off/on to re-run the fit at the real window size.
   DISPLAY=:11 ros2 run rqt_graph rqt_graph &
-  # rqt opens in a small window; wait for it, then stretch it to the display.
   (for i in $(seq 1 30); do
      id=$(DISPLAY=:11 xdotool search --class rqt_graph 2>/dev/null | head -1)
-     if [ -n "$id" ]; then
-       DISPLAY=:11 xdotool windowsize "$id" 100% 100% windowmove "$id" 0 0 2>/dev/null && break
-     fi
+     if [ -n "$id" ] && DISPLAY=:11 xdotool windowsize "$id" 100% 100% \
+        windowmove "$id" 0 0 2>/dev/null; then break; fi
+     sleep 2
+   done
+   # `[ ... ] && break` would end this subshell on the first pass under `set -e`
+   for i in $(seq 1 90); do
+     if [ "$(ros2 node list 2>/dev/null | wc -l)" -ge 12 ]; then break; fi
+     sleep 2
+   done
+   # rqt fits the graph before the cell's nodes exist and never re-fits by itself, so the tab
+   # opened with a microscopic graph. A fixed delay does not help: the graph keeps growing while
+   # the containers come up, and a fit taken mid-growth zooms in on a handful of nodes. Wait for
+   # the node list to *stop changing* (and to have the whole cell in it), then toggle "Fit" off
+   # and on so the second click re-runs it at the real window size.
+   prev=""
+   for i in $(seq 1 60); do
+     now=$(ros2 node list 2>/dev/null | sort)
+     if [ "$now" = "$prev" ] && [ "$(printf "%s" "$now" | grep -c .)" -ge 12 ]; then break; fi
+     prev="$now"
+     sleep 4
+   done
+   sleep 8
+   for pass in 1 2; do
+     DISPLAY=:11 xdotool mousemove 512 72 click 1 >/dev/null 2>&1 || true
      sleep 2
    done) &
 }

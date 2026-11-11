@@ -101,6 +101,11 @@ services:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
       - ./web:/srv/web
+      # The entrypoint and the shutdown server are COPYed into the image, so editing them in
+      # docker/web/ only took effect after a rebuild — mount them instead: a script fix is then
+      # `docker compose up -d --force-recreate web`, ten seconds instead of a full build.
+      - ./web/entry.sh:/entry.sh:ro
+      - ./web/shutdown_server.py:/shutdown_server.py:ro
       # maju password for the shutdown button (600 on host, never in the repo)
       - /home/maju/.shutdown-secret:/run/secrets/shutdown-secret:ro
 
