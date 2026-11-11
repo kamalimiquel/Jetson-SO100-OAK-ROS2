@@ -20,7 +20,7 @@ Since then the cell gained a **rosbridge WebSocket** (ADR-0019) already proven f
 
 **Option 2**: `windows/f710_teleop_ws.py`. It mirrors the C++ semantics — joint-step mode (D-pad selects joint, left stick moves it, LB/RB gripper), cartesian-feel mode (START toggles), record/replay (X / B) — and keeps the same safety rules: nothing is published until `/joint_states` arrives, targets are seeded at the arm's real pose, deltas and limits are clamped, and publishing stops when the pad is idle.
 
-`windows/f710_teleop.cpp` stays in the tree as the reference implementation and as the path to option 1 if latency ever matters.
+**Amended 2026-11-11**: the C++ client and its build files are removed from the tree — the Python client is the only implementation, and nothing on the PC needs ROS2 (README §9.4). Option 1 stays on the record as the path back if latency ever matters.
 
 ## Consequences
 

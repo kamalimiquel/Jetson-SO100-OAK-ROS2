@@ -114,7 +114,7 @@ DDS over LAN: same `ROS_DOMAIN_ID` across the cell; if multicast discovery fails
 2. Isaac Sim / Isaac Lab (Omniverse, needs an NVIDIA GPU on the Windows 11): photorealistic, domain randomization, synthetic VLM data.
 3. **Both**: MuJoCo for daily iteration + Isaac Sim for synthetic data. CHOSEN — ADR-0016 (start with MuJoCo).
 **6c. Teleoperation with the Logitech F710 from Windows** (3 alternatives):
-1. **Native Windows C++ client (rclcpp + SDL2)** publishing joint targets → joint-bridge node on the Jetson. CHOSEN — ADR-0017 (C++, no fragile USB passthrough).
+1. **Native Windows C++ client (rclcpp + SDL2)** publishing joint targets → joint-bridge node on the Jetson. Originally CHOSEN — ADR-0017, **later superseded**: ADR-0020 moved teleop to the Python client over rosbridge and the C++ client was dropped on 2026-11-11.
 2. ROS2 in WSL2 with usbipd-win + `joy_linux`: requires passing the dongle to WSL2 (fragile).
 3. phosphobot web teleop with gamepad: works, but ties control to that stack and bypasses ROS2.
 Control modes: step-by-step joint mode, Cartesian-feel mode (deltas converted to joint increments), and record/replay trajectories for data collection.
