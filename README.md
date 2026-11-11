@@ -707,21 +707,26 @@ visible and stable, the tilt is under 55 deg, and the frame is fresh;
 are kept in `docs/calibration/datasets/2026-11-09-so101/` (`poses.json` + 12 JPGs) so a solver can
 be re-run without the hardware present.
 
-**The dataset does not close — and that is the finding.** Re-examined 2026-11-11 with
-`tools/handeye_bundle.py`, which solves the same problem properly (closed form, then a joint bundle
-adjustment of the camera-in-base and the board-on-jaw over every corner, then a leave-one-out
-test): with the best closed form the board ends up **694 mm from the jaw with a 300 mm spread**
-across views. A 100 mm board held in the jaws cannot be there, so the poses and the images do not
-belong to the same instants. The relative rotations *do* agree (median 2.5 deg), so the motion is
-coherent and the failure is in the pose pairing, not in the geometry.
+**The dataset does not close, and the cause is now measured.** Re-examined 2026-11-11 with
+`tools/handeye_bundle.py` (closed form, then a joint bundle adjustment of camera-in-base and
+board-on-jaw over every corner, then a leave-one-out test). The stored FK is **exact** — recomputed
+from `joints_deg` with the SO-101 URDF it matches to 0.0 mm on all 12 poses — and the relative
+rotations of arm and board agree to 2.5° median, so the motion itself is coherent. What does not
+hold is the *board-on-jaw* relation: solving for it gives **25° of rotation spread and ~300 mm of
+translation spread** across the twelve shots. A board bolted to the jaws cannot do that, whatever
+the board size or intrinsics are (checked: 18/13.5, 20/15 and two K sets all give the same spread).
+
+So the poses are right and the board was not rigid with respect to the jaw between shots — the
+capture protocol asks the operator to hold it, and holding it is enough.
 
 That also disposes of the old figure: **29.1 mm / 8.7 deg** came from a spread metric that stays
 small on inconsistent data, so it was never a measurement of accuracy. The extrinsic in
 `docs/calibration/scene_cam_extrinsic.yaml` is marked **not usable** — nobody should consume it.
 
-What a valid capture needs: the board **bolted to the jaw** (not held, not resting on the bench) and
-the joint pose read at the instant of the shot. `handeye_bundle.py` is ready for it and reports the
-hold-out error, which is the number that matters — solving on 11 views and predicting the 12th.
+What a valid capture needs: the board **clamped and not touched** between shots (a bracket or a
+printed jaw adapter), with the joint pose read at the instant of the shot. `handeye_bundle.py` is
+ready for it and reports the hold-out error — solving on 11 views and predicting the 12th — which is
+the number that matters.
 
 FK is read from the URDF the arm bridge publishes, never from a copied kinematic chain.
 

@@ -1,11 +1,11 @@
 # !! NOT USABLE — kept only as a record !!
 # 2026-11-11: the dataset behind this file (datasets/2026-11-09-so101) does not close as an
-# eye-to-hand problem. With the best closed-form solution the board ends up ~694 mm from the jaw
-# with a 300 mm spread across views, which is impossible for a 100 mm board in the jaws — the
-# relative rotations do agree (median 2.5 deg), so the motion is coherent but the poses do not
-# close. The old 29 mm / 8.7 deg figure came from a spread metric that stays small on data like
-# this, so it is not evidence of accuracy. Re-solve with tools/handeye_bundle.py on a new capture
-# where the board is bolted to the jaw and the pose is read in the same frame as the shot.
+# eye-to-hand problem. The stored FK is exact (recomputed from joints_deg with the SO-101 URDF it
+# matches to 0.0 mm), the motion is coherent (relative rotations agree to 2.5 deg median), but the
+# board-on-jaw pose spreads 25 deg / 300 mm across the twelve shots — a board bolted to the jaws
+# cannot do that, so it moved relative to the gripper between shots. The old 29 mm / 8.7 deg figure
+# came from a spread metric that stays small on data like this; it is not evidence of accuracy.
+# Re-solve with tools/handeye_bundle.py on a capture where the board is clamped and not touched.
 #
 # base <- scene_cam  (eye-to-hand, board on the gripper)
 # solver: cv2.calibrateHandEye/base2gripper — residual 17.5 mm / 8.61 deg over 6 poses
