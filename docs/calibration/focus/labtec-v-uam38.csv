@@ -1,0 +1,4 @@
+time,card,device,resolution,distance_cm,sharpness,brightness,focus
+2026-11-11 12:30:52,Labtec V-UAM38,/dev/video4,640x480,10.0,444.11,126.6,fixed
+2026-11-11 12:31:12,Labtec V-UAM38,/dev/video4,640x480,12.5,280.82,126.4,fixed
+2026-11-11 12:31:23,Labtec V-UAM38,/dev/video4,640x480,15.0,75.11,125.9,fixed

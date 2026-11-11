@@ -1,0 +1,4 @@
+time,card,device,resolution,distance_cm,sharpness,brightness,focus
+2026-11-11 12:44:53,Live! Cam Sync HD VF0770,/dev/video4,1280x720,10.0,267.72,131.1,fixed
+2026-11-11 12:45:20,Live! Cam Sync HD VF0770,/dev/video4,1280x720,12.5,349.0,132.6,fixed
+2026-11-11 12:45:39,Live! Cam Sync HD VF0770,/dev/video4,1280x720,15.0,408.15,125.6,fixed

@@ -43,6 +43,7 @@ A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium),
   - [10.2 Cost: what the streams actually spend on the Xavier](#102-cost-what-the-streams-actually-spend-on-the-xavier)
   - [10.3 Hand-eye — where the camera sits in the arm's frame](#103-hand-eye--where-the-camera-sits-in-the-arms-frame)
   - [10.4 Depth scale, and colour to depth registration](#104-depth-scale-and-colour-to-depth-registration)
+  - [10.5 The gripper camera — is it in focus at 10-15 cm?](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm)
 - **[11. Node and topic reference](#11-node-and-topic-reference)**
   - [11.1 so100-arm — the arm](#111-so100-arm--the-arm)
   - [11.2 so100-cams — the cameras](#112-so100-cams--the-cameras)
@@ -104,7 +105,7 @@ seen working on this hardware, so trust it over the plan when they disagree.
 - [ ] **IK node (ADR-0009)** — SE(3) pose to joint angles, with the URDF limits; the missing middle between "the gripper is here" (FK, done) and "move the gripper there". Unblocks GraspGen, the VLM interface and autonomous episodes
 - [ ] **Episode recording + LeRobot export (ADR-0012)** — rosbag2 of the synchronised topics and an offline converter to the dataset format
 - [ ] **Hand-eye extrinsic** — 29.1 mm / 8.7 deg from the closed-form solver (best subset 25.4 mm); the bundle-adjustment refiner is marked untrusted, it reports 46 px where this data should reach ~1 px
-- [ ] **Gripper camera (ADR-0008)** — the node already publishes `/oak/gripper/*` when it finds a second device; blocked on hardware, only one OAK is plugged in
+- [ ] **Gripper camera (ADR-0008)** — the node already publishes `/oak/gripper/*` when it finds a second device; blocked on hardware, only one OAK is plugged in. Its focus at 10-15 cm is a separate question and has to be measured on the unit (§10.5)
 - [ ] **GraspGen (ADR-0013)** and **policy training (ADR-0016)** — need the IK node and the recorder first
 - [ ] **C++ F710 client** — never compiled; the Python client covers the same ground today
 
@@ -695,6 +696,84 @@ repeated at ~0.40 m (§2.3).
 homography from the board — 48 correspondences, 0.69 px rms — lives in
 `docs/calibration/color_to_depth.yaml`. It is solved and **not used yet**: the cloud is still
 uncoloured, which is the first item in §2.3.
+
+### 10.5 The gripper camera — is it in focus at 10-15 cm?
+
+ADR-0008 puts a camera on the wrist so the jaws and the object can be seen at **10-15 cm**. Cheap
+USB cameras are *fixed focus*, and "fixed focus" says nothing about where the plane actually is:
+two units at the same price can sit at opposite ends of the range. So the first step is not
+mounting, it is measuring.
+
+**The tool** — `tools/camfocus.py`, bench only, no ROS, any UVC camera. It serves the device as
+MJPEG, scores the sharpness of the newest frame about twice a second, and writes the score at
+10 / 12.5 / 15 cm to a CSV when the buttons are pressed:
+
+```
+python3 tools/camfocus.py /dev/video2 --size 1280x720        # --size omitted: largest MJPG size
+python3 tools/camfocus.py --follow "VF0770" --csv ~/vf.csv   # track the camera by card name
+chromium --user-data-dir=/tmp/chrome-cam --app=http://127.0.0.1:8190/
+```
+
+<table>
+<tr>
+<td width="62%"><img src="docs/focus-tool.png" alt="camfocus while measuring"><br><em>The tool on a printed page at 10 cm: sharpness 495, best 672, brightness 145 — and the last mark it wrote.</em></td>
+<td width="38%"><img src="docs/focus-vf0770-board.png" alt="the VF0770 looking at the ChArUco board"><br><em>The same tool on the Creative VF0770, pointed at the printed ChArUco board used for the measurements.</em></td>
+</tr>
+</table>
+
+**Procedure**
+
+1. **Device and capability.** `v4l2-ctl --list-devices` gives the card name and its `/dev/videoN`;
+   `v4l2-ctl -d /dev/videoN --list-ctrls | grep focus` tells you whether there is a `focus_absolute`
+   at all. Without it the camera is fixed focus and the only variable you control is the mounting
+   distance. (Note that one physical camera often registers two nodes — use the one that exposes the
+   capture format, usually the lower number.)
+2. **Target.** The printed ChArUco board, or a page of text: flat, perpendicular, filling at least
+   half the frame. The metric needs edges — a blank surface scores low even in perfect focus.
+3. **Check the exposure.** The page shows brightness next to the score. Keep it between roughly
+   60 and 180; a mean near 1 is a lens cap, not a focus problem, and auto-exposure swinging during
+   the run invalidates the comparison.
+4. **Mark the three distances.** Target at 10 cm, press `10 cm`; then 12.5 and 15. Each press writes
+   `time, card, device, resolution, distance_cm, sharpness, brightness, focus` to the CSV, so rows
+   from different cameras and resolutions can never be confused afterwards.
+5. **Read the peak — and keep going.** The distance with the highest score is the focus plane; if the
+   score is still rising at the last distance you tested, the plane is beyond it and the next marks
+   (20, 25 cm) decide where the camera can actually work.
+
+**The number** is the variance of the Laplacian on the grey frame, downscaled to 720 px. It is a
+relative measure: compare only within one camera, one resolution, one target and one lamp. On a
+1280x720 frame, sharp text sits around **300**, slightly soft around **20**, visibly blurred around
+**3**, and a black or flat frame around **1**.
+
+**Result** (2026-11-11, one lamp, the same board, nothing moved but the target). Raw rows in
+`docs/calibration/focus/`, figure generated by `tools/make_focus_chart.py`:
+
+| distance | Labtec V-UAM38 (640x480) | Creative Live! Cam Sync HD VF0770 (1280x720) |
+|---|---|---|
+| 10 cm | **444** | 268 |
+| 12.5 cm | 281 | 349 |
+| 15 cm | 75 | **408** |
+
+![Focus against working distance](docs/focus-vs-distance.png)
+
+Two clean monotonic curves pointing in **opposite directions**: the Labtec is sharpest at 10 cm or
+closer (six times softer by 15 cm), the VF0770 is still improving at 15 cm, so its plane is beyond
+the band. They cross between 10 and 12.5 cm. Brightness stayed within a few counts in each set
+(126 ±1 and 125-133), which is what makes the comparison valid: the score moved because of focus,
+not because the exposure changed.
+
+**What this means for the wrist camera**
+
+- Neither of these two serves 10-15 cm as it stands. With fixed focus the plane is a property of the
+  lens: you mount the camera *at* its plane, or you change the camera.
+- If the cell has to look at the jaws from ~10 cm, the Labtec is the one that was sharp there; if the
+  mount ends up beyond 15 cm, the VF0770 is, but its plane still has to be located with more marks.
+- The cleanest answer is a camera whose focus can be **set**: the 5M WebCam on this bench exposes
+  `focus_absolute` 0-1023, so it can be focused at the real working distance and locked there
+  (`curl 'http://127.0.0.1:8190/focus?v=350'` while pointing `camfocus` at it).
+- The OAK-D Lite of ADR-0008 is fixed focus and its stereo minimum sits well beyond 10 cm. The same
+  measurement has to be run on the real unit before the wrist mount is designed — a datasheet minimum
+  range is not a statement about focus.
 
 ## 11. Node and topic reference
 
