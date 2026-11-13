@@ -27,16 +27,20 @@ python3 /opt/ws/arm/arm_bridge.py &
 python3 /opt/ws/arm/deg2rad.py &
 
 # robot_state_publisher reads the robot_description PARAMETER (not the topic)
-# in Humble — pass the URDF directly. Re-read it on every retry: a container
-# started while the file is being synced must not cache an empty string.
-# Joint values are in DEGREES (LeRobot); RSP needs RADIANS (REP-103), so it
-# consumes the converted topic from deg2rad.py. frame_prefix keeps a second
-# arm's TF tree separate (Phase 1).
-(until URDF=$(cat /opt/ws/arm/urdf/so101.urdf) && [ -n "$URDF" ] \
-     && ros2 run robot_state_publisher robot_state_publisher --ros-args \
-          -p robot_description:="$URDF" -p frame_prefix:="$FP" -r joint_states:=/"$JSR"; do
-   echo "rsp: retrying in 2s"; sleep 2
- done) &
+# in Humble — pass the URDF directly. Joint values are in DEGREES (LeRobot); RSP
+# needs RADIANS (REP-103), so it consumes the converted topic from deg2rad.py.
+# frame_prefix (only when ARM_NS is set, i.e. the second arm) keeps that arm's
+# TF tree separate. An empty prefix would be an invalid -p frame_prefix:= argument.
+(
+  while true; do
+    URDF=$(cat /opt/ws/arm/urdf/so101.urdf 2>/dev/null) || { echo "rsp: no urdf, retry in 2s"; sleep 2; continue; }
+    [ -n "$URDF" ] || { echo "rsp: empty urdf, retry in 2s"; sleep 2; continue; }
+    RSP_ARGS=(-p "robot_description:=$URDF" -r "joint_states:=/$JSR")
+    [ -n "$FP" ] && RSP_ARGS+=(-p "frame_prefix:=$FP")
+    ros2 run robot_state_publisher robot_state_publisher --ros-args "${RSP_ARGS[@]}" || true
+    echo "rsp: retrying in 2s"; sleep 2
+  done
+) &
 
 # Wrist camera frame (ADR-0022) — a STATIC transform, published once on /tf_static.
 # The webcam is clipped to the moving jaw, so its pose relative to that link never changes:

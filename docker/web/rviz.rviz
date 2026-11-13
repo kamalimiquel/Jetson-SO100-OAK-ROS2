@@ -44,6 +44,23 @@ Visualization Manager:
       Collision Enabled: false
       Alpha: 1.0
       Enabled: true
+    - Class: rviz_default_plugins/RobotModel
+      # Second arm (two-arm plan, Phase 4): its own /arm2/robot_description latched
+      # by the arm2 bridge, its TF tree prefixed arm2_ so it does not collide with
+      # the first arm, positioned by the static base -> arm2_base at 0,0.30,0.
+      Name: SO-101 (arm 2)
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /arm2/robot_description
+      TF Prefix: arm2_
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 1.0
+      Enabled: true
     - Class: rviz_default_plugins/Image
       Name: Colour camera
       Enabled: true
