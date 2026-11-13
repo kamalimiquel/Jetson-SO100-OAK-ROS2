@@ -35,6 +35,16 @@ from std_msgs.msg import Float64MultiArray, String
 
 URDF = os.environ.get("IK_URDF", "/opt/ws/arm/urdf/so101.urdf")
 APPLY = os.environ.get("IK_APPLY", "") == "1"
+# Two-arm (Plan Phase 7): ARM_NS moves the topics to /arm2/ik/* and the base to
+# arm2_base, so a second instance can solve for arm 2 from its own frame.
+NS = os.environ.get("ARM_NS", "").strip("/")
+BASE_FRAME = "arm2_base" if NS else "base"
+
+
+def topic(name):
+    return f"/{NS}/{name}" if NS else f"/{name}"
+
+
 TOL_MM = float(os.environ.get("IK_TOL_MM", "2.0"))
 TOL_DEG = float(os.environ.get("IK_TOL_DEG", "2.0"))
 JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
@@ -223,16 +233,16 @@ def solve(chain, T_t, seed_deg, jaw=0.0):
 
 class IkNode(Node):
     def __init__(self):
-        super().__init__("ik")
+        super().__init__(("arm2_ik" if NS else "ik"))
         self.chain = Chain()
-        self.pub_sol = self.create_publisher(Float64MultiArray, "/ik/solution", 10)
-        self.pub_status = self.create_publisher(String, "/ik/status", 10)
-        self.pub_target = (self.create_publisher(Float64MultiArray, "/joint_targets", 10)
+        self.pub_sol = self.create_publisher(Float64MultiArray, topic("ik/solution"), 10)
+        self.pub_status = self.create_publisher(String, topic("ik/status"), 10)
+        self.pub_target = (self.create_publisher(Float64MultiArray, topic("joint_targets"), 10)
                            if APPLY else None)
         self.q_deg = None
         self.grip_deg = None
-        self.create_subscription(JointState, "/joint_states", self.on_joints, 10)
-        self.create_subscription(PoseStamped, "/ik/target", self.on_target, 10)
+        self.create_subscription(JointState, topic("joint_states"), self.on_joints, 10)
+        self.create_subscription(PoseStamped, topic("ik/target"), self.on_target, 10)
         self.get_logger().info(
             "ik: %d joints %s | limits %s | %s"
             % (self.chain.n, self.chain.links,
@@ -255,9 +265,9 @@ class IkNode(Node):
         T_t[:3, :3] = quat_to_mat(msg.pose.orientation.x, msg.pose.orientation.y,
                                   msg.pose.orientation.z, msg.pose.orientation.w)
         T_t[:3, 3] = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
-        if msg.header.frame_id and msg.header.frame_id not in ("base", ""):
-            self._status("rejected: frame_id is %r, expected 'base' (no extrinsics are applied "
-                         "here)" % msg.header.frame_id, ok=False)
+        if msg.header.frame_id and msg.header.frame_id not in (BASE_FRAME, ""):
+            self._status("rejected: frame_id is %r, expected '%s' (no extrinsics are applied "
+                         "here)" % (msg.header.frame_id, BASE_FRAME), ok=False)
             return
         seed = self.q_deg if self.q_deg is not None else np.zeros(self.chain.dof)
         q_deg, iters, pos_m, ori_deg = solve(self.chain, T_t, seed)
