@@ -37,6 +37,47 @@ services:
       - ./ws:/opt/ws:ro
     command: ["bash", "/opt/ws/arm/entry.sh"]
 
+  # Second SO-100 (two-arm plan, Phase 1). Same image and entrypoint; the
+  # namespace/ports/frames come from env: ARM_NS renames the topics to /arm2/*
+  # and prefixes the TF as arm2_ (frame_prefix + wrist frames + base->arm2_base
+  # at 0,0.30,0). Its joint server is on :8003, its torque proxy on :8095, and
+  # its calibration id is its own (so100_cell_b) so the arms never overwrite JSON.
+  arm2:
+    image: dustynv/ros:humble-ros-base-l4t-r35.4.1
+    container_name: so100-arm2
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ARM_NS=arm2
+      - JOINT_PORT=8003
+      - TORQUE_PORT=8095
+      # lerobot_joint_server reads these itself (Phase 1):
+      - PORT=8003
+      - SO100_PORT=/dev/ttyACM0
+      - SO100_ID=so100_cell_b
+      # The 30 cm (README §3.6 R3) — metres, published once on base->arm2_base.
+      - ARM2_OFFSET_X=0.0
+      - ARM2_OFFSET_Y=0.30
+      - ARM2_OFFSET_Z=0.0
+      - WRIST_TF_X=0.0
+      - WRIST_TF_Y=-0.028
+      - WRIST_TF_Z=0.035
+      - WRIST_TF_ROLL=3.14159
+      - WRIST_TF_PITCH=0.0
+      - WRIST_TF_YAW=0.0
+    devices:
+      # Phase 0 udev rule (provision-jetson.sh): serial 5A46085595 -> /dev/arm2_tty.
+      - /dev/arm2_tty:/dev/ttyACM0
+    volumes:
+      - /home/maju/lerobot/.venv:/home/maju/lerobot/.venv:ro
+      - /home/maju/.local/share/uv/python:/home/maju/.local/share/uv/python:ro
+      - /home/maju/.cache/huggingface/lerobot:/home/maju/.cache/huggingface/lerobot
+      - ./ws:/opt/ws:ro
+    command: ["bash", "/opt/ws/arm/entry.sh"]
+
   cams:
     build:
       context: ..

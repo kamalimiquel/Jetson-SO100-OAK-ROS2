@@ -8,21 +8,33 @@ that is the "RViz shows nonsense" symptom.
 
 This node republishes the same message with radians; robot_state_publisher is
 launched with `-r joint_states:=/joint_states_rad`.
+
+Env: ARM_NS (topic namespace, default empty -> /joint_states -> /joint_states_rad;
+     "arm2" -> /arm2/joint_states -> /arm2/joint_states_rad).
 """
 
 import math
+import os
 
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
+NS = os.environ.get("ARM_NS", "").strip("/")
+
+
+def topic(name: str) -> str:
+    return f"/{NS}/{name}" if NS else f"/{name}"
+
 
 class DegToRad(Node):
     def __init__(self):
-        super().__init__("deg2rad")
-        self.pub = self.create_publisher(JointState, "/joint_states_rad", 10)
-        self.sub = self.create_subscription(JointState, "/joint_states", self.on_msg, 10)
-        self.get_logger().info("republishing /joint_states (deg) as /joint_states_rad")
+        super().__init__("arm2_deg2rad" if NS else "deg2rad")
+        self.pub = self.create_publisher(JointState, topic("joint_states_rad"), 10)
+        self.sub = self.create_subscription(JointState, topic("joint_states"), self.on_msg, 10)
+        self.get_logger().info(
+            f"republishing {topic('joint_states')} (deg) as {topic('joint_states_rad')}"
+        )
 
     def on_msg(self, msg: JointState):
         out = JointState()

@@ -11,16 +11,21 @@ Nothing else is proxied: the page can switch torque, it cannot move the arm.
 
 CORS is open (`*`) because the page is served from :80 and talks to :8092 — same
 Jetson, different port, so the browser treats it as another origin.
+
+Env (two-arm plan, Phase 1): TORQUE_PORT (default 8092; arm 2 uses 8095),
+JOINT_PORT (default 8002; arm 2 uses 8003) — the loopback joint server to proxy.
 """
 
 import json
+import os
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = "0.0.0.0"
-PORT = 8092
-UPSTREAM = "http://127.0.0.1:8002/torque"
+PORT = int(os.environ.get("TORQUE_PORT", "8092"))
+JOINT_PORT = os.environ.get("JOINT_PORT", "8002")
+UPSTREAM = f"http://127.0.0.1:{JOINT_PORT}/torque"
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -55,6 +55,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [3.3 Access, groups, network](#33-access-groups-network)
   - [3.4 What you need from the repository](#34-what-you-need-from-the-repository)
   - [3.5 A second arm — what USB can and cannot take](#35-a-second-arm--what-usb-can-and-cannot-take)
+  - [3.6 Two-arm integration — the risks, explained](#36-two-arm-integration--the-risks-explained)
 - **[4. Arm bring-up — uv + LeRobot SDK (arm)](#4-arm-bring-up--uv--lerobot-sdk-arm)**
   - [4.1 Re-calibrating the arm (with pose pictures)](#41-re-calibrating-the-arm-with-pose-pictures)
 - **[5. Camera bring-up — depthai on the Xavier](#5-camera-bring-up--depthai-on-the-xavier)**
@@ -292,6 +293,70 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{seria
 - An unpowered hub: two cameras plus two adapters draw more than a single downstream port budgets,
   and the symptom is the one this cell already knows — a device that re-enumerates mid-run.
 
+
+### 3.6 Two-arm integration — the risks, explained
+
+The integration plan ([docs/two-arm-integration-plan.md](docs/two-arm-integration-plan.md)) rests on a
+few decisions — the `/arm2` namespace + `arm2_` frame prefix, the 30 cm as one static transform, and
+the F710 A-hold. Each carries a risk that can *look like an unrelated fault*. This section explains
+them one by one, and ends with two alternative ways the same cell could be built.
+
+**R1 — Two identical USB adapters.** Both arms use the same chip (`1a86:55d3`), so `VID:PID` cannot
+tell them apart; only the serial can. The confirmed wrong key is "whichever enumerated last" —
+`/dev/so100_arm` pointed at `ttyACM2` one boot and `ttyACM1` the next. If a udev rule is wrong or
+missing, the arm 2 container talks to arm 1's servos and vice-versa, and the *symptom is a dead
+motor*: the wrong arm answers the wrong bus, reads time out, and the log says "motor not responding"
+when the real fault is identity. That is the failure that burns the most debug time, which is why
+Phase 0 exists to make the names stable and is gated by a reboot test — not "it looks fine".
+
+**R2 — TF collisions.** The two arms share one TF graph and one RViz. A single frame without the
+`arm2_` prefix (or a namespace applied to topics but not to frames) *silently merges the two trees*:
+RViz draws one arm's shoulder attached to the other arm's base, and neither `tf2_echo` nor RViz
+reports an error — it just looks wrong in a way that is hard to state precisely. The prefix has to be
+applied at the second `robot_state_publisher` (`frame_prefix: arm2_`), not hoped to hold in each URDF.
+
+**R3 — The 30 cm separation.** Where the two arms sit is **one number**, published once as the static
+transform `base → arm2_base = (0, 0.30, 0)`. If that number and the MuJoCo twin's placement drift
+apart, the comparison between sim and bench is meaningless — and nothing errors, both just move. The
+number must live in exactly one place and both the TF2 static publisher and the twin must read it from
+there, not each hardcode it.
+
+**R4 — Teleop safety at the switch.** The dangerous moment is the transition arm 1 → arm 2: stop
+publishing to the old topic, re-seed the targets from the *new* arm's real pose so there is no jump,
+clamp the first delta, and — critically — refuse the switch if the far arm does not answer within 1 s
+(else you switch onto stale feedback and it jumps). The A-hold is a 5 s edge detector precisely so a
+short tap (which already means "replay") can never switch by accident.
+
+**R5 — The Xavier's stability.** It dropped three times in an hour on 2026-11-11/13 with the board at
+50 °C. No software in this plan fixes that; a second arm only adds load. The temperatures tab exists
+to watch it with two arms, and the regression phase (T8.4) records the delta vs one arm as the new
+normal.
+
+#### Two alternative ways the cell could be built
+
+**Alt 1 — symmetric namespaces for both arms (`/arm1` and `/arm2`) + a thin compatibility bridge.**
+Instead of arm 1 keeping the bare topics and arm 2 living under `/arm2`, rename *both* arms so every
+frame and topic is prefixed (`arm1_`/`arm2_`, `/arm1/*`/`/arm2/*`), and add a small re-publisher that
+copies arm 1's messages onto the bare topics (`/joint_states`, `/joint_targets`) the released 1.0
+surface already uses. This removes **R2 by construction** — no unprefixed frame exists anywhere to
+collide — and makes the two arms symmetric in code, docs and the Graph tab. Its cost is a one-time
+churn (a new prefix for the existing arm plus the bridge) that touches the web page, the twin and the
+pad exactly once. Risk trade-off: Alt 1 replaces the whole class of "bare frame collides" bugs with
+one small, well-tested compatibility bridge as a new moving part.
+
+**Alt 2 — physical-port naming (udev `KERNELS=`) and one generated geometry file.** Key the udev
+rules for the two arms on the physical hub port (`KERNELS=="1-…"`) instead of the serial, and generate
+every geometric number (the 30 cm and both wrist-camera TFs) from a single config that the TF2 static
+publisher and the MuJoCo twin both load. Physical-port naming is the fallback the plan already uses
+for the serial-less webcams, and it needs no serial that could be reflashed; its weakness is that
+moving a cable changes the identity, so the cables stay labelled and fixed (Phase 0 already demands
+that). The one-source geometry removes **R3** — there is no second literal to go out of sync. Risk
+trade-off: Alt 2 is more robust to a spoofed/reflashed serial and to geometry drift, at the cost of
+pinning both arms to two fixed ports forever (a cable change means a redeploy).
+
+The plan keeps serial-based naming (R1) and the single static transform + A-hold as the default — the
+least-churn path. Alt 1 and Alt 2 are the fallbacks if the risks that actually bite turn out to be TF
+collisions (R2) or geometry/identity drift (R3).
 
 ## 4. Arm bring-up — uv + LeRobot SDK (arm)
 Exact commands to install and use the LeRobot stack for the arm on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§2.3](#23-next)). Verified working; doubles as the record of the Jetson's current state.
