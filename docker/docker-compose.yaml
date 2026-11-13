@@ -100,8 +100,10 @@ services:
       # OAK devices (VID 03e7) + the cgroup rule below (ADR-0007).
       - /dev/bus/usb:/dev/bus/usb
       # Wrist camera (ADR-0022): a udev symlink, so re-enumeration to another /dev/videoN does
-      # not need a compose edit. scripts/provision-jetson.sh writes the rule.
+      # not need a compose edit. scripts/provision-jetson.sh writes the rule. arm2's webcam on
+      # its own symlink (two-arm plan, Phase 2).
       - /dev/so100_wrist:/dev/so100_wrist
+      - /dev/arm2_wrist:/dev/arm2_wrist
       - ./ws:/opt/ws
       - ../tools:/opt/tools:ro
     device_cgroup_rules:

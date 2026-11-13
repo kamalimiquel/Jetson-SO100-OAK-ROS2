@@ -41,23 +41,28 @@ H = int(os.environ.get("WRIST_H", "720"))
 FPS = int(os.environ.get("WRIST_FPS", "15"))
 HZ = float(os.environ.get("WRIST_HZ", "10"))
 CALIB = os.environ.get("WRIST_CALIB", "")
-FRAME = "gripper_color_optical_frame"
+# Two-arm (Phase 2): WRIST_TOPIC_NS renames the topics, WRIST_FRAME the frame id,
+# WRIST_NODE_NAME the node, so a second instance can run in the same container
+# (e.g. /dev/arm2_wrist -> /arm2/gripper/image/compressed, arm2_gripper_color_optical_frame).
+NS = os.environ.get("WRIST_TOPIC_NS", "/gripper").rstrip("/")
+FRAME = os.environ.get("WRIST_FRAME", "gripper_color_optical_frame")
+NODE_NAME = os.environ.get("WRIST_NODE_NAME", "wrist_cam")
 JPEG_QUALITY = 80
 
 
 class WristCam(Node):
     def __init__(self):
-        super().__init__("wrist_cam")
-        self.pub_img = self.create_publisher(CompressedImage, "/gripper/image/compressed", 5)
-        self.pub_info = self.create_publisher(CameraInfo, "/gripper/camera_info", 5)
+        super().__init__(NODE_NAME)
+        self.pub_img = self.create_publisher(CompressedImage, "%s/image/compressed" % NS, 5)
+        self.pub_info = self.create_publisher(CameraInfo, "%s/camera_info" % NS, 5)
         self.k = self._load_calib()
         self.cap = None
         self.warned = False
         self.frames = 0
         self.t_open = 0.0
         self.get_logger().info(
-            "wrist camera: %s %dx%d@%d fps -> /gripper/image/compressed at %.0f Hz%s"
-            % (DEVICE, W, H, FPS, HZ, "" if self.k else " (no intrinsics yet: no camera_info)"))
+            "wrist camera: %s %dx%d@%d fps -> %s/image/compressed at %.0f Hz%s"
+            % (DEVICE, W, H, FPS, NS, HZ, "" if self.k else " (no intrinsics yet: no camera_info)"))
         self.timer = self.create_timer(1.0 / max(HZ, 1.0), self.tick)
 
     def _load_calib(self):
