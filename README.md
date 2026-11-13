@@ -671,7 +671,10 @@ One page at **http://<xavier-ip>/** with six tabs, served by the `so100-web` con
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
 | **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the arm at its live pose, drawn with the **SO-101 model** (the hardware is an SO-100, [§2.3](#23-next)), the grid, TF, the scene **Colour camera** and the **Wrist camera** (the gripper webcam, ADR-0022). **Started on demand** — see below |
 
-What each tab actually looks like, captured on the bench (2026-11-10):
+What each tab actually looks like, captured on the bench (2026-11-10, **one arm**). The
+two-arm captures — both models in RViz, both wrist cameras in the Cams tab — land here once
+arm 2 is calibrated (`so100_cell_b`) and `so100-arm2` is running; the tab list already shows
+the renamed **Cams** tab and its Arm 1 / Arm 2 selector for the single-arm case.
 
 | | |
 |---|---|
