@@ -26,7 +26,7 @@
   <button class="active" data-tab="term">Terminal</button>
   <button data-tab="stereo">Stereo Cam &amp; Depth</button>
   <button data-tab="cloud">Point Cloud</button>
-  <button data-tab="focus">Wristcam focus test</button>
+  <button data-tab="focus">Cams</button>
   <button data-tab="temp">Xavier NX Temp</button>
   <button data-tab="graph">Graph</button>
   <button data-tab="rviz">RViz</button>
@@ -44,11 +44,13 @@
   // No placeholder: the page derives the host from its own URL, so it works
   // from any address (LAN IP, hostname) without a provisioning-time rewrite.
   const HOST = location.hostname;
+  // Cams deep link: opening the page with ?arm=2 opens the Cams tab on arm 2 (two-arm plan).
+  const armQS = new URLSearchParams(location.search).get("arm");
   const TAB_URLS = {
     rviz:  `http://${HOST}:6080/vnc.html?autoconnect=true&resize=scale`,
     stereo: `http://${HOST}:8090/stereo`,
     cloud:  `http://${HOST}:8091/`,
-    focus:  `http://${HOST}:8093/`,
+    focus:  `http://${HOST}:8093/${armQS ? "?arm=" + armQS : ""}`,
     temp:   `http://${HOST}:8094/`,
     graph: `http://${HOST}:6081/vnc.html?autoconnect=true&resize=scale`,
     term:  `http://${HOST}:7681`,

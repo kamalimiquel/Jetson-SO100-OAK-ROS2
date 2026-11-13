@@ -48,8 +48,9 @@ try:
 except Exception:                                    # noqa: BLE001 — reported in /status
     HAVE_SCORER = False
 
-TOPIC = "/gripper/image/compressed"
-CSV_HEADER = ["time", "distance_cm", "sharpness", "brightness", "frames", "source"]
+ARMS = {1: "/gripper/image/compressed", 2: "/arm2/gripper/image/compressed"}
+CSV_HEADER = ["time", "arm", "distance_cm", "sharpness", "brightness", "frames", "source"]
+TOPIC = ARMS[1]  # default; the live one is state["topic"]/state["arm"]
 MIN_SCORE_INTERVAL = 0.30            # score at ~3 Hz: 10 Hz of JPEG decode buys nothing
 IDLE_TIMEOUT = 45.0                  # seconds without a page poll before we stop ourselves
 
@@ -66,6 +67,8 @@ state = {
     "last_frame_t": 0.0,
     "frame": b"",                    # newest complete JPEG
     "source": "-",                   # "ros", "demo" or "-"
+    "arm": 1,                        # 1 or 2 (Cams tab); 2 = /arm2/gripper/...
+    "topic": TOPIC,                  # the topic being watched
     "error": "",
     "last_seen": time.time(),        # last time the page asked for something
     "marks": [],
@@ -120,20 +123,22 @@ def ingest(jpg):
 
 
 # --------------------------------------------------------------------------- sources
-def ros_worker():
-    """Subscribe to the wrist camera until asked to stop. This is the real source."""
+def ros_worker(arm):
+    """Subscribe to the selected wrist camera until asked to stop. This is the real source."""
     import rclpy
     from rclpy.node import Node
     from sensor_msgs.msg import CompressedImage
 
     rclpy.init()
     node = Node("wristcam_focus")
-    node.create_subscription(CompressedImage, TOPIC,
+    node.create_subscription(CompressedImage, ARMS[arm],
                              lambda msg: ingest(bytes(msg.data)), 5)
     with lock:
         state["source"] = "ros"
+        state["arm"] = int(arm)
+        state["topic"] = ARMS[arm]
         state["error"] = ""
-    node.get_logger().info("wristcam focus: listening on %s" % TOPIC)
+    node.get_logger().info("wristcam focus: listening on %s" % ARMS[arm])
     try:
         while True:
             with lock:
@@ -179,13 +184,16 @@ def start(kind):
         if state["run"]:
             state["last_seen"] = time.time()
             return False
+        arm = state["arm"]
         state["run"] = True
         state["frames"] = state["scored"] = 0
         state["best"] = 0.0
         state["score"] = state["brightness"] = 0.0
+        state["frame"] = b""
         state["last_seen"] = time.time()
         target = demo_worker if kind == "demo" else ros_worker
-        t = threading.Thread(target=target, name="focus-worker", daemon=True)
+        args = () if kind == "demo" else (arm,)
+        t = threading.Thread(target=target, args=args, name="focus-worker", daemon=True)
         state["worker"] = t
     t.start()
     return True
@@ -206,6 +214,31 @@ def stop():
     return True
 
 
+def select_arm(arm):
+    """Switch which wrist camera is shown/scored (1 or 2). If running, restart the worker."""
+    try:
+        arm = int(arm)
+    except (TypeError, ValueError):
+        arm = 1
+    if arm not in ARMS:
+        arm = 1
+    with lock:
+        prev = state["arm"]
+        running = state["run"]
+    if running and prev != arm:
+        stop()
+        with lock:
+            state["arm"] = arm
+            state["topic"] = ARMS[arm]
+            state["frame"] = b""
+        start("ros")
+    else:
+        with lock:
+            state["arm"] = arm
+            state["topic"] = ARMS[arm]
+    return state["arm"]
+
+
 def watchdog():
     while True:
         time.sleep(5)
@@ -224,7 +257,9 @@ def mark(csv_path, distance, source):
     recent = sorted(state["recent"]) or [state["score"]]
     sharp = recent[len(recent) // 2] if len(recent) % 2 else \
         0.5 * (recent[len(recent) // 2 - 1] + recent[len(recent) // 2])
-    row = [time.strftime("%Y-%m-%d %H:%M:%S"), distance,
+    with lock:
+        arm = state["arm"]
+    row = [time.strftime("%Y-%m-%d %H:%M:%S"), arm, distance,
            round(sharp, 2), round(state["brightness"], 1), state["scored"], source]
     new = not os.path.exists(csv_path)
     os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
@@ -260,7 +295,7 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
  .hint{color:#8d99ad;font-size:11.5px;margin-top:10px}
  .off{color:#c0392b}
 </style>
-<header>wristcam focus test — <span id="src">starting…</span>
+<header>cams focus test — arm <b id="cam">1</b> · <span id="src">starting…</span>
  &nbsp;·&nbsp; <b id="state">on demand</b></header>
 <div class="wrap">
  <div class="view"><img id="vid" src="/cam.mjpg" alt="wrist camera"></div>
@@ -269,6 +304,9 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
   <div class="score" id="score">—</div>
   <div class="hint">best <b id="best">—</b> · brightness <span id="bright">—</span>
    · <span id="frames">0</span> frames</div>
+  <div class="row"><div class="lbl">camera</div>
+   <button onclick="sel(1)">Arm 1 — /gripper</button>
+   <button onclick="sel(2)">Arm 2 — /arm2/gripper</button></div>
   <div class="row">
    <div class="lbl">mark the distance you are measuring at</div>
    <button onclick="mark(10)">10 cm</button>
@@ -289,6 +327,7 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
    if (!d) { const v = prompt("distance in cm?"); if (!v) return; d = v; }
    fetch(`/mark?d=${encodeURIComponent(d)}`).then(r => r.json()).then(refresh).catch(()=>{});
  }
+ function sel(n){ fetch(`/select?arm=${n}`).then(r=>r.json()).then(refresh).catch(()=>{}); }
  function refresh(j) {
    if (!j) return;
    document.getElementById("score").textContent =
@@ -299,7 +338,8 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
      j.running ? j.brightness.toFixed(0) : "—";
    document.getElementById("frames").textContent = j.frames;
    document.getElementById("src").textContent =
-     j.running ? (j.source === "ros" ? "/gripper/image/compressed" : "demo frames") : "idle";
+     j.running ? (j.topic || (j.source === "demo" ? "demo frames" : j.source)) : "idle";
+   document.getElementById("cam").textContent = j.arm || 1;
    const st = document.getElementById("state");
    st.textContent = j.running ? "measuring" : "idle";
    st.className = j.running ? "" : "off";
@@ -307,7 +347,7 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
    const t = document.getElementById("marks");
    t.innerHTML = (j.marks && j.marks.length)
      ? j.marks.slice().reverse().map(m =>
-         `<tr><td>${m[1]} cm</td><td>${m[2]}</td><td>${m[0].slice(11)}</td></tr>`).join("")
+         `<tr><td>${m[2]} cm · arm ${m[1]}</td><td>${m[3]}</td><td>${m[0].slice(11)}</td></tr>`).join("")
      : "<tr><td>—</td></tr>";
  }
  function poll() {
@@ -315,6 +355,8 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
      .then(j => { last = Date.now(); refresh(j); }).catch(()=>{});
  }
  setInterval(poll, 1000); poll();
+// Cams deep link: ?arm=2 in the page URL selects arm 2 on load (two-arm plan, Phase 3).
+(() => { const p = new URLSearchParams(location.search); if (p.get("arm")) sel(p.get("arm")); })();
 </script>
 """
 
@@ -350,6 +392,8 @@ class Handler(BaseHTTPRequestHandler):
                 "frames": state["frames"],
                 "scored": state["scored"],
                 "source": state["source"],
+                "arm": state["arm"],
+                "topic": state["topic"],
                 "error": state["error"],
                 "have_scorer": HAVE_SCORER,
                 "marks": list(state["marks"]),
@@ -382,6 +426,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(409, json.dumps({"error": "not running"}))
             row = mark(self.csv_path, d, src)
             return self._send(200, json.dumps({"row": row}))
+        if path == "/select":
+            arm = select_arm((q.get("arm") or ["1"])[0])
+            return self._send(200, json.dumps({"arm": arm}))
         if path == "/cam.mjpg":
             return self._stream()
         return self._send(404, json.dumps({"error": "not found"}))
