@@ -183,6 +183,9 @@ behaviour changes completely with the cable.
 Adding a **second arm and a second wrist camera** changes the arithmetic but not the rules: the port
 map, the measured numbers and the udev rules that tell two identical adapters apart are in
 [§3.5](#35-a-second-arm--what-usb-can-and-cannot-take).
+The **step-by-step integration plan** — phases, the tests that gate each one and the acceptance
+criteria (camera selector in the Cams tab, both arms 30 cm apart in RViz and MuJoCo, A-hold to change
+arm on the pad) — is in [docs/two-arm-integration-plan.md](docs/two-arm-integration-plan.md).
 
 
 
