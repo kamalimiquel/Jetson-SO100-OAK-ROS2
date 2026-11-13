@@ -27,6 +27,7 @@
   <button data-tab="stereo">Stereo Cam &amp; Depth</button>
   <button data-tab="cloud">Point Cloud</button>
   <button data-tab="focus">Wristcam focus test</button>
+  <button data-tab="temp">Xavier NX Temp</button>
   <button data-tab="graph">Graph</button>
   <button data-tab="rviz">RViz</button>
   <span id="rvizstate" style="align-self:center;color:#8d99ad;font-size:12px"></span>
@@ -36,6 +37,7 @@
 <iframe data-pane="stereo"></iframe>
 <iframe data-pane="cloud"></iframe>
 <iframe data-pane="focus"></iframe>
+<iframe data-pane="temp"></iframe>
 <iframe data-pane="graph"></iframe>
 <iframe data-pane="rviz"></iframe>
 <script>
@@ -47,6 +49,7 @@
     stereo: `http://${HOST}:8090/stereo`,
     cloud:  `http://${HOST}:8091/`,
     focus:  `http://${HOST}:8093/`,
+    temp:   `http://${HOST}:8094/`,
     graph: `http://${HOST}:6081/vnc.html?autoconnect=true&resize=scale`,
     term:  `http://${HOST}:7681`,
   };

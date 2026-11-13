@@ -44,6 +44,9 @@ python3 /shutdown_server.py &
 # wristcam focus test (:8093): the HTTP end is always up, the subscriber+scorer only run
 # while the tab is open (POST /start, /stop) — see docker/web/wrist_focus.py.
 python3 /srv/web/wrist_focus.py --csv /srv/state/wristcam-focus.csv &
+# board temperatures for the "Xavier NX Temp" tab (:8094). Thirteen sysfs reads a second:
+# it costs nothing, so unlike the focus test it simply always runs.
+python3 /srv/web/xavier_temp.py &
 python3 -m http.server 80 --directory /srv/web &
 
 source /opt/ros/humble/install/setup.bash

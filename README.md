@@ -371,6 +371,7 @@ are real ports on the host, so two containers cannot share one.
 | **8090** | MJPEG relé of the scene camera: `/`, `/stereo`, `/<view>/stream` | `so100-cams` | the **Stereo Cam & Depth** tab |
 | **8091** | the three.js point-cloud viewer | `so100-cams` | the **Point Cloud** tab |
 | **8093** | the wristcam focus test (on demand: `/start`, `/stop`) | `so100-web` | the **Wristcam focus test** tab |
+| **8094** | board temperatures from `/sys/class/thermal`, once a second | `so100-web` | the **Xavier NX Temp** tab |
 | **8092** | torque switch proxy → the loopback joint server | `so100-arm` | the `Arm torque` button |
 | **8099** | power-off endpoint, and RViz `/rviz/start`, `/rviz/stop`, `/rviz/state` | `so100-web` | the power button and the RViz tab |
 | **9090** | rosbridge WebSocket | `so100-rosbridge` | the MuJoCo twin, the F710 client, anything on the LAN |
@@ -523,6 +524,7 @@ One page at **http://<xavier-ip>/** with six tabs, served by the `so100-web` con
 | **Stereo Cam & Depth** | http://192.168.1.50:8090/stereo | four panels, each labelled on the image: **Stereo L** and **Stereo R** (the rectified pair the depth is computed from), **Depth** (0–2 m, turbo colormap) and **Confidence** (the device's per-pixel certainty, mono). Each carries its own resolution and rate |
 | **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, **each point in the colour the camera saw there** |
 | **Wristcam focus test** | http://192.168.1.50:8093/ | the wrist camera live with its **sharpness score**, and buttons that write the median of the last scores at 10 / 12.5 / 15 cm to `docker/state/wristcam-focus.csv` on the Xavier. It reads `/gripper/image/compressed` (it does **not** open the device — `so100-cams` owns it), and it **runs only while the tab is open**: `/start` on entry, `/stop` on leaving, plus a 45 s idle watchdog ([§10.5](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm)) |
+| **Xavier NX Temp** | http://192.168.1.50:8094/ | every thermal zone the kernel exposes (`CPU-therm`, `GPU-therm`, `SOC0-2`, `tj-therm`, the board sensors), hottest first, with its peak and a four-minute trace of the three hottest. Green below 60 °C, amber from 60, red from 80 — the NX starts throttling near 95. Thirteen sysfs reads a second, so it always runs |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
 | **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the arm at its live pose, drawn with the **SO-101 model** (the hardware is an SO-100, [§2.3](#23-next)), the grid, TF, the scene **Colour camera** and the **Wrist camera** (the gripper webcam, ADR-0022). **Started on demand** — see below |
 
@@ -599,6 +601,7 @@ Xvfb :11 1280x800  ──► rqt_graph ─► x11vnc :5901 ─► websockify :60
 ttyd :7681 (shell in the container) ────────────────────────────────┤
 python -m http.server :80 (tabs page + URDF + meshes, from /srv/web) ┘
 shutdown_server.py :8099 (button endpoint)
+wrist_focus.py :8093 (focus tab, on demand) · xavier_temp.py :8094 (temperatures)
 ```
 
 Each piece, and why it is there:
