@@ -70,7 +70,10 @@ def main():
         if "error" in r:
             print("  %-14s %s" % (r["dev"], r["error"]))
             continue
-        total += r["fps"] * (args.w * args.h * 0.10) / 8 / 1000 / 1000   # rough MJPG bitrate, Mbit/s
+        # MJPG is roughly 0.12 byte per pixel at webcam quality: 37 kB for 640x480, 110 kB for
+        # 720p. Enough to know whether the aggregate is 3 Mbit/s or 300 on a 480 Mbit/s hub.
+        pixels = int(r["size"].split("x")[0]) * int(r["size"].split("x")[1])
+        total += r["fps"] * pixels * 0.12 * 8 / 1e6
         print("  %-14s %s  fps asked %.0f got %.2f  frames %d  failed reads %d"
               % (r["dev"], r["size"], r["asked_fps"], r["fps"], r["frames"], r["failed_reads"]))
     print("  rough aggregate: %.1f Mbit/s of the 480 Mbit/s the hub shares" % total)

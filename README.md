@@ -43,7 +43,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
 
 ## Contents
 
-- **[Abbreviations](#abbreviations-used-in-this-document)**
+- **[Abbreviations used in this document](#abbreviations-used-in-this-document)**
 - **[1. The joints — one name for every layer](#1-the-joints--one-name-for-every-layer)**
 - **[2. Status and what is next](#2-status-and-what-is-next)**
   - [2.1 Phases](#21-phases)
@@ -54,6 +54,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [3.2 Host software](#32-host-software)
   - [3.3 Access, groups, network](#33-access-groups-network)
   - [3.4 What you need from the repository](#34-what-you-need-from-the-repository)
+  - [3.5 A second arm — what USB can and cannot take](#35-a-second-arm--what-usb-can-and-cannot-take)
 - **[4. Arm bring-up — uv + LeRobot SDK (arm)](#4-arm-bring-up--uv--lerobot-sdk-arm)**
   - [4.1 Re-calibrating the arm (with pose pictures)](#41-re-calibrating-the-arm-with-pose-pictures)
 - **[5. Camera bring-up — depthai on the Xavier](#5-camera-bring-up--depthai-on-the-xavier)**
@@ -179,6 +180,10 @@ A USB **full speed** link is not a fault: 12 Mb/s is the old USB 1.1 rate, and c
 simple webcams still negotiate it. What matters is not mixing them up — the OAK is the one device whose
 behaviour changes completely with the cable.
 
+Adding a **second arm and a second wrist camera** changes the arithmetic but not the rules: the port
+map, the measured numbers and the udev rules that tell two identical adapters apart are in
+[§3.5](#35-a-second-arm--what-usb-can-and-cannot-take).
+
 
 
 ### 3.2 Host software
@@ -214,6 +219,76 @@ behaviour changes completely with the cable.
 - **On the Xavier**: the `docker/` and `scripts/` folders ([§6.1](#61-deploying-and-creating-the-containers) copies them over).
 - **On the PC**: `windows/`, for the MuJoCo twin and the F710 client — so a `git clone` /
   `git pull` there, separate from the deploy directory.
+
+### 3.5 A second arm — what USB can and cannot take
+
+The cell is being extended with a **second SO-100 and its own wrist webcam**, on the same Xavier.
+The binding constraint is not CPU — two arm bridges at 50 Hz and two 10 Hz webcams are noise next to
+the OAK — it is **USB topology**. Everything below was measured on the bench on 2026-11-11; the
+numbers are from `lsusb -t` and from `tools/two_cam_bandwidth.py`, not from datasheets.
+
+**What each device actually asks of the bus**
+
+| Device | Class | Link it negotiates | Traffic |
+|---|---|---|---|
+| arm, per unit | USB-serial (CDC-ACM, CH9102) | **12 Mb/s** (full speed) | tiny: six servos at 50 Hz is small packets, well under 0.1 Mb/s |
+| wrist webcam | UVC, MJPG | **12 Mb/s** (Labtec 046d:08aa) or **480 Mb/s** (Creative VF0770) — the device sets its ceiling, not the hub | 3-5 Mb/s at 640×480/10, up to ~25 Mb/s at 1280×720/30 |
+| OAK-D POE | libusb (`usbfs`) | **5 Gb/s** | the one that needs the SuperSpeed link |
+
+**Measured, all at once, through one 480 Mb/s hub**
+
+| Test | Result |
+|---|---|
+| two webcams at 640×480, 10 fps | 12.77 fps + 9.42 fps, **0 failed reads** |
+| stress: Labtec 640×480@15 + VF0770 1280×720@30 | 12.66 fps + 28.73 fps, **0 failed reads** (≈30 Mb/s of the 480 available, 6 %) |
+| both arms, one inside its container and one probed from the host | **6/6 motors** each, positions read |
+
+So the shared hub is not the problem. What is the problem is **which device is which**: the two
+adapters are the same chip (`1a86:55d3`) and today `/dev/so100_arm` follows whichever one enumerated
+last — it pointed at `ttyACM2` on one boot and at `ttyACM1` on the next. Before the second arm is
+mounted, that has to stop being a guess.
+
+**The configuration that works**
+
+1. **One USB 3 port per high-speed camera.** The OAK goes alone, direct, no hub. If a second OAK
+   ever arrives it takes the other USB 3 port, on its own — two OAKs on one hub share the 5 Gb/s and
+   the depth stream collapses.
+2. **Everything that runs at full speed goes through one powered USB 2.0 High-Speed hub**: the two
+   arm adapters and the two wrist webcams. Check the hub, do not trust the box: in `lsusb -t` it must
+   read **480M** and in `lsusb -v` it must say **Self Powered**. A hub that shows up as `12M` is
+   full-speed — with one webcam it survives, with two the frames start dropping.
+3. **Name the devices by serial, never by VID:PID.** Both adapters carry a unique serial, so two
+   rules — not one — do the job:
+
+```
+# /etc/udev/rules.d/81-so100-arm.rules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{serial}=="5971081400", SYMLINK+="arm1_tty"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{serial}=="5A46085595", SYMLINK+="arm2_tty"
+```
+
+   The webcams are the harder half: a Logitech/Labtec often reports no serial, so the rule falls back
+   to the physical port (`KERNELS=="1-2.2.2"`) — which means **each camera stays in its own port
+   forever**, and the cables get labelled. Today `/dev/so100_wrist` points at the Labtec
+   (`046d:08aa`, 12 Mb/s, fixed focus); if the VF0770 is the camera that should sit on a jaw, its
+   VID:PID replaces it in the rule.
+4. **Software: one job per container, as always.** A `so100-arm2` container (same image, its joint
+   server on **:8003** instead of 8002) and, if the second wrist camera is driven by ROS, a
+   `so100-cams2`, or a second node in the existing cams container publishing
+   `/arm2/gripper/image/compressed`. Both arms share domain 42, so **namespaces and frame prefixes
+   are what keep them apart**: `/arm2/joint_states`, `/arm2/joint_targets`, and a
+   `robot_state_publisher` with `frame_prefix: arm2_` so the two TF trees can coexist in one graph.
+   The IK node gets one instance per arm, each with its own base frame.
+5. **Calibration is per arm and per id.** `--robot.id` is the profile name (`so100_cell` today);
+   the second arm needs its own, or the two will overwrite the same JSON.
+
+**What not to do**
+
+- Two OAKs behind one hub: they split 5 Gb/s and the depth rate falls off a cliff.
+- A USB 3 hub for the arms and webcams "because it is better": they still run at 12 Mb/s and you
+  burn the port the next camera will need.
+- An unpowered hub: two cameras plus two adapters draw more than a single downstream port budgets,
+  and the symptom is the one this cell already knows — a device that re-enumerates mid-run.
+
 
 ## 4. Arm bring-up — uv + LeRobot SDK (arm)
 Exact commands to install and use the LeRobot stack for the arm on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§2.3](#23-next)). Verified working; doubles as the record of the Jetson's current state.
