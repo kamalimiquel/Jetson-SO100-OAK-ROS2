@@ -53,7 +53,9 @@ Fail signal: a link that moves between boots — stop here, the rest of the plan
   (8092 is arm 1's proxy; 8093 and 8094 are the web tabs), device `/dev/arm2_tty:/dev/ttyACM0`,
   calibration id `so100_cell_b`.
 - `robot_state_publisher` for arm 2: `frame_prefix: arm2_`, remap `joint_states:=/arm2/joint_states_rad`.
-- Static transform `base → arm2_base` at **(0, 0.30, 0)** — the 30 cm of requirement 2, in metres,
+- Static transform `base → arm2_base` at **(0, 0.30, 0)** — the number now lives in
+  `docker/ws/cell_geometry.json`, read by the transform, the URDF, the MJCF scene and the twin's check
+  (README §3.6 R3) — the 30 cm of requirement 2, in metres,
   published once on `/tf_static` (same mechanism as the wrist camera, §10.7).
 
 **Tests**

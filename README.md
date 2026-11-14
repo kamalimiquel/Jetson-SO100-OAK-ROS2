@@ -425,6 +425,32 @@ apart, the comparison between sim and bench is meaningless — and nothing error
 number must live in exactly one place and both the TF2 static publisher and the twin must read it from
 there, not each hardcode it.
 
+**How that one place is built** (done 2026-11-14, `docker/ws/cell_geometry.json`):
+
+```
+docker/ws/cell_geometry.json      the only literal:  arm2_offset_m: {x: 0.0, y: 0.3, z: 0.0}
+   ├─ docker/ws/arm/entry.sh                 reads it, publishes the static base → arm2_base
+   ├─ tools/make_cell_urdf.py                reads it, writes the fixed joint in so101_cell.urdf
+   ├─ tools/make_two_arm_scene.py            reads it, places the copied arm in scene_two_arms.xml
+   └─ windows/mujoco_twin.py --both-arms     reads it and CHECKS the loaded scene against it
+```
+
+Two properties make it usable rather than decorative:
+
+- **The three writers cannot disagree**, because none of them contains the number — they all open the
+  same JSON, and the two generators print where they read it from
+  (`arm 2: arm2_-prefixed, at (0, 0.3, 0) from …/cell_geometry.json`).
+- **The consumer checks**: `mujoco_twin.py` measures the distance between the scene's `base` and
+  `arm2_base` bodies on load and compares it with the file, printing
+  `geometry check: scene OK — arms 0.3000 m apart, … says 0.3000 m` or a loud `MISMATCH` with what to
+  do about it. A scene generated on another bench (or before a geometry change) is exactly the drift R3
+  warns about, and it is the one failure that otherwise has no symptom. Verified both ways: the real
+  scene reads `OK`, and the same scene against a 0.25 m file reads `MISMATCH`.
+
+`ARM2_OFFSET_X/Y/Z` still exist in `entry.sh` and `--offset-y` in both generators as explicit
+**overrides** for experiments; using one prints a warning, so the escape hatch cannot become the
+source by accident.
+
 **R4 — Teleop safety at the switch.** The dangerous moment is the transition arm 1 → arm 2: stop
 publishing to the old topic, re-seed the targets from the *new* arm's real pose so there is no jump,
 clamp the first delta, and — critically — refuse the switch if the far arm does not answer within 1 s
@@ -498,6 +524,11 @@ container comes up on that profile and answers on its own port:
 **What is verified on the cell.** `/arm2/joint_states` 50.2 Hz, `/arm2/joint_states_rad` 49.6 Hz,
 `/joint_states` (arm 1) 32–44 Hz, both wrist cameras 6–9 Hz, and the static `base -> arm2_base` at
 `[0.000, 0.300, 0.000]` — the 30 cm of [R3](#36-two-arm-integration--the-risks-explained).
+
+**One number, one file.** The 30 cm is not written here, nor in the container script, nor in the
+generators: it lives in `docker/ws/cell_geometry.json` and the deploy reads it at start
+(`[arm2] base -> arm2_base at (0.0, 0.30, 0.0) from /opt/ws/cell_geometry.json`), while the twin checks
+the scene against it on load ([§3.6 R3](#36-two-arm-integration--the-risks-explained)).
 
 **RViz draws one model, not two.** This board renders only the **first display of a class**: a second
 `Image` panel stays "No Image" (§7) and a second `RobotModel` loads, reports OK and *renders nothing*.

@@ -13,11 +13,19 @@ reads the same number.
 """
 
 import argparse
+import json
 import os
 import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ARM_OFFSET_Y = 0.30
+GEOMETRY = os.path.join(ROOT, "docker/ws/cell_geometry.json")
+
+
+def cell_offset(path=GEOMETRY):
+    """Where arm 2 stands, from the ONE file that says it (README §3.6 R3)."""
+    with open(path, encoding="utf-8") as fh:
+        off = json.load(fh)["arm2_offset_m"]
+    return float(off["x"]), float(off["y"]), float(off["z"])
 
 
 def rename(el, tag, prefix):
@@ -32,8 +40,14 @@ def main():
     ap.add_argument("--src", default=os.path.join(ROOT, "docker/ws/arm/urdf/so101.urdf"))
     ap.add_argument("--out", default=os.path.join(ROOT, "docker/ws/arm/urdf/so101_cell.urdf"))
     ap.add_argument("--prefix", default="arm2_")
-    ap.add_argument("--offset-y", type=float, default=ARM_OFFSET_Y)
+    ap.add_argument("--geometry", default=GEOMETRY, help="cell geometry file (the single source)")
+    ap.add_argument("--offset-y", type=float, default=None,
+                    help="override the y of the cell geometry file (normally leave it alone)")
     args = ap.parse_args()
+    off_x, off_y, off_z = cell_offset(args.geometry)
+    if args.offset_y is not None:
+        print(f"warning: --offset-y {args.offset_y} overrides {args.geometry}")
+        off_y = args.offset_y
 
     tree = ET.parse(args.src)
     arm1 = tree.getroot()
@@ -52,7 +66,7 @@ def main():
     mount = ET.SubElement(arm1, "joint", {"name": args.prefix + "mount", "type": "fixed"})
     ET.SubElement(mount, "parent", {"link": "base"})
     ET.SubElement(mount, "child", {"link": args.prefix + "base"})
-    ET.SubElement(mount, "origin", {"xyz": "0 %g 0" % args.offset_y, "rpy": "0 0 0"})
+    ET.SubElement(mount, "origin", {"xyz": "%g %g %g" % (off_x, off_y, off_z), "rpy": "0 0 0"})
 
     for el in list(arm2):
         if el.tag in ("link", "joint"):
@@ -62,7 +76,8 @@ def main():
     tree.write(args.out, encoding="utf-8", xml_declaration=True)
     links = [l.get("name") for l in arm1.findall("link")]
     joints = [j.get("name") for j in arm1.findall("joint")]
-    print("wrote %s: %d links, %d joints (arm 2 at y=%+g)" % (args.out, len(links), len(joints), args.offset_y))
+    print("wrote %s: %d links, %d joints (arm 2 at %+g %+g %+g, from %s)"
+          % (args.out, len(links), len(joints), off_x, off_y, off_z, args.geometry))
 
 
 if __name__ == "__main__":

@@ -66,12 +66,26 @@ ros2 run tf2_ros static_transform_publisher \
 
 # (the second arm no longer publishes a model description of its own — see the block above)
 
-# Where the second arm stands relative to arm 1's base (Phase 1). The 30 cm of
-# requirement 2 lives ONLY here (README §3.6 R3): one static transform
-# base -> "${NS}_base" at (0, 0.30, 0); the MuJoCo twin must read the same number.
+# Where the second arm stands relative to arm 1's base (Phase 1) — the 30 cm of README §3.6 R3.
+# The number is NOT in this script: it lives in docker/ws/cell_geometry.json (mounted at
+# /opt/ws/cell_geometry.json), which is also what the URDF generator, the MuJoCo scene generator and
+# the twin's own check read. ARM2_OFFSET_* in the environment is an escape hatch for testing only.
 if [ -n "$NS" ]; then
+  GEOMETRY_FILE="${GEOMETRY_FILE:-/opt/ws/cell_geometry.json}"
+  OFFSET=$(python3 -c "import json,sys; o=json.load(open(sys.argv[1]))['arm2_offset_m']; print(o['x'], o['y'], o['z'])" "$GEOMETRY_FILE" 2>/dev/null)
+  if [ -n "$OFFSET" ]; then
+    # shellcheck disable=SC2086
+    set -- $OFFSET
+    OFF_X=${1} OFF_Y=${2} OFF_Z=${3}
+    SOURCE="$GEOMETRY_FILE"
+  else
+    OFF_X=0.0 OFF_Y=0.30 OFF_Z=0.0
+    SOURCE="the built-in fallback — $GEOMETRY_FILE could not be read"
+    echo "[$NS] warning: cell geometry unreadable, using (0.0, 0.30, 0.0)" >&2
+  fi
+  echo "[$NS] base -> ${NS}_base at (${ARM2_OFFSET_X:-$OFF_X}, ${ARM2_OFFSET_Y:-$OFF_Y}, ${ARM2_OFFSET_Z:-$OFF_Z}) from $SOURCE"
   ros2 run tf2_ros static_transform_publisher \
-    --x "${ARM2_OFFSET_X:-0.0}" --y "${ARM2_OFFSET_Y:-0.30}" --z "${ARM2_OFFSET_Z:-0.0}" \
+    --x "${ARM2_OFFSET_X:-$OFF_X}" --y "${ARM2_OFFSET_Y:-$OFF_Y}" --z "${ARM2_OFFSET_Z:-$OFF_Z}" \
     --frame-id base --child-frame-id "${NS}_base" &
 fi
 

@@ -18,7 +18,9 @@ Usage (on the Windows PC):
 """
 
 import argparse
+import json
 import math
+import os
 
 import mujoco
 import roslibpy
@@ -88,6 +90,36 @@ def build_map(model, arm2=False):
     return mapping
 
 
+def check_geometry(model, data, path):
+    """Compare the scene's arm separation with the one file that says where arm 2 stands.
+
+    Returns True when they agree. The twin keeps running either way: this is a viewer, and stopping
+    it would hide the very thing the operator opened it to look at.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            off = json.load(fh)["arm2_offset_m"]
+    except FileNotFoundError:
+        print(f"geometry check skipped: {path} not found")
+        return None
+    want = (off["x"] ** 2 + off["y"] ** 2 + off["z"] ** 2) ** 0.5
+    b1 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base")
+    b2 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, PREFIX + "base")
+    if min(b1, b2) < 0:
+        print("geometry check: the scene has no 'base' / '%sbase' bodies to compare" % PREFIX)
+        return None
+    mujoco.mj_forward(model, data)
+    d = data.xpos[b2] - data.xpos[b1]
+    got = float((d @ d) ** 0.5)
+    ok = abs(got - want) <= 1e-6
+    print(f"geometry check: scene {'OK' if ok else 'MISMATCH'} — arms {got:.4f} m apart, "
+          f"{path} says {want:.4f} m")
+    if not ok:
+        print("  !! sim and bench disagree: regenerate the scene with tools/make_two_arm_scene.py, "
+              "or fix cell_geometry.json — nothing else will notice")
+    return ok
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("model", help="path to the MuJoCo scene.xml (single- or two-arm)")
@@ -95,6 +127,12 @@ def main():
     parser.add_argument("--port", type=int, default=9090)
     parser.add_argument("--both-arms", action="store_true",
                         help="the scene holds two arms: subscribe to /joint_states and /arm2/joint_states")
+    parser.add_argument("--cell-geometry", default=os.path.join(
+                            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "docker", "ws", "cell_geometry.json"),
+                        help="the file that says where arm 2 stands (README §3.6 R3)")
+    parser.add_argument("--no-geometry-check", action="store_true",
+                        help="do not compare the scene's separation with the cell geometry file")
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(args.model)
@@ -110,6 +148,11 @@ def main():
         for want, q in sorted(m.items(), key=lambda kv: kv[1]):
             print(f"  qpos[{q}] <- {label} {want}")
     print(f"model: {model.nq} qpos")
+
+    # R3 lives in one file. The scene is generated from it, but a scene can be older than the file
+    # (or come from another bench), and a mismatch has no symptom at all: both models just move.
+    if args.both_arms and not args.no_geometry_check:
+        check_geometry(model, data, args.cell_geometry)
 
     client = roslibpy.Ros(host=args.host, port=args.port)
     client.run()

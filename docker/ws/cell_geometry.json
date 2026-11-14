@@ -1,0 +1,20 @@
+{
+  "_comment": [
+    "THE ONE PLACE THE CELL GEOMETRY IS WRITTEN DOWN (README §3.6 R3).",
+    "Everything that needs to know where arm 2 stands reads this file: the static transform",
+    "base -> arm2_base (docker/ws/arm/entry.sh), the merged URDF (tools/make_cell_urdf.py),",
+    "the two-arm MuJoCo scene (tools/make_two_arm_scene.py) and the twin's own check",
+    "(windows/mujoco_twin.py). Do not copy the number into any of them.",
+    "Units: metres, in arm 1's base frame."
+  ],
+  "arm2_offset_m": {
+    "x": 0.0,
+    "y": 0.3,
+    "z": 0.0
+  },
+  "measured": {
+    "date": "2026-11-14",
+    "how": "tf2_echo base arm2_base -> [0.000, 0.300, 0.000]; MuJoCo scene: gripper bodies 0.3000 m apart",
+    "note": "y is the only non-zero component on this bench: arm 2 sits 30 cm to arm 1's left"
+  }
+}

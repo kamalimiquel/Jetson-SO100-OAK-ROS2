@@ -27,11 +27,21 @@ measured distance between the two arms' gripper bodies, which must read the requ
 
 import argparse
 import copy
+import json
 import os
 import sys
 import xml.etree.ElementTree as ET
 
 PREFIX = "arm2_"
+GEOMETRY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "docker/ws/cell_geometry.json")
+
+
+def cell_offset(path=GEOMETRY):
+    """Where arm 2 stands, from the ONE file that says it (README §3.6 R3)."""
+    with open(path, encoding="utf-8") as fh:
+        off = json.load(fh)["arm2_offset_m"]
+    return float(off["x"]), float(off["y"]), float(off["z"])
 
 # Elements whose `name` is an id in the compiled model and must therefore be unique.
 ID_TAGS = {"body", "joint", "geom", "site", "camera", "light", "frame", "tendon", "equality",
@@ -114,10 +124,15 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("model", help="path to the single-arm model XML (e.g. .../robotstudio_so101/scene.xml)")
     ap.add_argument("--out", default=None, help="output path (default: <model dir>/scene_two_arms.xml)")
-    ap.add_argument("--offset-y", type=float, default=0.30,
-                    help="gap in metres (default 0.30, matches base->arm2_base)")
+    ap.add_argument("--geometry", default=GEOMETRY, help="cell geometry file (the single source)")
+    ap.add_argument("--offset-y", type=float, default=None,
+                    help="override the y of the geometry file (normally leave it alone)")
     ap.add_argument("--check", action="store_true", help="compile with mujoco and report the geometry")
     args = ap.parse_args()
+    off_x, off_y, off_z = cell_offset(args.geometry)
+    if args.offset_y is not None:
+        print(f"warning: --offset-y {args.offset_y} overrides {args.geometry}")
+        off_y = args.offset_y
 
     root = resolve_includes(args.model)
     worldbody = root.find("worldbody")
@@ -131,7 +146,7 @@ def main():
 
     arm2 = copy.deepcopy(arm1)
     prefix_ids(arm2)
-    arm2.set("pos", "0 %g 0" % args.offset_y)
+    arm2.set("pos", "%g %g %g" % (off_x, off_y, off_z))
 
     other = [c for c in worldbody if _q(c.tag) != "body"]
     worldbody[:] = other + [arm1, arm2]
@@ -150,7 +165,7 @@ def main():
     ET.ElementTree(root).write(out, encoding="utf-8", xml_declaration=True)
     print("wrote %s" % out)
     print("  arm 1: unchanged, at the origin")
-    print("  arm 2: %s-prefixed, at (0, %g, 0)" % (PREFIX, args.offset_y))
+    print("  arm 2: %s-prefixed, at (%g, %g, %g) from %s" % (PREFIX, off_x, off_y, off_z, args.geometry))
 
     if args.check:
         try:
@@ -170,8 +185,11 @@ def main():
         print("check: nq=%d njnt=%d nbody=%d nu=%d" % (model.nq, model.njnt, model.nbody, model.nu))
         print("check: gripper centres differ by (%.4f, %.4f, %.4f) m -> %.4f m apart"
               % (d[0], d[1], d[2], (d @ d) ** 0.5))
-        if abs(d[1] - args.offset_y) > 1e-6:
-            print("check: FAILED — the y gap is not the requested %.3f m" % args.offset_y, file=sys.stderr)
+        want = (off_x ** 2 + off_y ** 2 + off_z ** 2) ** 0.5
+        got = (d @ d) ** 0.5
+        if abs(got - want) > 1e-6:
+            print("check: FAILED — %.4f m apart, the geometry file says %.4f m" % (got, want),
+                  file=sys.stderr)
             return 1
     return 0
 
