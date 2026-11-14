@@ -132,7 +132,7 @@ seen working on this hardware, so trust it over the plan when they disagree.
 - [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier
 - [x] Compose file + provisioning script for the **six** services (five cell domains + rosbridge)
 - [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); Windows twin mirrors /joint_states at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC)
-- [x] Web interface: **six tabs live** — Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud, Cams, Temp Xavier NX, Graph, RViz — plus the torque switch (ADR-0014/0015/0018)
+- [x] Web interface: **six tabs live** — Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Cams, Temp Xavier NX, Graph, RViz — plus the torque switch (ADR-0014/0015/0018)
 - [x] F710 teleop over rosbridge from the Windows PC (ADR-0020): all six joints and the gripper, torque on/off by holding B for 5 s
 - [x] Point cloud: unprojected with the depth camera's own intrinsics, extended disparity (range from ~0.65 m down to ~0.33 m), left/right check; scale measured at 0.315 m against PnP geometry — depth reads **+3.0%**, spread ±1% over 100k board pixels
 - [x] Colour ↔ depth **registration**: homography from the board, 48 correspondences, 0.69 px rms — `docs/calibration/color_to_depth.yaml`
@@ -164,7 +164,7 @@ the later chapters assume it, and the failure they produce points somewhere else
 | **USB 3 cable for the OAK** | a **USB 3 (5 Gb/s) data** cable, not a charge-only one — this is the one cable the cell cannot work around | the OAK's link must show `5000M` in `lsusb -t` ([§5](#5-camera-bring-up--depthai-on-the-xavier), step 6) |
 | Wrist camera | USB RGB webcam, manual focus set at 10-15 cm | mounted on the moving jaw, streaming at 10 Hz; the focus requirement and how it is proven are in [§10.5](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm) (ADR-0022) |
 | Host | Jetson Xavier NX 16 GB, JetPack 5.1.5 (Ubuntu 20.04) | the six containers |
-| Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§7](#7-verifying-the-data-flow) (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud, Cams, Temp Xavier NX, Graph, RViz), the MuJoCo twin and the F710 pad |
+| Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§7](#7-verifying-the-data-flow) (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Cams, Temp Xavier NX, Graph, RViz), the MuJoCo twin and the F710 pad |
 | Pad | Logitech F710, back switch in **X** mode | `/joint_targets` over rosbridge |
 | Board | ChArUco `(5,5)`, 0.018 m squares, 0.0135 m markers, `DICT_4X4_50`, printed at a 100 mm side — a ready-to-print page is [docs/charuco-board.pdf](docs/charuco-board.pdf) | hand-eye and depth-scale runs ([§10](#10-perception--what-the-cloud-sees-and-its-calibration)) |
 **The three connections, and the speed each one really negotiates.** These are measured, not assumed
@@ -512,7 +512,7 @@ are real ports on the host, so two containers cannot share one.
 | **6081** | noVNC of display **:11** — rqt_graph | `so100-web` | the **Graph** tab |
 | **7681** | ttyd: an SSH shell into the **Xavier host** (`maju@127.0.0.1`) | `so100-web` | the **Terminal Xavier NX** tab |
 | **8090** | MJPEG relé of the scene camera: `/`, `/stereo`, `/<view>/stream` | `so100-cams` | the **Stereo Cams & Depth OAK-D** tab |
-| **8091** | the three.js point-cloud viewer | `so100-cams` | the **Point Cloud** tab |
+| **8091** | the three.js point-cloud viewer | `so100-cams` | the **Point Cloud OAK-D** tab |
 | **8093** | the wristcam focus test (on demand: `/start`, `/stop`) | `so100-web` | the **Wristcam focus test** tab |
 | **8094** | board temperatures from `/sys/class/thermal`, once a second | `so100-web` | the **Temp Xavier NX** tab |
 | **8092** | torque switch proxy → the loopback joint server | `so100-arm` | the `Arm torque` button |
@@ -665,7 +665,7 @@ One page at **http://<xavier-ip>/** with six tabs, served by the `so100-web` con
 |---|---|---|
 | **Terminal Xavier NX** | http://192.168.1.50:7681 | a writable shell on the **Xavier host**: `so100-web`'s ttyd SSHes to `maju@127.0.0.1`, so `docker ps` and every host command work here ([§6.1](#61-deploying-and-creating-the-containers)); falls back to the container shell if the secret is missing — the first tab, because it is the cheap one |
 | **Stereo Cams & Depth OAK-D** | http://192.168.1.50:8090/stereo | four panels, each labelled on the image: **Stereo L** and **Stereo R** (the rectified pair the depth is computed from), **Depth** (0–2 m, turbo colormap) and **Confidence** (the device's per-pixel certainty, mono). Each carries its own resolution and rate |
-| **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, **each point in the colour the camera saw there** |
+| **Point Cloud OAK-D** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, **each point in the colour the camera saw there** |
 | **Wristcam focus test** | http://192.168.1.50:8093/ | the wrist camera live with its **sharpness score**, and buttons that write the median of the last scores at 10 / 12.5 / 15 cm to `docker/state/wristcam-focus.csv` on the Xavier. It reads `/gripper/image/compressed` (it does **not** open the device — `so100-cams` owns it), and it **runs only while the tab is open**: `/start` on entry, `/stop` on leaving, plus a 45 s idle watchdog ([§10.5](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm)) |
 | **Temp Xavier NX** | http://192.168.1.50:8094/ | every thermal zone the kernel exposes (`CPU-therm`, `GPU-therm`, `SOC0-2`, `tj-therm`, the board sensors), hottest first, with its peak and a four-minute trace of the three hottest. Green below 60 °C, amber from 60, red from 80 — the NX starts throttling near 95. Thirteen sysfs reads a second, so it always runs |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
@@ -681,7 +681,7 @@ the renamed **Cams** tab and its Arm 1 / Arm 2 selector for the single-arm case.
 | ![Terminal tab](docs/web-terminal.jpg) | ![Stereo Cam tab](docs/web-stereo.jpg) |
 | **Terminal Xavier NX** — a shell on the **Xavier host**: `docker ps` shows the cell's containers | **Stereo Cams & Depth OAK-D** — four panels: the rectified pair, the depth map and its confidence (the mono views blurred here) |
 | ![Point Cloud tab](docs/web-pointcloud.jpg) | ![Graph tab](docs/web-graph.jpg) |
-| **Point Cloud** — the cloud in 3D, opening top-down on the bench; drag to orbit | **Graph** — rqt_graph: who publishes what to whom |
+| **Point Cloud OAK-D** — the cloud in 3D, opening top-down on the bench; drag to orbit | **Graph** — rqt_graph: who publishes what to whom |
 | ![RViz tab](docs/web-rviz.jpg) | |
 | **RViz** — the arm at its live pose (SO-101 model), the scene colour camera and the wrist camera (both blurred here) | |
 
@@ -785,7 +785,7 @@ Two rules learned the hard way:
 
 ## 9. Operator PC — teleop + visualization
 
-Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — six tabs (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud, Cams, Temp Xavier NX, Graph, RViz) and the torque switch. The RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs **no ROS on Windows**: the Python client talks to the rosbridge WebSocket (ADR-0020).
+Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — six tabs (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Cams, Temp Xavier NX, Graph, RViz) and the torque switch. The RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs **no ROS on Windows**: the Python client talks to the rosbridge WebSocket (ADR-0020).
 
 ### 9.1 MuJoCo model check (ADR-0016)
 
@@ -906,7 +906,7 @@ Everything the PC runs is either plain HTTP or the rosbridge WebSocket:
 
 | What you use on the PC | Transport | ROS2 on Windows? |
 |---|---|---|
-| the tabs — Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud, Cams, Temp Xavier NX, Graph, RViz | HTTP + noVNC | no |
+| the tabs — Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Cams, Temp Xavier NX, Graph, RViz | HTTP + noVNC | no |
 | MuJoCo twin | roslibpy → `ws://<xavier>:9090` | no |
 | F710 teleop, Python client | roslibpy → `ws://<xavier>:9090` | no |
 
