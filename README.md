@@ -737,8 +737,10 @@ the renamed **Gripper Cams** tab and its Arm 1 / Arm 2 selector for the single-a
 | **Terminal Xavier NX** — a shell on the **Xavier host**: `docker ps` shows the cell's containers | **Stereo Cams & Depth OAK-D** — four panels: the rectified pair, the depth map and its confidence (the mono views blurred here) |
 | ![Point Cloud tab](docs/web-pointcloud.jpg) | ![Graph tab](docs/web-graph.jpg) |
 | **Point Cloud OAK-D** — the cloud in 3D, opening top-down on the bench; drag to orbit | **Graph** — rqt_graph: who publishes what to whom |
-| ![RViz tab](docs/web-rviz.jpg) | |
-| **RViz** — the arm at its live pose (SO-101 model), the scene colour camera and the wrist camera (both blurred here) | |
+| ![RViz tab](docs/web-rviz.jpg) | ![Temp tab](docs/web-temp.png) |
+| **RViz** — both arms as one model at their live poses (`SO-101 x2 (cell)`, status *Ok*), and the composed camera panel on the left (blurred here) | **Temp Xavier NX** — every kernel thermal zone, hottest first, with the peak and a four-minute trace |
+| ![Gripper Cams tab](docs/web-gripper.png) | |
+| **Gripper Cams** — the active jaw camera with its live sharpness score, the Arm 1 / Arm 2 selector and the distance marks that write to the CSV | |
 
 **Depth and confidence are not in RViz — they are in the Stereo tab.** This board has no GPU path
 for Qt, so RViz draws with *llvmpipe*, a software renderer that uses the CPU. Every image panel
@@ -911,10 +913,6 @@ Twin troubleshooting:
 The same twin mirrors **both** arms when the scene holds both of them. MuJoCo has no "instance", so
 the scene is generated: the arm is copied, every id of the copy is prefixed `arm2_`, and the copy is
 rooted at **(0, +0.30, 0)** — the number R3 fixes, the same one `tf2_echo base arm2_base` reports.
-
-![Both arms in MuJoCo](docs/twin-two-arms.png)
-
-*The generated scene rendered offscreen on the Xavier: two SO-101s, 30 cm apart, on the shared floor.*
 
 On the PC, once, next to the Menagerie clone:
 
@@ -1310,9 +1308,10 @@ still has to change by moving the arm, not the camera.
 
 ![The wrist feed in the browser](docs/wrist-camera.png)
 
-*`/gripper/image/compressed` as it arrives today, with the camera on the moving jaw: 640x480 at
-10 Hz, seen at `:8090/gripper/stream`. Blurred on purpose — it is the pipeline, not the final view;
-the focus is only proved once the procedure above has been run and its CSV kept.*
+*One frame of `/gripper/image/compressed` exactly as it arrives (640x480, 10 Hz), the sharpest of 93
+consecutive frames of the live stream, taken 2026-11-14 with the arm at rest and the bench behind the
+open jaws. The soft background is the depth of field, not a fault: the jaws themselves are in focus
+where they cross the working plane.*
 
 ### 10.6 The cloud in the colour frame, coloured
 
