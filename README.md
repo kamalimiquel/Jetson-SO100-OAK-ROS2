@@ -969,7 +969,7 @@ python windows\f710_teleop_ws.py --host 192.168.1.50
 
 The pad must be in **X mode** (switch on its back). It waits for `/joint_states`, seeds the targets at the arm's real pose and then starts publishing `/joint_targets` (degrees, 6 values).
 
-**Arm the arm from the pad: hold A for 5 s** (two buzzes = live, one = released), or press `Arm torque` in the web page first. The arm boots with torque off and `/write` refuses until the servos are energised, so the pad looks dead otherwise. Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
+**Arm the arm from the pad: hold B for 5 s** (two buzzes = live, one = released), or press `Arm torque` in the web page first. The arm boots with torque off and `/write` refuses until the servos are energised, so the pad looks dead otherwise. Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
 
 ![Logitech F710 layout](docs/f710-pad.png)
 
@@ -980,8 +980,11 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 - **joint-step** (default): D-pad L/R picks joint 0–5, left stick Y moves it, LB/RB close/open the gripper.
 - **cartesian-feel**: START toggles — left stick = pan/lift, right stick X = elbow, right stick Y = wrist_roll, **LB + right stick Y = wrist_flex**, triggers = gripper.
 - **record / replay**: X starts/stops recording the targets, B replays them.
-- **torque**: hold **A for 5 s** to energise or release the **active** arm — the state is read from the arm before flipping, so it cannot get out of sync. **Two short buzzes when it arms, one when it releases**, and a long one if the arm's state cannot be read (nothing changes then).
-- **switch arms**: hold **Y for 5 s**; one buzz on arm 1, two on arm 2.
+- **torque**: hold **B for 5 s** to energise or release the **active** arm — the state is read from the arm before flipping, so it cannot get out of sync. **Two short buzzes when it arms, one when it releases**, and a long one if the arm's state cannot be read (nothing changes then). A short tap of B still replays.
+- **switch arms**: hold **A for 5 s**; one buzz on arm 1, two on arm 2.
+
+If the pad does not vibrate at all, check it with `python windows\f710_teleop_ws.py --rumble-test`: it prints
+the pad's name and guid, whether pygame exposes a rumble API, and whether the driver accepted each buzz.
 
 **Arming and switching never move the arm.** Arming first copies the arm's real pose into the
 targets and publishes exactly that, and while an arm is released its targets keep following its real

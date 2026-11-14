@@ -21,12 +21,12 @@ Modes (same behaviour as the C++ client in this folder):
                         replays.
 
 Torque and the two-arm switch:
-  - hold A for 5 s to energise / release the ACTIVE arm. Arming first re-seeds the
-    targets from the arm's real pose, so the servos take hold exactly where the arm
-    is — never at an old value from the last command or a replay;
+  - hold B for 5 s to energise / release the ACTIVE arm (a short tap still replays).
+    Arming first re-seeds the targets from the arm's real pose, so the servos take
+    hold exactly where the arm is — never at an old value from the last command;
   - rumble: two short buzzes = armed, one = released, a long one = the arm was not
     answering and nothing changed;
-  - hold Y for 5 s to switch teleop from arm 1 to arm 2 and back; it fires once
+  - hold A for 5 s to switch teleop from arm 1 to arm 2 and back; it fires once
     at the 5 s mark (not on release) and needs a release before the next switch;
   - the switch is NOT blind: it asks the new arm's /joint_states first and, if it
     has not answered within SWITCH_CONFIRM seconds, refuses (long rumble) and stays;
@@ -211,18 +211,31 @@ class Teleop:
         return (1 if up else 0) - (1 if down else 0)
 
     def rumble(self, kind, count=1):
-        """Short buzzes (one = arm 1, two = arm 2) or one long one (switch refused)."""
+        """Short buzzes (one = arm 1 / released, two = arm 2 / armed) or one long one (refused).
+
+        The log line matters as much as the buzz: SDL silently ignores rumble on pads and
+        drivers that do not implement it, and then "it does not vibrate" has no other clue.
+        """
         if self.joystick is None:
+            print(f"buzz {kind} x{count}: no controller — nothing to rumble")
+            return
+        # pygame 2 exposes both names depending on version; take whichever exists.
+        buzz = getattr(self.joystick, "rumble", None) or getattr(self.joystick, "set_rumble", None)
+        if buzz is None:
+            print(f"buzz {kind} x{count}: this pygame has no rumble API")
             return
         try:
             if kind == "long":
-                self.joystick.set_rumble(0.9, 0.9, 800)
+                ok = buzz(0.9, 0.9, 900)
+                print("buzz long x1:", "ok" if ok is not False else "NOT SUPPORTED by this pad")
                 return
-            for _ in range(count):
-                self.joystick.set_rumble(0.6, 0.6, 250)
-                time.sleep(0.12)
-        except Exception:  # noqa: BLE001 — rumble is cosmetic
-            pass
+            ok = True
+            for i in range(count):
+                ok = buzz(0.7, 0.7, 320)
+                print(f"buzz {i + 1}/{count}:", "ok" if ok is not False else "NOT SUPPORTED by this pad")
+                time.sleep(0.26)                    # gap, so two buzzes read as two
+        except Exception as exc:  # noqa: BLE001 — rumble is cosmetic, never fatal
+            print(f"buzz failed: {exc}")
 
     # ---- two-arm switch (Plan Phase 5)
     def switch_arm(self):
@@ -287,19 +300,19 @@ class Teleop:
             return
         self.torque_on[arm] = on
         print(f"{ARMS[arm]['name']} torque: {'ENABLED' if on else 'OFF'}" +
-              ("" if on else " — hold A 5 s to arm it"))
+              ("" if on else " — hold B 5 s to arm it"))
 
     def handle_a(self):
-        """A held 5 s = arm / release the ACTIVE arm. Two buzzes armed, one released."""
+        """A short = nothing; held 5 s = switch arms, firing once, needs a release."""
         now = time.time()
         down = self._button(0)              # A
         if down and self.a_down_at is None:
             self.a_down_at = now
             self.a_long_fired = False
-        elif down and not self.a_long_fired and now - self.a_down_at >= HOLD_TORQUE:
+        elif down and not self.a_long_fired and now - self.a_down_at >= HOLD_SWITCH:
             self.a_long_fired = True
-            print(f"A held {HOLD_TORQUE:.0f} s")
-            self.toggle_torque()
+            print(f"A held {HOLD_SWITCH:.0f} s")
+            self.switch_arm()
         elif not down and self.a_down_at is not None:
             self.a_down_at = None           # a tap does nothing; releasing re-arms A
 
@@ -345,30 +358,21 @@ class Teleop:
         print(f"{ARMS[arm]['name']} torque: ARMED, holding its current pose")
         self.rumble("short", count=2)                   # two buzzes = live
 
-    def handle_y(self):
-        """Y short = nothing; held 5 s = switch arms, firing once, needs a release."""
-        now = time.time()
-        down = self._button(3)              # Y
-        if down and self.y_down_at is None:
-            self.y_down_at = now
-            self.y_long_fired = False
-        elif down and not self.y_long_fired and now - self.y_down_at >= HOLD_SWITCH:
-            self.y_long_fired = True
-            print(f"Y held {HOLD_SWITCH:.0f} s")
-            self.switch_arm()
-        elif not down and self.y_down_at is not None:
-            self.y_down_at = None           # releasing re-arms Y
-
     def handle_b(self):
-        """B short = replay what was recorded; a longer press does nothing (A owns torque)."""
+        """B short = replay; held 5 s = torque on/off for the ACTIVE arm."""
         now = time.time()
         down = self._button(1)
         if down and self.b_down_at is None:
             self.b_down_at = now
+            self.b_long_fired = False
+        elif down and not self.b_long_fired and now - self.b_down_at >= HOLD_TORQUE:
+            self.b_long_fired = True
+            print(f"B held {HOLD_TORQUE:.0f} s")
+            self.toggle_torque()
         elif not down and self.b_down_at is not None:
             held = now - self.b_down_at
             self.b_down_at = None
-            if held <= TAP_REPLAY and self.record:
+            if not self.b_long_fired and held <= TAP_REPLAY and self.record:
                 self.replaying = True
                 self.replay_i = 0
                 print(f"REPLAY of {len(self.record)} points")
@@ -378,9 +382,9 @@ class Teleop:
         pygame.init()
         pygame.joystick.init()
         clock = pygame.time.Clock()
-        print("F710 teleop — joint-step on arm 1. START=mode, X=record, B=replay, A=torque, Y=arm, Ctrl+C quits.")
-        print("  hold A 5 s = arm / release the active arm (2 buzzes on, 1 off)")
-        print("  hold Y 5 s = switch the teleop to the other arm (Phase 5)")
+        print("F710 teleop — joint-step on arm 1. START=mode, X=record, B=replay/torque, A=arm, Ctrl+C quits.")
+        print("  hold B 5 s = arm / release the active arm (2 buzzes on, 1 off)")
+        print("  hold A 5 s = switch the teleop to the other arm (Phase 5)")
         try:
             while True:
                 pygame.event.pump()
@@ -403,7 +407,6 @@ class Teleop:
 
     def tick(self):
         self.handle_a()
-        self.handle_y()
         if self.pressed(7):        # START
             self.cartesian = not self.cartesian
             print("mode:", "cartesian-feel" if self.cartesian else "joint-step")
@@ -490,13 +493,36 @@ class Teleop:
             if not self.torque_warned[self.active]:
                 self.torque_warned[self.active] = True
                 print(f"{ARMS[self.active]['name']}: torque off — not publishing "
-                      "(hold A 5 s, or 'Arm torque' in the web page)")
+                      "(hold B 5 s, or 'Arm torque' in the web page)")
             return
         self.torque_warned[self.active] = False
         self.pubs[self.active].publish(
             {"layout": {"dim": [], "data_offset": 0}, "data": [float(v) for v in self.targets]})
         if self.recording:
             self.record.append(list(self.targets))
+
+
+def rumble_test():
+    """Buzz the pad twice and say whether SDL accepted it — run this before blaming the code."""
+    pygame.init()
+    pygame.joystick.init()
+    if pygame.joystick.get_count() == 0:
+        print("no joystick found")
+        return 1
+    js = pygame.joystick.Joystick(0)
+    js.init()
+    buzz = getattr(js, "rumble", None) or getattr(js, "set_rumble", None)
+    print(f"{js.get_name()}  guid={js.get_guid()}  pygame {pygame.version.ver}")
+    print("rumble API:", "yes" if buzz else "NO — this build cannot buzz the pad")
+    if buzz is None:
+        return 1
+    for i in range(2):
+        ok = buzz(0.8, 0.8, 400)
+        print(f"  buzz {i + 1}: {ok}  (False means the driver refused it)")
+        time.sleep(0.45)
+    pygame.quit()
+    print("if you felt nothing, the pad or its driver has no rumble (F710 over XInput usually does)")
+    return 0
 
 
 def dump(seconds=20):
@@ -534,9 +560,13 @@ def main():
     ap.add_argument("--host", default="192.168.1.185", help="the Xavier's LAN address")
     ap.add_argument("--port", type=int, default=9090)
     ap.add_argument("--dump", action="store_true", help="only print pad input (mapping aid)")
+    ap.add_argument("--rumble-test", action="store_true",
+                    help="buzz the pad twice and exit (checks whether SDL rumble works)")
     ap.add_argument("--scale", type=float, default=1.0,
                     help="speed factor (0.5 = half speed, 2.0 = double)")
     args = ap.parse_args()
+    if args.rumble_test:
+        return rumble_test()
     if args.dump:
         dump(); return 0
     print(f"rosbridge at ws://{args.host}:{args.port} (pass --host <xavier-ip> to change)")

@@ -4,9 +4,9 @@
 Loads `windows/f710_teleop_ws.py`, fakes the buttons and the two HTTP calls (so nothing on the real
 arm is energised), and checks the rules the operator feels:
 
-  switch (Y)  starts on arm 1 · a tap does nothing · 5 s switches · no double fire without a release
+  switch (A)  starts on arm 1 · a tap does nothing · 5 s switches · no double fire without a release
               · a second hold switches back · a silent arm is refused
-  torque (A)  5 s arms with two buzzes and publishes the arm's REAL pose (no jump) · 5 s again
+  torque (B)  5 s arms with two buzzes and publishes the arm's REAL pose (no jump) · 5 s again
               releases with one buzz · a stale target buffer still resolves to the real pose
               · a stale pose refuses to arm with a long buzz
 
@@ -60,8 +60,8 @@ def main():
     # exactly like a dead proxy ("torque: cannot read state").
     check("reads a real arm's torque over the LAN", t.read_arm_torque(0) is not None, True)
 
-    buttons = {"a": False, "y": False}
-    t._button = lambda b: buttons["a"] if b == 0 else (buttons["y"] if b == 3 else False)
+    buttons = {"a": False, "b": False}
+    t._button = lambda b: buttons["a"] if b == 0 else (buttons["b"] if b == 1 else False)
 
     buzzes = []
     t.rumble = lambda kind, count=1: buzzes.append((kind, count))
@@ -77,38 +77,38 @@ def main():
         t0 = time.time()
         while time.time() - t0 < seconds:
             t.handle_a()
-            t.handle_y()
+            t.handle_b()
             time.sleep(0.02)
 
     # ---------------------------------------------------------------- switch, on Y
-    print("== switch (Y)")
+    print("== switch (A)")
     check("starts on arm 1", t.active, 0)
-    buttons["y"] = True
+    buttons["a"] = True
     tick_for(0.4)
     check("a tap does not switch", t.active, 0)
     tick_for(5.0)
     check("holding 5 s switches to arm 2", t.active, 1)
     tick_for(6.0)
     check("does not fire twice without a release", t.active, 1)
-    buttons["y"] = False
-    t.handle_y()
-    buttons["y"] = True
+    buttons["a"] = False
+    t.handle_a()
+    buttons["a"] = True
     tick_for(5.4)
     check("a second hold switches back to arm 1", t.active, 0)
-    buttons["y"] = False
-    t.handle_y()
+    buttons["a"] = False
+    t.handle_a()
     t.arm_state_t[1] = time.time() - 10.0
     t.switch_arm()
     check("refuses a silent arm", t.active, 0)
 
     # ---------------------------------------------------------------- torque, on A
-    print("== torque (A)")
+    print("== torque (B)")
     buzzes.clear()
     sent.clear()
     real = list(t.arm_targets[t.active])
     t.targets = [0.0] * 6                      # stale: whatever was left in the buffer
     fake["on"] = False
-    buttons["a"] = True
+    buttons["b"] = True
     tick_for(5.2)
     check("5 s arms the active arm", fake["on"], True)
     check("two buzzes when arming", buzzes, [("short", 2)])
@@ -116,27 +116,27 @@ def main():
     check("published exactly one target", len(sent), 1)
     close("and that target is the real pose", sent[0] if sent else [], real)
     tick_for(4.0)
-    check("does not fire twice while A stays down", len(buzzes), 1)
+    check("does not fire twice while B stays down", len(buzzes), 1)
 
-    buttons["a"] = False
-    t.handle_a()
-    buttons["a"] = True
+    buttons["b"] = False
+    t.handle_b()
+    buttons["b"] = True
     buzzes.clear()
     tick_for(5.2)
     check("5 s again releases it", fake["on"], False)
     check("one buzz when releasing", buzzes, [("short", 1)])
 
-    buttons["a"] = False
-    t.handle_a()
+    buttons["b"] = False
+    t.handle_b()
     t.targets = [-33.0, 12.0, -80.0, 40.0, -70.0, 5.0]   # an old command, far from reality
     real2 = list(t.arm_targets[t.active])
-    buttons["a"] = True
+    buttons["b"] = True
     tick_for(5.2)
     close("a later arm cycle still holds the real pose", t.targets, real2)
 
     # a silent arm refuses to arm
-    buttons["a"] = False
-    t.handle_a()
+    buttons["b"] = False
+    t.handle_b()
     fake["on"] = False
     buzzes.clear()
     t.arm_state_t[t.active] = time.time() - 10.0
