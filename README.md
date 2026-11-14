@@ -455,11 +455,6 @@ clamp the first delta, and — critically — refuse the switch if the far arm d
 (else you switch onto stale feedback and it jumps). The A-hold is a 5 s edge detector precisely so a
 short tap (which already means "replay") can never switch by accident.
 
-**R5 — The Xavier's stability.** It dropped three times in an hour on 2026-11-11/13 with the board at
-50 °C. No software in this plan fixes that; a second arm only adds load. The temperatures tab exists
-to watch it with two arms, and the regression phase (T8.4) records the delta vs one arm as the new
-normal.
-
 #### Two alternative ways the cell could be built
 
 **Alt 1 — symmetric namespaces for both arms (`/arm1` and `/arm2`) + a thin compatibility bridge.**
