@@ -8,6 +8,9 @@
   nav { display: flex; gap: 0.5em; padding: 0.5em; background: #1c2733; }
   nav button { padding: 0.5em 1em; border: 0; border-radius: 4px; background: #2e3d4e; color: #d8e1ec; cursor: pointer; }
   nav button.active { background: #4a90d9; color: #fff; }
+  /* a two-row label (the Terminal tab names the machine it opens) */
+  nav button.two-line { line-height: 1.05; padding-top: 0.3em; padding-bottom: 0.3em; }
+  nav button.two-line span { display: block; font-size: 0.78em; opacity: 0.85; }
   nav button#shutdown { margin-left: auto; background: #c0392b; color: #fff; font-weight: bold; }
   /* torque switch: red = servos free (boot state), orange = energised */
   nav button#torque { background: #c0392b; color: #fff; font-weight: bold; margin-right: 0.9em;
@@ -23,7 +26,7 @@
 <nav>
   <button id="torque" title="Energise the servos (arm is free to move by hand until then)">Arm torque</button>
   <span class="sep"></span>
-  <button class="active" data-tab="term">Terminal</button>
+  <button class="active two-line" data-tab="term">Terminal<span>Xavier NX</span></button>
   <button data-tab="stereo">Stereo Cam &amp; Depth</button>
   <button data-tab="cloud">Point Cloud</button>
   <button data-tab="focus">Cams</button>

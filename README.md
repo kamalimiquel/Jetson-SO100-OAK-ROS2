@@ -31,7 +31,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
 | **MJPEG** | Motion JPEG — a stream of JPEG stills; how the camera tabs push video to the browser with no plugin |
 | **JPEG / CompressedImage** | a compressed image; in ROS it is the `sensor_msgs/CompressedImage` message (e.g. `/gripper/image/compressed`) |
 | **WebSocket / rosbridge** | a persistent TCP connection a browser can speak; *rosbridge* turns those into ROS topics (used by the MuJoCo twin and the pad) |
-| **ttyd** | the tiny web server in `so100-web` that exposes the Terminal tab (a shell in the browser) |
+| **ttyd** | the tiny web server in `so100-web` that exposes the Terminal Xavier NX tab (a shell on the host, in the browser) |
 | **noVNC / websockify / VNC** | browser-friendly virtual screens: *Xvfb* fakes a monitor, *x11vnc* shares it, *websockify* lets a browser view it |
 | **X11 / X server / Qt** | the Linux graphical system (X11); Qt is the toolkit RViz2 is built on |
 | **llvmpipe** | the software 3-D renderer used here because this board has no GPU path for Qt — it costs CPU |
@@ -164,7 +164,7 @@ the later chapters assume it, and the failure they produce points somewhere else
 | **USB 3 cable for the OAK** | a **USB 3 (5 Gb/s) data** cable, not a charge-only one — this is the one cable the cell cannot work around | the OAK's link must show `5000M` in `lsusb -t` ([§5](#5-camera-bring-up--depthai-on-the-xavier), step 6) |
 | Wrist camera | USB RGB webcam, manual focus set at 10-15 cm | mounted on the moving jaw, streaming at 10 Hz; the focus requirement and how it is proven are in [§10.5](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm) (ADR-0022) |
 | Host | Jetson Xavier NX 16 GB, JetPack 5.1.5 (Ubuntu 20.04) | the six containers |
-| Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§7](#7-verifying-the-data-flow) (Terminal, Stereo Cam & Depth, Point Cloud, Wristcam focus test, Graph, RViz), the MuJoCo twin and the F710 pad |
+| Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§7](#7-verifying-the-data-flow) (Terminal Xavier NX, Stereo Cam & Depth, Point Cloud, Cams, Xavier NX Temp, Graph, RViz), the MuJoCo twin and the F710 pad |
 | Pad | Logitech F710, back switch in **X** mode | `/joint_targets` over rosbridge |
 | Board | ChArUco `(5,5)`, 0.018 m squares, 0.0135 m markers, `DICT_4X4_50`, printed at a 100 mm side — a ready-to-print page is [docs/charuco-board.pdf](docs/charuco-board.pdf) | hand-eye and depth-scale runs ([§10](#10-perception--what-the-cloud-sees-and-its-calibration)) |
 **The three connections, and the speed each one really negotiates.** These are measured, not assumed
@@ -510,7 +510,7 @@ are real ports on the host, so two containers cannot share one.
 | **80** | the tabs page (`index.html`) and the RViz/URDF assets | `so100-web` | the browser: http://<xavier>/ |
 | **6080** | noVNC of display **:10** — RViz2 | `so100-web` | the **RViz** tab |
 | **6081** | noVNC of display **:11** — rqt_graph | `so100-web` | the **Graph** tab |
-| **7681** | ttyd: an SSH shell into the **Xavier host** (`maju@127.0.0.1`) | `so100-web` | the **Terminal** tab |
+| **7681** | ttyd: an SSH shell into the **Xavier host** (`maju@127.0.0.1`) | `so100-web` | the **Terminal Xavier NX** tab |
 | **8090** | MJPEG relé of the scene camera: `/`, `/stereo`, `/<view>/stream` | `so100-cams` | the **Stereo Cam & Depth** tab |
 | **8091** | the three.js point-cloud viewer | `so100-cams` | the **Point Cloud** tab |
 | **8093** | the wristcam focus test (on demand: `/start`, `/stop`) | `so100-web` | the **Wristcam focus test** tab |
@@ -520,7 +520,7 @@ are real ports on the host, so two containers cannot share one.
 | **9090** | rosbridge WebSocket | `so100-rosbridge` | the MuJoCo twin, the F710 client, anything on the LAN |
 | **8002** | the LeRobot joint server (**loopback only**, `127.0.0.1`) | `so100-arm` | the `:8092` proxy, host scripts |
 
-**The Terminal tab is a shell on the Xavier host, not inside `so100-web`.** It is ttyd running in
+**The Terminal Xavier NX tab is a shell on the Xavier host, not inside `so100-web`.** It is ttyd running in
 `so100-web` on :7681, but its command SSHes to `maju@127.0.0.1` (the container shares the host's
 network namespace), so `docker ps` and everything else on the host works there. It needs `maju`'s
 password, which the entrypoint reads from a 600-permission file on the host
@@ -663,7 +663,7 @@ One page at **http://<xavier-ip>/** with six tabs, served by the `so100-web` con
 
 | Tab | URL (direct) | What you see |
 |---|---|---|
-| **Terminal** | http://192.168.1.50:7681 | a writable shell on the **Xavier host**: `so100-web`'s ttyd SSHes to `maju@127.0.0.1`, so `docker ps` and every host command work here ([§6.1](#61-deploying-and-creating-the-containers)); falls back to the container shell if the secret is missing — the first tab, because it is the cheap one |
+| **Terminal Xavier NX** | http://192.168.1.50:7681 | a writable shell on the **Xavier host**: `so100-web`'s ttyd SSHes to `maju@127.0.0.1`, so `docker ps` and every host command work here ([§6.1](#61-deploying-and-creating-the-containers)); falls back to the container shell if the secret is missing — the first tab, because it is the cheap one |
 | **Stereo Cam & Depth** | http://192.168.1.50:8090/stereo | four panels, each labelled on the image: **Stereo L** and **Stereo R** (the rectified pair the depth is computed from), **Depth** (0–2 m, turbo colormap) and **Confidence** (the device's per-pixel certainty, mono). Each carries its own resolution and rate |
 | **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, **each point in the colour the camera saw there** |
 | **Wristcam focus test** | http://192.168.1.50:8093/ | the wrist camera live with its **sharpness score**, and buttons that write the median of the last scores at 10 / 12.5 / 15 cm to `docker/state/wristcam-focus.csv` on the Xavier. It reads `/gripper/image/compressed` (it does **not** open the device — `so100-cams` owns it), and it **runs only while the tab is open**: `/start` on entry, `/stop` on leaving, plus a 45 s idle watchdog ([§10.5](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm)) |
@@ -679,7 +679,7 @@ the renamed **Cams** tab and its Arm 1 / Arm 2 selector for the single-arm case.
 | | |
 |---|---|
 | ![Terminal tab](docs/web-terminal.jpg) | ![Stereo Cam tab](docs/web-stereo.jpg) |
-| **Terminal** — a shell on the **Xavier host**: `docker ps` shows the cell's containers | **Stereo Cam & Depth** — four panels: the rectified pair, the depth map and its confidence (the mono views blurred here) |
+| **Terminal Xavier NX** — a shell on the **Xavier host**: `docker ps` shows the cell's containers | **Stereo Cam & Depth** — four panels: the rectified pair, the depth map and its confidence (the mono views blurred here) |
 | ![Point Cloud tab](docs/web-pointcloud.jpg) | ![Graph tab](docs/web-graph.jpg) |
 | **Point Cloud** — the cloud in 3D, opening top-down on the bench; drag to orbit | **Graph** — rqt_graph: who publishes what to whom |
 | ![RViz tab](docs/web-rviz.jpg) | |
@@ -704,7 +704,7 @@ appearing in ~10 s, not a container restart. The web container idles at **2 %** 
 
 Plus a red **Shutdown Xavier NX** button on the right (it POSTs to the container's :8099 endpoint, which SSHes to the host and powers it off; the password lives only in a 600 file on the host, mounted read-only as a secret).
 
-The page derives the Xavier's address from its own URL (`location.hostname`), so it works from any IP without editing anything, and it loads the first tab (Terminal) on page open.
+The page derives the Xavier's address from its own URL (`location.hostname`), so it works from any IP without editing anything, and it loads the first tab (Terminal Xavier NX) on page open.
 
 ### 8.1 Day-to-day: from cold to moving the arm
 
