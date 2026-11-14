@@ -69,6 +69,8 @@ HOLD_SWITCH = 5.0               # hold Y this long to switch arms (Plan Phase 5)
 TAP_REPLAY = 0.8                # s: B shorter than this replays, longer does nothing
 ARM_BUZZ_GAP = 1.0              # s between the two buzzes that mean "armed"
 ARM_SETTLE = 1.0                # s to wait for a reading with torque on before commanding it
+ARM_REPORT = 3.0                # s after arming at which the joints are read and printed again
+ARM_TOLERANCE = 1.0             # deg of drift that still counts as "it did not move"
 SWITCH_CONFIRM = 1.0            # s the far arm must have answered within, or the switch is refused
 IDLE_STOP = 0.5                 # s without input -> stop publishing
 SEED_TIMEOUT = 20.0             # s to wait for the active arm's first /joint_states
@@ -128,6 +130,10 @@ class Teleop:
 
         self.state_seq = [0, 0]                           # /joint_states messages seen per arm
         self.buzz_at = None                               # pending second buzz (arming)
+        self.report_at = None                             # pending "3 s after arming" report
+        self.report_ref = None                            # joints printed just before torque on
+        self.report_arm = None
+        self.report_input = 0.0                           # last user input when arming happened
         self.torque_on = [None, None]                     # None=unknown, True/False known
         self.last_torque_check = 0.0
         self.torque_warned = [False, False]
@@ -282,6 +288,39 @@ class Teleop:
             if not quiet:
                 self.say(f"buzz failed: {exc}")
 
+    def service_report(self):
+        """Print the joints three seconds after arming, and undo a drift nobody asked for.
+
+        This is the honest measurement of "does it move when I arm it": the reference is the
+        vector read just before the torque went on, taken while the arm was still loose — the
+        pose the operator left it in — not anything commanded earlier.
+        """
+        if self.report_at is None or time.time() < self.report_at:
+            return
+        arm = self.report_arm
+        self.report_at = None
+        if arm != self.active:
+            return
+        if not self.fresh_pose(arm):
+            self.say(f"{ARMS[arm]['name']}: no fresh pose for the 3 s report", key=f"report{arm}")
+            return
+        now = list(self.arm_targets[arm])
+        drift = [n - r for n, r in zip(now, self.report_ref)]
+        worst = max((abs(d) for d in drift), default=0.0)
+        self.say(f"{ARMS[arm]['name']} joints 3 s after torque: {fmt(now)} "
+                 f"(drift {fmt(drift)}, worst {worst:.1f}deg)", key=f"report{arm}")
+        if worst <= ARM_TOLERANCE:
+            self.say(f"{ARMS[arm]['name']}: held its pose (<= {ARM_TOLERANCE:.0f}deg)", key=f"held{arm}")
+            return
+        if self.last_input > self.report_input:
+            self.say(f"{ARMS[arm]['name']}: moved because the pad moved it after arming — left alone",
+                     key=f"held{arm}")
+            return
+        self.say(f"{ARMS[arm]['name']}: DRIFTED {worst:.1f}deg with no input — re-commanding the "
+                 f"pose it was armed at", key=f"held{arm}")
+        self.targets = list(self.report_ref)
+        self.send()
+
     def service_buzz(self):
         """Fire the pending second "armed" buzz from the main loop — a sleep(3) here would
         freeze the teleop for three seconds, which on a live arm is not acceptable."""
@@ -383,6 +422,7 @@ class Teleop:
                 return
             self.torque_on[arm] = False
             self.torque_warned[arm] = False
+            self.report_at = None
             if self.fresh_pose(arm):
                 self.targets = list(self.arm_targets[arm])
             self.say(f"{ARMS[arm]['name']} torque: RELEASED", key=f"torque{arm}")
@@ -398,6 +438,8 @@ class Teleop:
             self.rumble("long")
             return
         pose_before = list(self.arm_targets[arm])
+        self.say(f"{ARMS[arm]['name']} joints just before torque: {fmt(pose_before)}",
+                 key=f"before{arm}")
         seq = self.state_seq[arm]
         state = self.write_arm_torque(arm, True)
         if state is None:
@@ -424,7 +466,13 @@ class Teleop:
         self.say(f"{ARMS[arm]['name']} torque: ARMED — read {fmt(pose_before)} before, "
                  f"{fmt(pose_after)} after (drift {drift:.1f}°), commanding that", key=f"torque{arm}")
         self.rumble("short", count=1)                   # buzz 1 of 2 = live
-        self.buzz_at = time.time() + ARM_BUZZ_GAP       # buzz 2, three seconds later
+        self.buzz_at = time.time() + ARM_BUZZ_GAP       # buzz 2, one second later
+        # Read and print the joints again once things have settled, and correct a drift that
+        # nobody asked for (a stick move after arming is left alone, on purpose).
+        self.report_at = time.time() + ARM_REPORT
+        self.report_ref = list(pose_before)
+        self.report_arm = arm
+        self.report_input = self.last_input
 
     def handle_b(self):
         """B short = replay; held 5 s = torque on/off for the ACTIVE arm."""
@@ -475,6 +523,7 @@ class Teleop:
 
     def tick(self):
         self.service_buzz()
+        self.service_report()
         self.handle_a()
         if self.pressed(7):        # START
             self.cartesian = not self.cartesian

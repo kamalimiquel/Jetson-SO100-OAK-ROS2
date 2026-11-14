@@ -76,6 +76,8 @@ def main():
 
     buzzes = []
     t.rumble = lambda kind, count=1, **kw: buzzes.append((kind, count))   # `quiet` only silences the log
+    said = []
+    t.say = lambda text, key=None: said.append(text)
     sent = []
     t.send = lambda: sent.append(list(t.targets))
 
@@ -83,6 +85,7 @@ def main():
         t0 = time.time()
         while time.time() - t0 < seconds:
             t.service_buzz()
+            t.service_report()
             t.handle_a()
             t.handle_b()
             time.sleep(0.02)
@@ -129,6 +132,23 @@ def main():
     close("and that target is the read pose", sent[0] if sent else [], real)
     tick_for(1.3)
     check("the second buzz fires after 1 s", buzzes, [("short", 1), ("short", 1)])
+    check("prints the joints just before torque",
+          any("joints just before torque" in x for x in said), True)
+    check("the 3 s report is scheduled",
+          0.5 < (t.report_at or 0) - time.time() < 3.1, True)
+
+    # three seconds later, with the arm sagging 5 deg on its own: it must be reported and undone
+    t.arm_targets[t.active][2] += 5.0
+    ref = list(t.report_ref)
+    sent.clear()
+    tick_for(3.3)
+    check("prints the joints 3 s after torque",
+          any("joints 3 s after torque" in x for x in said), True)
+    check("calls out the drift", any("DRIFTED" in x for x in said), True)
+    check("re-commands the pose it was armed at", len(sent), 1)
+    close("and that pose is the one before torque", sent[0] if sent else [], ref)
+    check("the report does not repeat", t.report_at, None)
+    t.arm_targets[t.active][2] -= 5.0
     check("and is not left pending", t.buzz_at, None)
     tick_for(4.0)
     check("does not fire again while B stays down", len(buzzes), 2)
