@@ -351,7 +351,16 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
    if (!d) { const v = prompt("distance in cm?"); if (!v) return; d = v; }
    fetch(`/mark?d=${encodeURIComponent(d)}`).then(r => r.json()).then(refresh).catch(()=>{});
  }
- function sel(n){ fetch(`/select?arm=${n}`).then(r=>r.json()).then(refresh).catch(()=>{}); }
+ function sel(n){
+   // The old camera's MJPEG stream is still open inside the <img>: after the server switches,
+   // the browser keeps painting the last frame it received, which looks exactly like "the
+   // buttons do nothing". Reopening the stream is what actually changes the picture.
+   fetch(`/select?arm=${n}`).then(r => r.json()).then(j => {
+     const v = document.getElementById("vid");
+     v.src = "/cam.mjpg?arm=" + (j.arm || n) + "&t=" + Date.now();
+     refresh(j);
+   }).catch(()=>{});
+ }
  function refresh(j) {
    if (!j) return;
    document.getElementById("score").textContent =
@@ -379,6 +388,22 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
      .then(j => { last = Date.now(); refresh(j); }).catch(()=>{});
  }
  setInterval(poll, 1000); poll();
+
+ // If the frame counter stops moving, the multipart connection died (container restart, laptop
+ // asleep): reopen the stream instead of leaving a frozen picture on screen.
+ let lastFrames = -1, stalled = 0;
+ setInterval(() => {
+   fetch("/status", {cache:"no-store"}).then(r => r.json()).then(j => {
+     if (!j.running) { lastFrames = -1; stalled = 0; return; }
+     if (j.frames === lastFrames) {
+       if (++stalled >= 4) {
+         document.getElementById("vid").src = "/cam.mjpg?t=" + Date.now();
+         stalled = 0;
+       }
+     } else { stalled = 0; }
+     lastFrames = j.frames;
+   }).catch(()=>{});
+ }, 1500);
 // Cams deep link: ?arm=2 in the page URL selects arm 2 on load (two-arm plan, Phase 3).
 (() => { const p = new URLSearchParams(location.search); if (p.get("arm")) sel(p.get("arm")); })();
 </script>

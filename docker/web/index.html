@@ -73,6 +73,8 @@
     try { navigator.sendBeacon(`${FOCUS_API}/stop`); } catch (e) {}
   }
 
+  const FRESH = new Set(["focus", "temp", "stereo", "cloud"]);
+
   const RVIZ_API = `http://${HOST}:8099`;
   const rvizState = document.getElementById("rvizstate");
   let rvizPoll = null;
@@ -121,9 +123,15 @@
     btn.classList.add("active");
     const pane = document.querySelector(`iframe[data-pane="${tab}"]`);
     pane.classList.add("active");
-    if (!pane.src) {
-      pane.src = TAB_URLS[tab];
-      pane.addEventListener("load", () => { pane.focus(); });
+    // Our own pages (focus, temperature, stereo, cloud) are loaded fresh on every visit: the tab
+    // switches cost nothing and a page left open from before a fix would otherwise keep running
+    // the old JavaScript for ever — which is exactly how "the buttons do nothing" survived a
+    // deploy. The VNC and ttyd tabs keep their session.
+    let src = TAB_URLS[tab];
+    if (FRESH.has(tab)) src += (src.includes("?") ? "&" : "?") + "v=" + Date.now();
+    if (pane.getAttribute("src") !== src) {
+      pane.addEventListener("load", () => { pane.focus(); }, { once: true });
+      pane.src = src;
     }
     pane.focus();
     if (tab === "rviz") rvizOn(); else rvizOff();

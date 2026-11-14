@@ -43,7 +43,8 @@ def rviz_pid():
 def pair_pid():
     """PID of the two-wrist composer, or None."""
     try:
-        out = subprocess.run(["pgrep", "-f", "wrist_pair.py"], capture_output=True, timeout=5).stdout
+        out = subprocess.run(["pgrep", "-f", "python3 /srv/web/wrist_pair.py"],
+                             capture_output=True, timeout=5).stdout
     except Exception:  # noqa: BLE001
         return None
     pids = [int(p) for p in out.split() if p.strip()]
@@ -61,7 +62,8 @@ def pair_start():
 def pair_stop():
     if not pair_pid():
         return True
-    subprocess.run(["pkill", "-TERM", "-f", "wrist_pair.py"], capture_output=True, timeout=5)
+    subprocess.run(["pkill", "-TERM", "-f", "python3 /srv/web/wrist_pair.py"],
+                   capture_output=True, timeout=5)
     return True
 
 
@@ -71,7 +73,6 @@ def rviz_start():
             return True
         subprocess.Popen(["bash", "-lc", RVIZ_CMD], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
-    pair_start()
     return True
 
 
@@ -83,10 +84,8 @@ def rviz_stop():
             subprocess.run(["pkill", "-%s" % sig, "-f", "rviz2"], capture_output=True, timeout=5)
             for _ in range(25):
                 if not rviz_pid():
-                    pair_stop()
                     return True
                 threading.Event().wait(0.1)
-    pair_stop()
     return rviz_pid() is None
 
 

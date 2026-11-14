@@ -47,6 +47,10 @@ python3 /srv/web/wrist_focus.py --csv /srv/state/wristcam-focus.csv &
 # board temperatures for the "Xavier NX Temp" tab (:8094). Thirteen sysfs reads a second:
 # it costs nothing, so unlike the focus test it simply always runs.
 python3 /srv/web/xavier_temp.py &
+# both wrist cameras composed into one image for RViz (:no port). It is always up because
+# starting and stopping it with RViz raced with SIGTERM and left a dead node behind; instead
+# it composes only when something is subscribed, so a closed RViz costs exactly nothing.
+python3 /srv/web/wrist_pair.py >> /tmp/wrist_pair.log 2>&1 &
 python3 -m http.server 80 --directory /srv/web &
 
 source /opt/ros/humble/install/setup.bash
