@@ -92,6 +92,15 @@ def main():
             t.handle_b()
             time.sleep(0.02)
 
+    print("== the client tracks the real pose on every message")
+    t.on_state({"position": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]}, 1)
+    first = list(t.arm_targets[1])
+    t.on_state({"position": [7.0, 8.0, 9.0, 10.0, 11.0, 12.0]}, 1)
+    check("a second message updates the stored pose", list(t.arm_targets[1]),
+          [7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+    check("and it is not stuck on the first one", first, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    t.arm_state_t[1] = 0.0
+
     # ---------------------------------------------------------------- switch, on A (silent)
     print("== switch (A)")
     check("starts on arm 1", t.active, 0)
@@ -143,7 +152,11 @@ def main():
     check("the 3 s report is scheduled",
           0.5 < (t.report_at or 0) - time.time() < 3.1, True)
 
-    # three seconds later, with the arm sagging 5 deg on its own: it must be reported and undone
+    # three seconds later, with the arm sagging 5 deg on its own: it must be reported and undone.
+    # The live topic would overwrite the fake drift on the next message, so it is paused here.
+    real_on_state, real_fresh = t.on_state, t.fresh_pose
+    t.on_state = lambda *a, **k: None
+    t.fresh_pose = lambda arm: True
     t.arm_targets[t.active][2] += 5.0
     ref = list(t.report_ref)
     sent.clear()
@@ -155,6 +168,7 @@ def main():
     close("and that pose is the one before torque", sent[0] if sent else [], ref)
     check("the report does not repeat", t.report_at, None)
     t.arm_targets[t.active][2] -= 5.0
+    t.on_state, t.fresh_pose = real_on_state, real_fresh
     check("and is not left pending", t.buzz_at, None)
     tick_for(4.0)
     check("does not fire again while B stays down", len(buzzes), 2)

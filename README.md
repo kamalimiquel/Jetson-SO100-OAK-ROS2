@@ -1014,6 +1014,13 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
   arm 1 joints 3 s after torque off: [-24.7, ...] (drift [0.0, ...], worst 0.0deg)
   ```
 
+  The pose is kept **live**: `on_state()` overwrites the stored vector on every `/joint_states`
+  message, not only on the first one. It used to be written once, so the client kept the pose the arm
+  had **when the program started** and armed the arm back to it — which is exactly the "it goes to an
+  old position" that survived three attempts at fixing the server. Verified: client starts at elbow
+  −68.6°, the arm is moved to −57.0°, release and re-arm holds −57.0° (0.00° from the moved pose,
+  11.60° from the start pose).
+
   The reference is read **while the arm is still loose** — after your hand has left it — and compared
   three seconds after the torque went on. If it moved more than 1° with no stick input in between, the
   client re-commands that same pose and says `DRIFTED … re-commanding`. These lines bypass the console

@@ -195,9 +195,12 @@ class Teleop:
             return
         self.arm_state_t[arm] = time.time()
         self.state_seq[arm] += 1
+        # EVERY message updates the real pose. This used to happen only on the first one, which
+        # left `arm_targets` frozen at the pose the arm had when the client started — so arming
+        # commanded that startup pose and the arm went back to it, exactly like an old command.
+        self.arm_targets[arm] = [float(p) for p in pos[:DOF]]
         if not self.arm_state_seen[arm]:
             self.arm_state_seen[arm] = True
-            self.arm_targets[arm] = [float(p) for p in pos[:DOF]]
             if arm == self.active:
                 self.targets = list(self.arm_targets[arm])
                 print(f"{ARMS[arm]['name']} state received — targets seeded at its real pose")
