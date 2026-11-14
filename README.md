@@ -991,10 +991,25 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
   The jump itself was **server-side**, not in the client: a servo keeps its own `Goal_Position`, so
   `enable_torque()` alone made it snap back to the last command it had been given — a pose from before
   the torque was removed. `lerobot_joint_server.py` now writes the **present** positions as goals
-  (before enabling, and once more right after), so "arm" means "stay where you are": measured 0.00° of
-  drift on both arms with nobody touching them, and the position used is the one the arm is in with
-  torque off, not the one it had when it was released. **Two buzzes, one second apart,
-  mean armed; one means released**; a long buzz means the pose was stale and nothing was armed.
+  (before enabling, once right after, and then a short loop that re-reads and re-writes the same pose up
+  to four times while the servo takes up the load), so "arm" means "stay where you are" — and the pose
+  it freezes is the one the arm is in **with torque off**, after your hand moved it, not the one it had
+  when it was released. Measured 0.00° on all six joints with nobody touching the arm.
+  **Two buzzes, one second apart, mean armed; one means released**; a long buzz means the pose was stale
+  and nothing was armed.
+
+  The pad prints the measurement itself, so a doubt is settled from the console instead of by eye:
+
+  ```
+  arm 1 joints just before torque: [-40.1, -12.1, -70.4, 3.4, -79.3, 9.2]
+  arm 1 torque: ARMED — read [...] before, [...] after (drift 0.0°), commanding that
+  arm 1 joints 3 s after torque: [-40.1, -12.1, -70.4, 3.4, -79.3, 9.2] (drift [0.0, ...], worst 0.0deg)
+  arm 1: held its pose (<= 1deg)
+  ```
+
+  The reference is read **while the arm is still loose** — after your hand has left it — and compared
+  three seconds after the torque went on. If it moved more than 1° with no stick input in between, the
+  client re-commands that same pose and says `DRIFTED … re-commanding`.
 - **switch arms**: hold **A for 5 s**. The switch is **silent** — no buzz on A at all, neither on
   success nor on refusal (the log says which, and a refused switch keeps the previous arm).
 
