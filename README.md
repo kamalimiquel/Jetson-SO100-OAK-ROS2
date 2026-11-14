@@ -1,6 +1,6 @@
 # Jetson-SO100-OAK-ROS2
 
-Robotic manipulation cell: **two SO-100 arms** (six Feetech servos each, 7.5 V supply) + an **OAK-D POE camera (USB-C)** + **two USB RGB webcams on the wrists, manually focused at 10-15 cm** (ADR-0022), governed by a **Jetson Xavier NX 16 GB** (Ubuntu 20.04, JetPack 5.1.5) running **ROS2 Humble in Docker containers**. Arm 1 keeps the topics it always had (`/joint_states`, `/joint_targets`, `/gripper/…`, frames `base…gripper`); **arm 2 lives under `/arm2/…` with the TF prefix `arm2_`, 30 cm from arm 1** (the plans and risks are in [§2.5](#25-a-second-arm--what-usb-can-and-cannot-take) and [§15](#15-two-arm-integration--the-risks-explained)).
+Robotic manipulation cell: **two SO-100 arms** (six Feetech servos each, 7.5 V supply) + an **OAK-D POE camera (USB-C)** + **one USB RGB webcam per wrist** (ADR-0022) — arm 1's is manually focused at 10-15 cm and measured; arm 2's is **not** in that band yet ([§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm)), governed by a **Jetson Xavier NX 16 GB** (Ubuntu 20.04, JetPack 5.1.5) running **ROS2 Humble in Docker containers**. Arm 1 keeps the topics it always had (`/joint_states`, `/joint_targets`, `/gripper/…`, frames `base…gripper`); **arm 2 lives under `/arm2/…` with the TF prefix `arm2_`, 30 cm from arm 1** (the plans and risks are in [§2.5](#25-a-second-arm--what-usb-can-and-cannot-take) and [§15](#15-two-arm-integration--the-risks-explained)).
 
 A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium), GraspGen inference, policy training (MuJoCo / Isaac Sim) and teleoperation with a Logitech F710.
 
@@ -26,7 +26,8 @@ rather than redrawn, and the band at the bottom lists what is still to build.
 | **FK / IK** | Forward / Inverse Kinematics — from joint angles to the hand's pose, or back from a pose to angles |
 | **DDS / ROS_DOMAIN_ID** | the network layer ROS 2 ships over; the *domain id* is a number that mutes the network, so two robot cells on one LAN do not hear each other |
 | **QoS** | Quality of Service — how a ROS topic is delivered (reliable vs. best-effort, and how long old messages survive for late subscribers) |
-| **TF / TF2** | the topic carrying where each frame (arm `Base`, cameras, …) is relative to the others |
+| **TF / TF2** | short for **transform**: in ROS, the tree of coordinate frames — the little position+rotation arrows that say where every part is *relative to every other part*, e.g. `base → arm2_base = (0, 0.30, 0)` means "arm 2's base sits 30 cm to the left of arm 1's". **TF2** is the library that answers the questions ("where is the gripper in the camera's frame?"). It travels on two topics: `/tf` for parts that move (published ~17 Hz) and `/tf_static` for the ones that never do (published once, latched) |
+| **frame (coordinate frame)** | a named coordinate system attached to one part — `base`, `gripper`, `scene_color_optical_frame`, `arm2_base` — with its own origin and axes. A transform is always "from one frame to another"; a frame that is not in the TF tree cannot be used by RViz or by any ROS tool |
 | **RViz / RViz2** | the 3-D viewer that draws the robot model and its sensors |
 | **rqt_graph** | the tool that draws which ROS node publishes to which topic |
 | **OAK / OAK-D** | the scene camera — a DepthAI stereo camera (IMX378 colour + two OV9282 mono) from which the depth is made |
@@ -141,7 +142,7 @@ the later chapters assume it, and the failure they produce points somewhere else
 | Arms | **two SO-100** followers, six Feetech servos each, **7.5 V** supply — the URDF/MJCF in use are the SO-101 | `/dev/arm1_tty` and `/dev/arm2_tty` on the Xavier — udev symlinks, because both CH9102 adapters (VID `1a86`, serials `5971081400` / `5A46085595`) re-enumerate; inside each container it is still `/dev/ttyACM0` ([§2.5](#25-a-second-arm--what-usb-can-and-cannot-take)) |
 | Scene camera | OAK-D POE (IMX378 colour + 2x OV9282 mono, 7.5 cm baseline) over USB-C | opened by the cams container |
 | **USB 3 cable for the OAK** | a **USB 3 (5 Gb/s) data** cable, not a charge-only one — this is the one cable the cell cannot work around | the OAK's link must show `5000M` in `lsusb -t` ([§6](#6-camera-bring-up--depthai-on-the-xavier), step 6) |
-| Wrist cameras | **one USB RGB webcam per arm** (Logitech/Labtec and a Creative VF0770), manual focus set at 10-15 cm | mounted on each moving jaw, streaming at 10 Hz on `/gripper/image/compressed` and `/arm2/gripper/image/compressed`; the focus requirement and how it is proven are in [§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm) (ADR-0022) |
+| Wrist cameras | **one USB RGB webcam per arm**: a Logitech/Labtec (`046d:08aa`) on arm 1, focused at 10-15 cm and measured; a **Creative VF0770** (`041e:4095`) on arm 2, whose fixed focus sits far beyond that band and is still unsolved | mounted on each moving jaw, streaming at 10 Hz on `/gripper/image/compressed` and `/arm2/gripper/image/compressed`; the requirement, the measurement and the three ways out for arm 2 are in [§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm) (ADR-0022) |
 | USB hub | powered 2.0 hub (Terminus `1a40:0101`, `480M`, self-powered) | carries **both arms and both wrist cameras** at once — measured 12.77 + 9.42 fps with both cameras running ([§2.5](#25-a-second-arm--what-usb-can-and-cannot-take)) |
 | Host | Jetson Xavier NX 16 GB, JetPack 5.1.5 (Ubuntu 20.04) | the seven containers |
 | Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§8](#8-verifying-the-data-flow) (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Gripper Cams, Temp Xavier NX, Graph, RViz), the MuJoCo twin and the F710 pad |
@@ -1318,6 +1319,23 @@ USB cameras are *fixed focus*, and "fixed focus" says nothing about where the pl
 two units at the same price can sit at opposite ends of the range. So the first step is not
 mounting, it is measuring.
 
+**Arm 2's camera is not in the band, and that is not a measurement problem.** The VF0770 is a
+fixed-focus webcam aimed at a desk (its family documents a focusing distance in the tens of
+centimetres), so no amount of arm movement will bring 10-15 cm into focus. Three ways out, with what
+each one really costs:
+
+| Option | What it means | Pros | Cons |
+|---|---|---|---|
+| **1. Refocus the VF0770 itself** | open the shell, break the thread-locking glue on the lens barrel and screw it out until the jaws are sharp at 12.5 cm, then lock it again | free, keeps the unit, the mount and the vendor pipeline; best optical quality (no added glass) | destructive and per-unit; the thread may not travel far enough; dust on the sensor; can end up written off |
+| **2. Close-up diopter in front of the lens** | a printed holder with a +8…+10 dioptre close-up lens (a phone macro clip works) that pulls the focus plane from ~50 cm into 10-15 cm | cheapest, reversible, no disassembly, ten minutes to try; keeps both the camera and the topic | adds aberration and vignetting, loses light, fixes the working distance to whatever the diopter dictates, changes the intrinsics (recalibrate) |
+| **3. Replace it with an adjustable-focus module** | a USB UVC camera with an M12 lens (varifocal 5 cm-∞, manual ring) on both arms, so the two wrists are identical | the only option that makes the **two arms the same**; repeatable, documented, no hacking; the ring can be set per unit with the camfocus score | costs money and a printed mount; new intrinsics and a new `/dev` name per unit; a week of lead time if it has to be ordered |
+
+Whichever is chosen, the acceptance test does not change: the same `camfocus.py` run at 10 / 12.5 / 15 cm,
+with the median written to the CSV for **that camera** — and the number, not the datasheet, decides
+([§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm)). The recommendation for a cell that is
+going to be replicated is **3**, with **1** as the free experiment to run first and **2** if the barrel
+refuses to turn.
+
 **The tool** — `tools/camfocus.py`, bench only, no ROS, any UVC camera. It serves the device as
 MJPEG, scores the sharpness of the newest frame about twice a second, and writes the score at
 10 / 12.5 / 15 cm to a CSV when the buttons are pressed:
@@ -1863,10 +1881,10 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
   the other still
 - [ ] **Plan T6.5 — the twin with one arm down** — stop `so100-arm2` with the twin open: it must keep
   drawing arm 1 and say which one is missing
-- [ ] **Focus measured for the second camera** — the symlinks are in place and both feeds run
-  (`/dev/arm1_wrist` → Logitech, `/dev/arm2_wrist` → Creative VF0770, rules already keyed by VID:PID),
-  but the focus-vs-distance curve exists only for arm 1's unit; pick Arm 2 in the tab and repeat
-  [§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm)
+- [ ] **Arm 2's camera does not focus at 10-15 cm** — the Logitech on arm 1 does and is measured; the
+  Creative VF0770 on arm 2 is fixed-focus well beyond the band, so it is a hardware decision, not a
+  measurement: refocus its barrel, add a close-up diopter, or replace it with an adjustable-focus
+  module on both arms ([§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm))
 - [ ] **Port-based camera rules if a second identical webcam is added** — today the two wrists are
   different models, so VID:PID is enough; the same camera twice would need `KERNELS==` on the port
 - [ ] **GraspGen (ADR-0013)** and **policy training (ADR-0016)** — need the IK node and the recorder first
