@@ -318,6 +318,9 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{seria
    are what keep them apart**: `/arm2/joint_states`, `/arm2/joint_targets`, and a
    `robot_state_publisher` with `frame_prefix: arm2_` so the two TF trees can coexist in one graph.
    The IK node gets one instance per arm, each with its own base frame.
+   *(What was actually built differs in one point, and for a measured reason: there is **no** second
+   `robot_state_publisher` — RViz on this board renders only the first display of a class, so both arms
+   are one merged model fed by `/cell/joint_states_rad`. See [§3.7](#37-second-arm-live--calibration-and-the-one-model-rviz).)*
 5. **Calibration is per arm and per id.** `--robot.id` is the profile name (`so100_cell` today);
    the second arm needs its own, or the two will overwrite the same JSON.
 
