@@ -1003,7 +1003,8 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 
   ```
   arm 1 joints just before torque: [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8]
-  arm 1 torque: ARMED — read [...] before, [...] after (drift 0.0°), commanding that
+  arm 1 torque: ARMED — read before: [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8]
+  arm 1 torque: ARMED — read after:  [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8] (drift 0.0°, commanding that)
   arm 1 joints 3 s after torque on: [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8] (drift [0.0, ...], worst 0.0deg)
   arm 1: held its pose (<= 1deg)
   arm 1 joints just before releasing torque: [-24.7, ...]

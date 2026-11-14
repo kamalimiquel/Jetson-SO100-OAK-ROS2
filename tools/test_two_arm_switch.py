@@ -136,6 +136,10 @@ def main():
     check("the second buzz fires after 1 s", buzzes, [("short", 1), ("short", 1)])
     check("prints the joints just before torque",
           any("joints just before torque" in x for x in said), True)
+    check("prints ARMED read before",
+          any("ARMED — read before:" in x for x in said), True)
+    check("prints ARMED read after",
+          any("ARMED — read after:" in x for x in said), True)
     check("the 3 s report is scheduled",
           0.5 < (t.report_at or 0) - time.time() < 3.1, True)
 

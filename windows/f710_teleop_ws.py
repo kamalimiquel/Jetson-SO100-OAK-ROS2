@@ -429,7 +429,7 @@ class Teleop:
             self.torque_warned[arm] = False
             if fresh:
                 self.targets = list(self.arm_targets[arm])
-            self.say(f"{ARMS[arm]['name']} torque: RELEASED", key=f"torque{arm}")
+            print(f"{ARMS[arm]['name']} torque: RELEASED")   # every time, like the measurements
             self.rumble("short", count=1)               # one buzz = loose
             # Same measurement on the way out: where it is 3 s later, once gravity has had it.
             self.report_at = time.time() + ARM_REPORT
@@ -471,8 +471,12 @@ class Teleop:
             self.say(f"{ARMS[arm]['name']}: armed, but no fresh pose to confirm — not publishing",
                      key=f"torque{arm}")
         drift = max((abs(a - b) for a, b in zip(pose_before, pose_after)), default=0.0)
-        self.say(f"{ARMS[arm]['name']} torque: ARMED — read {fmt(pose_before)} before, "
-                 f"{fmt(pose_after)} after (drift {drift:.1f}°), commanding that", key=f"torque{arm}")
+        # Plain print, one line each, every single time: the dedupe in say() would hide the second
+        # cycle whenever the arm happens to be at the same pose, which is exactly the case being
+        # checked.
+        print(f"{ARMS[arm]['name']} torque: ARMED — read before: {fmt(pose_before)}")
+        print(f"{ARMS[arm]['name']} torque: ARMED — read after:  {fmt(pose_after)} "
+              f"(drift {drift:.1f}°, commanding that)")
         self.rumble("short", count=1)                   # buzz 1 of 2 = live
         self.buzz_at = time.time() + ARM_BUZZ_GAP       # buzz 2, one second later
         # Read and print the joints again once things have settled, and correct a drift that
