@@ -23,6 +23,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 SECRET = "/run/secrets/shutdown-secret"
 RVIZ_CMD = ("source /opt/ros/humble/install/setup.bash 2>/dev/null; "
             "DISPLAY=:10 LIBGL_ALWAYS_SOFTWARE=1 exec rviz2 -d /srv/web/rviz.rviz")
+# RViz draws at most two compressed-image panels on this board, and there are three camera views
+# with two arms: the two jaw cameras are composed into one frame (wrist_pair.py) while RViz runs.
+PAIR_CMD = ("source /opt/ros/humble/install/setup.bash 2>/dev/null; "
+            "exec python3 /srv/web/wrist_pair.py")
 _rviz_lock = threading.Lock()
 
 
@@ -36,12 +40,38 @@ def rviz_pid():
     return pids[0] if pids else None
 
 
+def pair_pid():
+    """PID of the two-wrist composer, or None."""
+    try:
+        out = subprocess.run(["pgrep", "-f", "wrist_pair.py"], capture_output=True, timeout=5).stdout
+    except Exception:  # noqa: BLE001
+        return None
+    pids = [int(p) for p in out.split() if p.strip()]
+    return pids[0] if pids else None
+
+
+def pair_start():
+    if pair_pid():
+        return True
+    subprocess.Popen(["bash", "-lc", PAIR_CMD], stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    return True
+
+
+def pair_stop():
+    if not pair_pid():
+        return True
+    subprocess.run(["pkill", "-TERM", "-f", "wrist_pair.py"], capture_output=True, timeout=5)
+    return True
+
+
 def rviz_start():
     with _rviz_lock:
         if rviz_pid():
             return True
         subprocess.Popen(["bash", "-lc", RVIZ_CMD], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
+    pair_start()
     return True
 
 
@@ -53,8 +83,10 @@ def rviz_stop():
             subprocess.run(["pkill", "-%s" % sig, "-f", "rviz2"], capture_output=True, timeout=5)
             for _ in range(25):
                 if not rviz_pid():
+                    pair_stop()
                     return True
                 threading.Event().wait(0.1)
+    pair_stop()
     return rviz_pid() is None
 
 
