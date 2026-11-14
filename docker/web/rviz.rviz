@@ -62,10 +62,10 @@ Visualization Manager:
       Alpha: 1.0
       Enabled: true
     - Class: rviz_default_plugins/Image
-      Name: Wrist cameras (arm 1 | arm 2)
+      Name: Cameras (scene | arm 1 | arm 2)
       Enabled: true
       Topic:
-        Value: /gripper/pair/compressed
+        Value: /gripper/cameras/compressed
         Depth: 5
         History Policy: Keep Last
         Reliability Policy: Reliable

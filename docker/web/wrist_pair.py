@@ -27,9 +27,10 @@ from sensor_msgs.msg import CompressedImage
 LEFT = "/gripper/image/compressed"          # arm 1 (Labtec)
 RIGHT = "/arm2/gripper/image/compressed"    # arm 2 (Creative VF0770)
 SCENE = "/oak/scene/color/compressed"       # the OAK, for context
-OUT = "/gripper/pair/compressed"
-TILE_W = 640                                # fixed slot per camera, see tile()
-TILE_H = 480
+OUT = "/gripper/cameras/compressed"
+TILE_W = 426                                # slot per wrist camera, see tile()
+TILE_H = 320
+SCENE_W = 852                               # scene spans both wrist slots
 LABEL_H = 26
 
 
@@ -61,8 +62,8 @@ class Pair(Node):
         if self.pub.get_subscription_count() == 0:
             return                                # nobody is watching (RViz closed): cost zero
         with self.lock:
-            left, right = self.frames[LEFT], self.frames[RIGHT]
-        pair = compose(left, right)
+            scene, left, right = self.frames[SCENE], self.frames[LEFT], self.frames[RIGHT]
+        pair = compose(scene, left, right)
         if pair is None:
             return
         msg = CompressedImage()
@@ -79,45 +80,50 @@ class Pair(Node):
             raise SystemExit(0)
 
 
-def tile(jpeg, label):
+def tile(jpeg, label, w=None, h=None):
     """One tile fitted into a fixed TILE_W x TILE_H slot, with a caption bar.
 
     The slot is a constant size on purpose: RViz rebuilds the Ogre texture whenever the message's
     dimensions change, and a canvas that shifts by a few pixels between frames leaves the panel on
     "No Image". Same reason for the multiple-of-4 padding.
     """
-    out = Image.new("RGB", (TILE_W, TILE_H + LABEL_H), (11, 18, 32))
+    tw, th = w or TILE_W, h or TILE_H
+    out = Image.new("RGB", (tw, th + LABEL_H), (11, 18, 32))
     img = None
     if jpeg:
         try:
             img = Image.open(io.BytesIO(jpeg)).convert("RGB")
-            scale = min(TILE_W / img.width, TILE_H / img.height)
+            scale = min(tw / img.width, th / img.height)
             img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))),
                              Image.BILINEAR)
         except Exception:                                     # noqa: BLE001
             img = None
     if img is None:
         d = ImageDraw.Draw(out)
-        d.text((16, LABEL_H + TILE_H // 2 - 8), "waiting for %s" % label, fill=(140, 150, 165))
+        d.text((16, LABEL_H + th // 2 - 8), "waiting for %s" % label, fill=(140, 150, 165))
     else:
-        out.paste(img, ((TILE_W - img.width) // 2, LABEL_H + (TILE_H - img.height) // 2))
+        out.paste(img, ((tw - img.width) // 2, LABEL_H + (th - img.height) // 2))
     ImageDraw.Draw(out).text((10, 7), label, fill=(232, 237, 245))
     return out
 
 
-def compose(left, right):
-    """The two jaws side by side in one panel.
+def compose(scene, left, right):
+    """Scene colour camera on top, the two jaws below it — all three in ONE image.
 
-    One display, not two: RViz docks several image panels as tabs on this board and a tab nobody
-    selected looks exactly like a dead feed. The scene colour camera stays in its own tab.
+    RViz on this board renders only the first image display it is given (a second one sits on
+    "No Image" whatever its size or rate, and the 3-D view starves while it tries), so the three
+    camera views are composed here instead of being three panels.
     """
-    tiles = [tile(left, "arm 1  %s" % LEFT), tile(right, "arm 2  %s" % RIGHT)]
-    canvas = Image.new("RGB", (TILE_W * 2, TILE_H + LABEL_H), (11, 18, 32))
-    for i, t in enumerate(tiles):
-        canvas.paste(t, (TILE_W * i, 0))
-        if i:
-            ImageDraw.Draw(canvas).line([(TILE_W * i, 0), (TILE_W * i, canvas.height)],
-                                        fill=(38, 48, 66), width=2)
+    top = tile(scene, "scene  %s" % SCENE, SCENE_W, int(SCENE_W * 9 / 16))
+    a = tile(left, "arm 1  %s" % LEFT)
+    b = tile(right, "arm 2  %s" % RIGHT)
+    canvas = Image.new("RGB", (SCENE_W, top.height + a.height), (11, 18, 32))
+    canvas.paste(top, (0, 0))
+    canvas.paste(a, (0, top.height))
+    canvas.paste(b, (TILE_W, top.height))
+    d = ImageDraw.Draw(canvas)
+    d.line([(TILE_W, top.height), (TILE_W, canvas.height)], fill=(38, 48, 66), width=2)
+    d.line([(0, top.height), (canvas.width, top.height)], fill=(38, 48, 66), width=2)
     buf = io.BytesIO()
     canvas.save(buf, format="JPEG", quality=80)
     return buf.getvalue()
@@ -126,7 +132,7 @@ def compose(left, right):
 def main():
     ap = argparse.ArgumentParser(description="compose both wrist cameras into one image")
     ap.add_argument("--out", default=OUT)
-    ap.add_argument("--hz", type=float, default=8.0)
+    ap.add_argument("--hz", type=float, default=4.0)
     args = ap.parse_args()
     rclpy.init()
     node = Pair(args.out, args.hz)
