@@ -304,9 +304,12 @@ arm on the pad) — is in [docs/two-arm-integration-plan.md](docs/two-arm-integr
   state cannot be opened.
 - A wired LAN is best. The page derives the host from its own URL, so DHCP is fine; the examples
   below all use `192.168.1.50`.
-- Ports on the Xavier, all of them: **80** tabs page, **6080** RViz, **6081** rqt_graph,
-  **7681** terminal, **8090** MJPEG/stereo/depth, **8091** cloud, **8092** torque proxy, **8093** wrist focus test,
-  **8099** power + RViz control, **9090** rosbridge. **8002** is loopback only (joint server).
+- Ports on the Xavier, all of them: **80** tabs page, **6080** the RViz **picture** (noVNC),
+  **6081** the rqt_graph picture, **7681** terminal, **8090** MJPEG/stereo/depth, **8091** cloud,
+  **8092**/**:8095** torque proxies (arm 1 / arm 2), **8093** wrist focus test, **8094** temperatures,
+  **8099** RViz **control** (start/stop) + power-off, **9090** rosbridge. **8002**/**8003** are loopback
+  only (the two joint servers). Note that `6080` and `8099` are both "RViz" and are not the same thing:
+  one carries the pixels, the other is a four-endpoint API that starts and stops the process.
 
 ### 3.4 What you need from the repository
 
@@ -679,7 +682,7 @@ are real ports on the host, so two containers cannot share one.
 | Port | Serves | Container | Used by |
 |---|---|---|---|
 | **80** | the tabs page (`index.html`) and the RViz/URDF assets | `so100-web` | the browser: http://<xavier>/ |
-| **6080** | noVNC of display **:10** — RViz2 | `so100-web` | the **RViz** tab |
+| **6080** | noVNC of display **:10** — it carries RViz2's **pixels** (a VNC stream in a WebSocket) | `so100-web` | the **RViz** tab |
 | **6081** | noVNC of display **:11** — rqt_graph | `so100-web` | the **Graph** tab |
 | **7681** | ttyd: an SSH shell into the **Xavier host** (`maju@127.0.0.1`) | `so100-web` | the **Terminal Xavier NX** tab |
 | **8090** | MJPEG relé of the scene camera: `/`, `/stereo`, `/<view>/stream` | `so100-cams` | the **Stereo Cams & Depth OAK-D** tab |
@@ -688,7 +691,7 @@ are real ports on the host, so two containers cannot share one.
 | **8094** | board temperatures from `/sys/class/thermal`, once a second | `so100-web` | the **Temp Xavier NX** tab |
 | **8092** | torque switch proxy → arm 1's joint server | `so100-arm` | the `Arm torque` button |
 | **8095** | torque switch proxy → arm 2's joint server | `so100-arm2` | the pad's B (or `curl -X POST` by hand) |
-| **8099** | power-off endpoint, and RViz `/rviz/start`, `/rviz/stop`, `/rviz/state` | `so100-web` | the power button and the RViz tab |
+| **8099** | **no pixels at all**: a small JSON API — `GET /health`, `GET /rviz/state`, `POST /rviz/start`, `POST /rviz/stop`, `POST /shutdown` | `so100-web` | the power button and the RViz tab, which starts and stops the process |
 | **9090** | rosbridge WebSocket | `so100-rosbridge` | the MuJoCo twin, the F710 client, anything on the LAN |
 | **8002** | arm 1's LeRobot joint server (**loopback only**, `127.0.0.1`) | `so100-arm` | the `:8092` proxy, host scripts |
 | **8003** | arm 2's joint server (**loopback only**) | `so100-arm2` | the `:8095` proxy, host scripts |
