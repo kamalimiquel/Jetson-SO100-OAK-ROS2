@@ -21,6 +21,9 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
 NS = os.environ.get("ARM_NS", "").strip("/")
+# The cell URDF (so101_cell.urdf) names the second arm's joints arm2_*, so the merged joint-state
+# topic carries those names and one robot_state_publisher can drive both arms.
+JP = os.environ.get("JOINT_PREFIX", (NS + "_") if NS else "")
 
 
 def topic(name: str) -> str:
@@ -39,7 +42,7 @@ class DegToRad(Node):
     def on_msg(self, msg: JointState):
         out = JointState()
         out.header = msg.header
-        out.name = msg.name
+        out.name = [(JP + n) if JP else n for n in msg.name]
         out.position = [math.radians(p) for p in msg.position]
         out.velocity = [math.radians(v) for v in msg.velocity]
         out.effort = msg.effort

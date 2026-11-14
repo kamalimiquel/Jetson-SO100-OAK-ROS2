@@ -26,21 +26,31 @@ python3 /opt/ws/arm/torque_api.py &
 python3 /opt/ws/arm/arm_bridge.py &
 python3 /opt/ws/arm/deg2rad.py &
 
-# robot_state_publisher reads the robot_description PARAMETER (not the topic)
-# in Humble — pass the URDF directly. Joint values are in DEGREES (LeRobot); RSP
-# needs RADIANS (REP-103), so it consumes the converted topic from deg2rad.py.
-# frame_prefix (only when ARM_NS is set, i.e. the second arm) keeps that arm's
-# TF tree separate. An empty prefix would be an invalid -p frame_prefix:= argument.
-(
-  while true; do
-    URDF=$(cat /opt/ws/arm/urdf/so101.urdf 2>/dev/null) || { echo "rsp: no urdf, retry in 2s"; sleep 2; continue; }
-    [ -n "$URDF" ] || { echo "rsp: empty urdf, retry in 2s"; sleep 2; continue; }
-    RSP_ARGS=(-p "robot_description:=$URDF" -r "joint_states:=/$JSR")
-    [ -n "$FP" ] && RSP_ARGS+=(-p "frame_prefix:=$FP")
-    ros2 run robot_state_publisher robot_state_publisher --ros-args "${RSP_ARGS[@]}" || true
-    echo "rsp: retrying in 2s"; sleep 2
-  done
-) &
+# robot_state_publisher reads the robot_description PARAMETER (not the topic) in Humble — pass the
+# URDF directly. Joint values are DEGREES (LeRobot) and RSP wants RADIANS (REP-103), so it consumes
+# the converted topic.
+#
+# ONE publisher for the whole cell, started by arm 1's container: RViz on this board renders only the
+# FIRST display of a class, so a second RobotModel is never drawn — both arms must be one model. It
+# loads so101_cell.urdf (arm 1 plain + arm 2 prefixed arm2_ + a fixed base->arm2_base at 0,0.30,0) and
+# reads the merged joint states from joint_merge.py. The second arm's container publishes no model of
+# its own; its static wrist transform and the base->arm2_base offset stay, so its tree remains valid
+# while this container restarts.
+if [ -z "$NS" ]; then
+  python3 /opt/ws/arm/joint_merge.py &
+  (
+    while true; do
+      URDF=$(cat /opt/ws/arm/urdf/so101_cell.urdf 2>/dev/null) || { echo "rsp: no urdf, retry in 2s"; sleep 2; continue; }
+      [ -n "$URDF" ] || { echo "rsp: empty urdf, retry in 2s"; sleep 2; continue; }
+      ros2 run robot_state_publisher robot_state_publisher --ros-args \
+        -p "robot_description:=$URDF" -r "joint_states:=/cell/joint_states_rad" || true
+      echo "rsp: retrying in 2s"; sleep 2
+    done
+  ) &
+  # Latched copy for RViz's single RobotModel (the file source does not load on this build).
+  MODEL_URDF=/opt/ws/arm/urdf/so101_cell.urdf MODEL_PREFIX="" \
+  MODEL_TOPIC=/cell/robot_description python3 /opt/ws/arm/model_description_pub.py &
+fi
 
 # Wrist camera frame (ADR-0022) — a STATIC transform, published once on /tf_static.
 # The webcam is clipped to the moving jaw, so its pose relative to that link never changes:
@@ -53,6 +63,8 @@ ros2 run tf2_ros static_transform_publisher \
   --x "${WRIST_TF_X:-0.0}" --y "${WRIST_TF_Y:-0.028}" --z "${WRIST_TF_Z:-0.035}" \
   --roll "${WRIST_TF_ROLL:-3.14159}" --pitch "${WRIST_TF_PITCH:-0.0}" --yaw "${WRIST_TF_YAW:-0.0}" \
   --frame-id "${FP}moving_jaw_so101_v1" --child-frame-id "${FP}gripper_color_optical_frame" &
+
+# (the second arm no longer publishes a model description of its own — see the block above)
 
 # Where the second arm stands relative to arm 1's base (Phase 1). The 30 cm of
 # requirement 2 lives ONLY here (README §3.6 R3): one static transform

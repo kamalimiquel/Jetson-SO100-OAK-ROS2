@@ -56,6 +56,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [3.4 What you need from the repository](#34-what-you-need-from-the-repository)
   - [3.5 A second arm — what USB can and cannot take](#35-a-second-arm--what-usb-can-and-cannot-take)
   - [3.6 Two-arm integration — the risks, explained](#36-two-arm-integration--the-risks-explained)
+  - [3.7 Second arm, live — calibration and the one-model RViz](#37-second-arm-live--calibration-and-the-one-model-rviz)
 - **[4. Arm bring-up — uv + LeRobot SDK (arm)](#4-arm-bring-up--uv--lerobot-sdk-arm)**
   - [4.1 Re-calibrating the arm (with pose pictures)](#41-re-calibrating-the-arm-with-pose-pictures)
 - **[5. Camera bring-up — depthai on the Xavier](#5-camera-bring-up--depthai-on-the-xavier)**
@@ -357,6 +358,60 @@ pinning both arms to two fixed ports forever (a cable change means a redeploy).
 The plan keeps serial-based naming (R1) and the single static transform + A-hold as the default — the
 least-churn path. Alt 1 and Alt 2 are the fallbacks if the risks that actually bite turn out to be TF
 collisions (R2) or geometry/identity drift (R3).
+
+### 3.7 Second arm, live — calibration and the one-model RViz
+
+Arm 2 is calibrated, running and drawn next to arm 1. This is the record of how, and of the two
+things that did not work, so they are not tried again.
+
+**Calibration.** The wire mapping (`arm2_tty` → `/dev/ttyACM0` inside the container) and the profile
+name are the only differences from [§4.1](#41-re-calibrating-the-arm-with-pose-pictures): the second arm is
+`so100_cell_b`, so the two profiles never overwrite each other.
+
+    ssh maju@192.168.1.185
+    ~/lerobot/.venv/bin/lerobot-calibrate --robot.type=so100_follower \
+        --robot.port=/dev/arm2_tty --robot.id=so100_cell_b
+
+Step 1 is "put the joints in the middle of their range and press ENTER", step 2 is the sweep. Two
+details that look like faults and are not:
+
+- **After step 1 every joint reads 2047.** That is the point of the step: the tool takes the pose you
+  press ENTER in as the new zero (*half-turn homing*), so the raw encoders all report mid-scale until
+  you move something. A *constant* 2047 with the arm untouched is the expected picture; a row that
+  never leaves 2047 while you sweep that joint is the fault.
+- **`wrist_roll` has no row in the table.** It is a full-turn joint and is recorded separately
+  (`record_calibration(..., full_turn_motors=["wrist_roll"])`); turn it a whole revolution during the
+  sweep. Its saved range is 0–4095.
+
+Measured ranges after the sweep (`shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`,
+`gripper`): 658–3344, 911–3186, 816–2972, 740–3193, 1250–2047, all with homing offsets written next
+to them in `~/.cache/huggingface/lerobot/calibration/robots/so_follower/so100_cell_b.json`. Then the
+container comes up on that profile and answers on its own port:
+
+    cd ~/so100/docker && docker compose up -d arm2
+    curl -s http://127.0.0.1:8003/status      # {"connected": true, "calibrated": true}
+    curl -s http://127.0.0.1:8003/read        # six angles in degrees
+
+**What is verified on the cell.** `/arm2/joint_states` 50.2 Hz, `/arm2/joint_states_rad` 49.6 Hz,
+`/joint_states` (arm 1) 32–44 Hz, both wrist cameras 6–9 Hz, and the static `base -> arm2_base` at
+`[0.000, 0.300, 0.000]` — the 30 cm of [R3](#36-two-arm-integration--the-risks-explained).
+
+**RViz draws one model, not two.** This board renders only the **first display of a class**: a second
+`Image` panel stays "No Image" (§7) and a second `RobotModel` loads, reports OK and *renders nothing*.
+For the arms the workaround is to make them **one robot**: a single `robot_state_publisher` loads
+[`docker/ws/arm/urdf/so101_cell.urdf`](docker/ws/arm/urdf/so101_cell.urdf) — arm 1 as it is, arm 2
+renamed `arm2_*` and hung off a **fixed joint `base -> arm2_base` at `(0, 0.30, 0)`**
+(`tools/make_cell_urdf.py` writes it) — and consumes `/cell/joint_states_rad`, where
+`docker/ws/arm/joint_merge.py` concatenates both arms' radians. `deg2rad.py` prefixes the second
+arm's joint names (`arm2_shoulder_pan`, …) so the two sets do not collide in that one message. RViz
+shows a single display, `SO-101 x2 (cell)`, from `/cell/robot_description`.
+
+![Both arms in RViz](docs/two-arms-rviz.png)
+
+Three attempts that failed, for the record: giving the second model its own latched
+`/arm2/model_description` (icon turns green, nothing is drawn), RViz's `TF Prefix` field (the display
+never leaves its error state) and `Description Source: File` (**never loads** on this build — it fails
+for arm 1 too). The merged model sidesteps all three.
 
 ## 4. Arm bring-up — uv + LeRobot SDK (arm)
 Exact commands to install and use the LeRobot stack for the arm on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§2.3](#23-next)). Verified working; doubles as the record of the Jetson's current state.

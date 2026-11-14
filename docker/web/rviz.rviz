@@ -12,13 +12,13 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.35
+      Distance: 1.40
       Focal Point:
-        X: 0.10
-        Y: 0.0
+        X: 0.0
+        Y: 0.15
         Z: 0.25
       Pitch: 0.35
-      Yaw: 3.6
+      Yaw: 3.14
     Saved: ~
   Displays:
     - Class: rviz_default_plugins/Grid
@@ -32,35 +32,22 @@ Visualization Manager:
       Show Axes: false
       Show Names: false
     - Class: rviz_default_plugins/RobotModel
-      Name: SO-101
+      # ONE model for both arms: RViz on this board draws only the first display of a class, so a
+      # second RobotModel reports OK and renders nothing. /cell/robot_description is the merged URDF
+      # (arm 1 plain + arm 2 as arm2_*, fixed base->arm2_base at 0,0.30,0) published latched by the
+      # arm container; the same RSP drives it from /cell/joint_states_rad.
+      Name: SO-101 x2 (cell)
+      Enabled: true
       Description Source: Topic
       Description Topic:
         Depth: 5
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /robot_description
+        Value: /cell/robot_description
       Visual Enabled: true
       Collision Enabled: false
       Alpha: 1.0
-      Enabled: true
-    - Class: rviz_default_plugins/RobotModel
-      # Second arm (two-arm plan, Phase 4): its own /arm2/robot_description latched
-      # by the arm2 bridge, its TF tree prefixed arm2_ so it does not collide with
-      # the first arm, positioned by the static base -> arm2_base at 0,0.30,0.
-      Name: SO-101 (arm 2)
-      Description Source: Topic
-      Description Topic:
-        Depth: 5
-        Durability Policy: Transient Local
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /arm2/robot_description
-      TF Prefix: arm2_
-      Visual Enabled: true
-      Collision Enabled: false
-      Alpha: 1.0
-      Enabled: true
     - Class: rviz_default_plugins/Image
       Name: Cameras (scene | arm 1 | arm 2)
       Enabled: true
