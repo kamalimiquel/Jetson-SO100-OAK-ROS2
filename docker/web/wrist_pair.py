@@ -26,7 +26,8 @@ from sensor_msgs.msg import CompressedImage
 
 LEFT = "/gripper/image/compressed"          # arm 1 (Labtec)
 RIGHT = "/arm2/gripper/image/compressed"    # arm 2 (Creative VF0770)
-TILE_H = 480                                # both tiles are scaled to this height
+TILE_W = 640                                # fixed slot per camera, see tile()
+TILE_H = 480
 LABEL_H = 26
 
 
@@ -68,22 +69,27 @@ class Pair(Node):
 
 
 def tile(jpeg, label):
-    """One tile scaled to TILE_H, with a caption bar. A missing frame becomes a placeholder."""
+    """One tile fitted into a fixed TILE_W x TILE_H slot, with a caption bar.
+
+    The slot is a constant size on purpose: RViz rebuilds the Ogre texture whenever the message's
+    dimensions change, and a canvas that shifts by a few pixels between frames leaves the panel on
+    "No Image". Same reason for the multiple-of-4 padding.
+    """
+    out = Image.new("RGB", (TILE_W, TILE_H + LABEL_H), (11, 18, 32))
+    img = None
     if jpeg:
         try:
             img = Image.open(io.BytesIO(jpeg)).convert("RGB")
-            w = max(1, int(img.width * TILE_H / img.height))
-            img = img.resize((w, TILE_H), Image.BILINEAR)
+            scale = min(TILE_W / img.width, TILE_H / img.height)
+            img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))),
+                             Image.BILINEAR)
         except Exception:                                     # noqa: BLE001
             img = None
-    else:
-        img = None
     if img is None:
-        img = Image.new("RGB", (int(TILE_H * 4 / 3), TILE_H), (18, 22, 30))
-        d = ImageDraw.Draw(img)
-        d.text((16, TILE_H // 2 - 8), "waiting for %s" % label, fill=(140, 150, 165))
-    out = Image.new("RGB", (img.width, TILE_H + LABEL_H), (11, 18, 32))
-    out.paste(img, (0, LABEL_H))
+        d = ImageDraw.Draw(out)
+        d.text((16, LABEL_H + TILE_H // 2 - 8), "waiting for %s" % label, fill=(140, 150, 165))
+    else:
+        out.paste(img, ((TILE_W - img.width) // 2, LABEL_H + (TILE_H - img.height) // 2))
     ImageDraw.Draw(out).text((10, 7), label, fill=(232, 237, 245))
     return out
 
@@ -91,14 +97,11 @@ def tile(jpeg, label):
 def compose(left, right):
     a = tile(left, "arm 1  %s" % LEFT)
     b = tile(right, "arm 2  %s" % RIGHT)
-    # even (multiple of 4) dimensions: Ogre builds the texture from the JPEG and an odd width makes
-    # the upload fail silently, which is exactly what the RViz panel shows as "No Image"
-    w = ((a.width + b.width) + 3) // 4 * 4
-    h = (a.height + 3) // 4 * 4
-    canvas = Image.new("RGB", (w, h), (11, 18, 32))
+    canvas = Image.new("RGB", (TILE_W * 2, TILE_H + LABEL_H), (11, 18, 32))
     canvas.paste(a, (0, 0))
-    canvas.paste(b, (a.width, 0))
-    ImageDraw.Draw(canvas).line([(a.width, 0), (a.width, a.height)], fill=(38, 48, 66), width=2)
+    canvas.paste(b, (TILE_W, 0))
+    ImageDraw.Draw(canvas).line([(TILE_W, 0), (TILE_W, canvas.height)],
+                                fill=(38, 48, 66), width=2)
     buf = io.BytesIO()
     canvas.save(buf, format="JPEG", quality=80)
     return buf.getvalue()

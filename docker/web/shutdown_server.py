@@ -26,7 +26,7 @@ RVIZ_CMD = ("source /opt/ros/humble/install/setup.bash 2>/dev/null; "
 # RViz draws at most two compressed-image panels on this board, and there are three camera views
 # with two arms: the two jaw cameras are composed into one frame (wrist_pair.py) while RViz runs.
 PAIR_CMD = ("source /opt/ros/humble/install/setup.bash 2>/dev/null; "
-            "exec python3 /srv/web/wrist_pair.py")
+            "exec python3 /srv/web/wrist_pair.py >> /tmp/wrist_pair.log 2>&1")
 _rviz_lock = threading.Lock()
 
 
