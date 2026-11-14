@@ -123,14 +123,36 @@ def ingest(jpg):
 
 
 # --------------------------------------------------------------------------- sources
+_CTX = None
+_CTX_LOCK = threading.Lock()
+
+
+def ros_context():
+    """One rclpy context for the whole process.
+
+    Humble raises `Context.init() must only be called once`, so the context is created the first
+    time the tab starts measuring and is never shut down again: switching cameras destroys the node
+    and builds a new one on the same context. Shutting rclpy down here would poison the process and
+    the second camera would never publish a frame (that was the "the Arm 1 / Arm 2 buttons do
+    nothing" bug).
+    """
+    global _CTX
+    with _CTX_LOCK:
+        if _CTX is None:
+            import rclpy
+            rclpy.init()
+            _CTX = rclpy.get_default_context()
+        return _CTX
+
+
 def ros_worker(arm):
     """Subscribe to the selected wrist camera until asked to stop. This is the real source."""
     import rclpy
     from rclpy.node import Node
     from sensor_msgs.msg import CompressedImage
 
-    rclpy.init()
-    node = Node("wristcam_focus")
+    ctx = ros_context()
+    node = Node("wristcam_focus", context=ctx)
     node.create_subscription(CompressedImage, ARMS[arm],
                              lambda msg: ingest(bytes(msg.data)), 5)
     with lock:
@@ -147,7 +169,6 @@ def ros_worker(arm):
             rclpy.spin_once(node, timeout_sec=0.2)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
 
 
 def demo_worker():
@@ -206,11 +227,14 @@ def stop():
         state["run"] = False
         worker = state["worker"]
         state["worker"] = None
+    # Join here, bounded: the loop checks the flag within a spin_once timeout (0.2 s). Waiting
+    # matters because a camera switch is stop() + start(), and two live nodes would both feed the
+    # frame buffer — the picture would flicker between the two arms.
+    if worker is not None and worker.is_alive() and worker is not threading.current_thread():
+        worker.join(timeout=3.0)
+    with lock:
         state["frame"] = b""
         state["source"] = "-"
-    # the ROS worker notices within a spin_once timeout; do not block the HTTP thread
-    if worker is not None and worker.is_alive():
-        threading.Thread(target=worker.join, kwargs={"timeout": 3.0}, daemon=True).start()
     return True
 
 
@@ -281,16 +305,16 @@ PAGE = """<!doctype html><meta charset=utf-8><title>wristcam focus test</title>
  header{padding:8px 12px;background:#0b1220;border-bottom:1px solid #1b2735}
  b{color:#3fb950}
  .wrap{display:flex;height:calc(100vh - 44px)}
- .view{flex:1;min-width:0;background:#000;display:grid;place-items:center}
- img{max-width:100%%;max-height:100%%}
+ .view{flex:1;min-width:0;background:#000;display:grid;place-items:center;overflow:hidden}
+ img{max-width:100%;max-height:100%;object-fit:contain}
  aside{width:320px;border-left:1px solid #1b2735;padding:12px;overflow:auto}
  .score{font-size:44px;color:#e6edf3;line-height:1}
  .lbl{color:#8d99ad;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
  .row{margin:14px 0}
- button{width:100%%;margin:4px 0;padding:8px;background:#16202e;color:#c9d3e0;
+ button{width:100%;margin:4px 0;padding:8px;background:#16202e;color:#c9d3e0;
    border:1px solid #26364a;border-radius:5px;font:inherit;cursor:pointer}
  button:hover{border-color:#3fb950;color:#fff}
- table{width:100%%;border-collapse:collapse;margin-top:6px;font-size:12px}
+ table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
  td{padding:3px 4px;border-bottom:1px solid #1b2735}
  .hint{color:#8d99ad;font-size:11.5px;margin-top:10px}
  .off{color:#c0392b}
