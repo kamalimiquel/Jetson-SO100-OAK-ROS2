@@ -931,6 +931,11 @@ cd mujoco_menagerie && git sparse-checkout set robotstudio_so101 && cd ..
 .\.venv312\Scripts\python.exe windows\mujoco_twin.py D:\10_Repos\Robotics\mujoco_menagerie\robotstudio_so101\scene_two_arms.xml --both-arms
 ```
 
+![The twin on the operator PC](docs/twin-two-arms-live.png)
+
+*The twin on the operator PC, with `--both-arms`: one scene, both SO-101s, each following its own robot
+over rosbridge. The arms are in different poses because the two real arms are — that is the check.*
+
 **Those paths are this cell's, not a requirement**: `D:\10_Repos\Robotics\mujoco_menagerie` is wherever
 the Menagerie clone lives and `Zenoh_Bridge` is wherever this repository was cloned — substitute your own
 install directories. Same for `.\.venv312\Scripts\python.exe`: it is only the venv that has `mujoco` and
