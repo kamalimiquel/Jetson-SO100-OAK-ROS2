@@ -20,8 +20,13 @@ Modes (same behaviour as the C++ client in this folder):
   record / replay       X starts/stops recording the sent targets, B short
                         replays.
 
-Two-arm switch (Plan Phase 5):
-  - hold A for 5 s to switch teleop from arm 1 to arm 2 and back; it fires once
+Torque and the two-arm switch:
+  - hold A for 5 s to energise / release the ACTIVE arm. Arming first re-seeds the
+    targets from the arm's real pose, so the servos take hold exactly where the arm
+    is — never at an old value from the last command or a replay;
+  - rumble: two short buzzes = armed, one = released, a long one = the arm was not
+    answering and nothing changed;
+  - hold Y for 5 s to switch teleop from arm 1 to arm 2 and back; it fires once
     at the 5 s mark (not on release) and needs a release before the next switch;
   - the switch is NOT blind: it asks the new arm's /joint_states first and, if it
     has not answered within SWITCH_CONFIRM seconds, refuses (long rumble) and stays;
@@ -29,9 +34,10 @@ Two-arm switch (Plan Phase 5):
     the new arm's real pose (so there is no jump), clamps the first delta and
     resumes on the new topic;
   - rumble: one short buzz = switched to arm 1, two = arm 2, a long one = refused;
-  - torque is PER ARM: switching does not energise anything. If the newly selected
-    arm has torque off, the client stops publishing and says so once per state
-    (the torque proxies are :8092 for arm 1 and :8095 for arm 2).
+  - torque is PER ARM: switching does not energise anything, and it never moves the
+    arm you leave. If the newly selected arm has torque off, the client stops
+    publishing and says so once per state (the torque proxies are :8092 for arm 1
+    and :8095 for arm 2).
 
 Safety:
   - nothing is published until the active arm's /joint_states has been received
@@ -58,8 +64,9 @@ STEP_MAX = 1.0                  # deg per tick at full stick (joint-step) = 50 d
 FEEL_MAX = 0.5                  # deg per tick at full stick (cartesian-feel) = 25 deg/s
 GRIP_RATE = 1.0                 # gripper % per tick = 50 %/s
 DEADZONE = 0.15
-HOLD_TORQUE = 5.0               # hold B this long to switch the servos on/off
-HOLD_SWITCH = 5.0               # hold A this long to switch arms (Plan Phase 5)
+HOLD_TORQUE = 5.0               # hold A this long to energise / release the active arm
+HOLD_SWITCH = 5.0               # hold Y this long to switch arms (Plan Phase 5)
+TAP_REPLAY = 0.8                # s: B shorter than this replays, longer does nothing
 SWITCH_CONFIRM = 1.0            # s the far arm must have answered within, or the switch is refused
 IDLE_STOP = 0.5                 # s without input -> stop publishing
 SEED_TIMEOUT = 20.0             # s to wait for the active arm's first /joint_states
@@ -92,6 +99,7 @@ class Teleop:
     def __init__(self, host, port, scale=1.0):
         self.scale = scale
         self.active = 0
+        self.host = host            # kept here: roslibpy 2.x drops .host from the Ros object
         self.client = roslibpy.Ros(host=host, port=port)
         try:
             self.client.run()          # non-blocking: starts the event loop in its own thread
@@ -128,6 +136,8 @@ class Teleop:
         self.b_long_fired = False
         self.a_down_at = None
         self.a_long_fired = False
+        self.y_down_at = None
+        self.y_long_fired = False
 
         self.prev = {}
 
@@ -218,8 +228,7 @@ class Teleop:
     def switch_arm(self):
         """A held 5 s: move teleop to the other arm, with a feedback check."""
         new = 1 - self.active
-        now = time.time()
-        if not self.arm_state_seen[new] or now - self.arm_state_t[new] > SWITCH_CONFIRM:
+        if not self.fresh_pose(new):
             print(f"{ARMS[new]['name']} not answering — switch REFUSED, staying on {ARMS[self.active]['name']}")
             self.rumble("long")
             return
@@ -233,30 +242,37 @@ class Teleop:
         print(f"-> teleop on {ARMS[new]['name']} ({ARMS[new]['states']})")
         self.rumble("short", count=new + 1)             # 1 buzz arm1, 2 arm2
 
-    def handle_a(self):
-        """A short = nothing; held 5 s = switch arms, firing once, needs a release."""
-        now = time.time()
-        down = self._button(0)              # A
-        if down and self.a_down_at is None:
-            self.a_down_at = now
-            self.a_long_fired = False
-        elif down and not self.a_long_fired and now - self.a_down_at >= HOLD_SWITCH:
-            self.a_long_fired = True
-            print(f"A held {HOLD_SWITCH:.0f} s")
-            self.switch_arm()
-        elif not down and self.a_down_at is not None:
-            self.a_down_at = None           # short tap: nothing; a release also re-arms A
+    # ---- torque (A) and arm switch (Y)
+    def fresh_pose(self, arm):
+        """True when that arm published /joint_states recently enough to be trusted."""
+        return self.arm_state_seen[arm] and (time.time() - self.arm_state_t[arm]) <= SWITCH_CONFIRM
 
-    def torque_url(self):
-        return f"http://{self.client.host}:{ARMS[self.active]['torque']}/torque"
+    def torque_url(self, arm=None):
+        return f"http://{self.host}:{ARMS[self.active if arm is None else arm]['torque']}/torque"
+
+    @staticmethod
+    def _opener():
+        """Bypass any system proxy: one on Windows turns these LAN calls into timeouts."""
+        return urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def read_arm_torque(self, arm):
-        """Bool/None for one arm's torque via its LAN proxy (loopback port differs per arm)."""
+        """Bool/None for one arm's torque via its LAN proxy (the port differs per arm)."""
         try:
-            url = f"http://{self.client.host}:{ARMS[arm]['torque']}/torque"
-            with urllib.request.urlopen(url, timeout=2.5) as r:
+            with self._opener().open(self.torque_url(arm), timeout=5) as r:
                 return bool(json.loads(r.read() or b"{}").get("torque"))
         except Exception:  # noqa: BLE001
+            return None
+
+    def write_arm_torque(self, arm, want):
+        """Set an arm's torque; returns what the server reports, or None on failure."""
+        try:
+            req = urllib.request.Request(
+                self.torque_url(arm), data=json.dumps({"on": want}).encode(), method="POST",
+                headers={"Content-Type": "application/json"})
+            with self._opener().open(req, timeout=8) as r:
+                return bool(json.loads(r.read() or b"{}").get("torque"))
+        except Exception as exc:  # noqa: BLE001
+            print(f"torque: POST failed ({exc})")
             return None
 
     def torque_gate(self):
@@ -270,44 +286,89 @@ class Teleop:
         if on is None:
             return
         self.torque_on[arm] = on
-        news = "ENABLED" if on else "OFF"
-        print(f"{ARMS[arm]['name']} torque: {news}" +
-              ("" if on else " — press 'Arm torque' in the web page to energise it"))
+        print(f"{ARMS[arm]['name']} torque: {'ENABLED' if on else 'OFF'}" +
+              ("" if on else " — hold A 5 s to arm it"))
+
+    def handle_a(self):
+        """A held 5 s = arm / release the ACTIVE arm. Two buzzes armed, one released."""
+        now = time.time()
+        down = self._button(0)              # A
+        if down and self.a_down_at is None:
+            self.a_down_at = now
+            self.a_long_fired = False
+        elif down and not self.a_long_fired and now - self.a_down_at >= HOLD_TORQUE:
+            self.a_long_fired = True
+            print(f"A held {HOLD_TORQUE:.0f} s")
+            self.toggle_torque()
+        elif not down and self.a_down_at is not None:
+            self.a_down_at = None           # a tap does nothing; releasing re-arms A
 
     def toggle_torque(self):
-        """Read the ACTIVE arm's real state, invert it — never assume."""
+        """Arm or release the active arm WITHOUT moving it, and say which with the rumble."""
         arm = self.active
         on = self.read_arm_torque(arm)
         if on is None:
-            print("torque: cannot read state")
+            print(f"{ARMS[arm]['name']}: torque state unreadable (proxy :{ARMS[arm]['torque']}) "
+                  "— nothing changed")
+            self.rumble("long")
             return
-        want = not on
-        try:
-            req = urllib.request.Request(
-                self.torque_url(), data=json.dumps({"on": want}).encode(), method="POST",
-                headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=6) as r:
-                state = bool(json.loads(r.read() or b"{}").get("torque"))
-            self.torque_on[arm] = state
-            print(f"{ARMS[arm]['name']} torque:", "ENABLED" if state else "DISABLED")
-        except Exception as exc:  # noqa: BLE001
-            print(f"torque: toggle failed ({exc})")
+
+        if on:                                          # ---- release
+            state = self.write_arm_torque(arm, False)
+            if state is None:
+                self.rumble("long")
+                return
+            self.torque_on[arm] = False
+            self.torque_warned[arm] = False
+            if self.fresh_pose(arm):
+                self.targets = list(self.arm_targets[arm])
+            print(f"{ARMS[arm]['name']} torque: RELEASED")
+            self.rumble("short", count=1)               # one buzz = loose
+            return
+
+        # ---- arm. Hold exactly where the arm is: the targets may be stale (last command, a
+        # replay, or the other arm's pose), and sending them just after the servos go live is
+        # the jump the operator reads as "it goes back to an old value".
+        if not self.fresh_pose(arm):
+            print(f"{ARMS[arm]['name']}: no fresh pose — refusing to arm (it would jump)")
+            self.rumble("long")
+            return
+        self.targets = list(self.arm_targets[arm])
+        state = self.write_arm_torque(arm, True)
+        if state is None:
+            self.rumble("long")
+            return
+        self.torque_on[arm] = True
+        self.torque_warned[arm] = False
+        self.last_torque_check = time.time()
+        self.send()                                    # command the pose it already has
+        print(f"{ARMS[arm]['name']} torque: ARMED, holding its current pose")
+        self.rumble("short", count=2)                   # two buzzes = live
+
+    def handle_y(self):
+        """Y short = nothing; held 5 s = switch arms, firing once, needs a release."""
+        now = time.time()
+        down = self._button(3)              # Y
+        if down and self.y_down_at is None:
+            self.y_down_at = now
+            self.y_long_fired = False
+        elif down and not self.y_long_fired and now - self.y_down_at >= HOLD_SWITCH:
+            self.y_long_fired = True
+            print(f"Y held {HOLD_SWITCH:.0f} s")
+            self.switch_arm()
+        elif not down and self.y_down_at is not None:
+            self.y_down_at = None           # releasing re-arms Y
 
     def handle_b(self):
-        """B short = replay; held HOLD_TORQUE = torque on/off for the ACTIVE arm."""
+        """B short = replay what was recorded; a longer press does nothing (A owns torque)."""
         now = time.time()
         down = self._button(1)
         if down and self.b_down_at is None:
             self.b_down_at = now
-            self.b_long_fired = False
-        elif down and not self.b_long_fired and now - self.b_down_at >= HOLD_TORQUE:
-            self.b_long_fired = True
-            print(f"B held {HOLD_TORQUE:.0f} s")
-            self.toggle_torque()
         elif not down and self.b_down_at is not None:
             held = now - self.b_down_at
             self.b_down_at = None
-            if not self.b_long_fired and held < HOLD_TORQUE and self.record:
+            if held <= TAP_REPLAY and self.record:
                 self.replaying = True
                 self.replay_i = 0
                 print(f"REPLAY of {len(self.record)} points")
@@ -317,9 +378,9 @@ class Teleop:
         pygame.init()
         pygame.joystick.init()
         clock = pygame.time.Clock()
-        print("F710 teleop — joint-step on arm 1. START=mode, X=record, B=replay/torque, Ctrl+C quits.")
-        print("  hold B 5 s = torque on/off (arm is booted torque-off)")
-        print("  hold A 5 s = switch the teleop to the other arm (Phase 5)")
+        print("F710 teleop — joint-step on arm 1. START=mode, X=record, B=replay, A=torque, Y=arm, Ctrl+C quits.")
+        print("  hold A 5 s = arm / release the active arm (2 buzzes on, 1 off)")
+        print("  hold Y 5 s = switch the teleop to the other arm (Phase 5)")
         try:
             while True:
                 pygame.event.pump()
@@ -342,6 +403,7 @@ class Teleop:
 
     def tick(self):
         self.handle_a()
+        self.handle_y()
         if self.pressed(7):        # START
             self.cartesian = not self.cartesian
             print("mode:", "cartesian-feel" if self.cartesian else "joint-step")
@@ -354,6 +416,11 @@ class Teleop:
                 print(f"RECORDING stopped — {len(self.record)} points")
         self.handle_b()
         self.torque_gate()
+
+        # Released arm: it cannot move on its own, so keep the targets glued to the real pose.
+        # Arming later then commands "stay" instead of whatever value was left in the buffer.
+        if self.torque_on[self.active] is False and self.fresh_pose(self.active):
+            self.targets = list(self.arm_targets[self.active])
 
         if self.replaying:
             if self.replay_i >= len(self.record):
@@ -423,7 +490,7 @@ class Teleop:
             if not self.torque_warned[self.active]:
                 self.torque_warned[self.active] = True
                 print(f"{ARMS[self.active]['name']}: torque off — not publishing "
-                      "(press 'Arm torque' in the web page)")
+                      "(hold A 5 s, or 'Arm torque' in the web page)")
             return
         self.torque_warned[self.active] = False
         self.pubs[self.active].publish(

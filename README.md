@@ -969,7 +969,7 @@ python windows\f710_teleop_ws.py --host 192.168.1.50
 
 The pad must be in **X mode** (switch on its back). It waits for `/joint_states`, seeds the targets at the arm's real pose and then starts publishing `/joint_targets` (degrees, 6 values).
 
-**Press `Arm torque` in the web page first** — the arm boots with torque off and `/write` refuses until the servos are energised, so the pad will look dead otherwise. Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
+**Arm the arm from the pad: hold A for 5 s** (two buzzes = live, one = released), or press `Arm torque` in the web page first. The arm boots with torque off and `/write` refuses until the servos are energised, so the pad looks dead otherwise. Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
 
 ![Logitech F710 layout](docs/f710-pad.png)
 
@@ -980,7 +980,14 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 - **joint-step** (default): D-pad L/R picks joint 0–5, left stick Y moves it, LB/RB close/open the gripper.
 - **cartesian-feel**: START toggles — left stick = pan/lift, right stick X = elbow, right stick Y = wrist_roll, **LB + right stick Y = wrist_flex**, triggers = gripper.
 - **record / replay**: X starts/stops recording the targets, B replays them.
-- **torque**: hold **B for 5 s** to switch the servos on or off, same as the red button in the web page — the state is read from the arm before flipping, so it cannot get out of sync. A short tap still replays.
+- **torque**: hold **A for 5 s** to energise or release the **active** arm — the state is read from the arm before flipping, so it cannot get out of sync. **Two short buzzes when it arms, one when it releases**, and a long one if the arm's state cannot be read (nothing changes then).
+- **switch arms**: hold **Y for 5 s**; one buzz on arm 1, two on arm 2.
+
+**Arming and switching never move the arm.** Arming first copies the arm's real pose into the
+targets and publishes exactly that, and while an arm is released its targets keep following its real
+pose — so the servos take hold where the arm is, not where it was three commands ago (which is what
+an old buffer feels like: the arm snapping back to a pose you left). The switch does the same with the
+new arm. Both refuse, with a long buzz, if that arm has not published in the last second.
 
 #### joint-step, the default mode
 
@@ -1017,6 +1024,9 @@ Two things about the client that are easy to get wrong:
 - **`roslibpy` 2.x has no `run_once()`.** `Ros.run()` is the non-blocking one — it starts the event loop on its own
   thread and returns — so callbacks land while the main loop sleeps. Calling a pump that does not exist is what
   crashed the client on its first run (`AttributeError: 'Ros' object has no attribute 'run_once'`).
+- **`roslibpy` 2.x has no `Ros.host` either.** The torque calls built their URL from `self.client.host`, which
+  raised inside a bare `except` and surfaced as `torque: cannot read state` with both proxies healthy — the
+  client now keeps the address it was given.
 - **The wait for the first state has a timeout** (20 s, then a clear message naming the missing topic and the
   container to check). Waiting forever looks like a hang when the real problem is an arm that never came up.
 
@@ -1026,9 +1036,10 @@ The two-arm switch can be tested **without a pad**, by faking the button against
 uv run --with pygame --with roslibpy python tools/test_two_arm_switch.py --host 192.168.1.185
 ```
 
-It checks six rules (starts on arm 1, a tap does nothing, 5 s switches, no double fire without release, a
-second hold switches back, and a silent arm is refused) and exits 0 only when all pass. Measured 2026-11-14: all
-six checks pass; over WiFi the same test is flaky because the stream stalls — see §9.4.
+It fakes the two torque HTTP calls (so the real arm is never energised) and checks eighteen things: the switch
+rules above, and on the torque side two buzzes when arming, one when releasing, **the first published target being
+the arm's real pose even when the buffer held an old command**, and a stale pose refusing to arm. Measured
+2026-11-14: all eighteen pass. Over WiFi the same test is flaky because the stream stalls — see §9.4.
 
 **If rosbridge stops delivering**: it logs `Client connected` and `Subscribed to /joint_states` and then sends
 nothing, while `ros2 topic hz` inside the arm container still shows 25 Hz. That is stale DDS shared memory after
