@@ -31,10 +31,33 @@ LO = [-170.0, -170.0, -170.0, -170.0, -170.0, 0.0]
 HI = [170.0, 170.0, 170.0, 170.0, 170.0, 100.0]
 
 
+def connect_with_retry(arm, tries=15, delay=2.0):
+    """Connect, and survive the glitches right after the board powers up.
+
+    A checksum error on one motor (`Failed to enable torque ... Checksum error`) kills
+    `arm.connect()` outright — and it is exactly what happens when the servos come up
+    out of an abrupt power cut, mid-enumeration. One try means the arm stays dead and
+    silent for the rest of the boot while `docker ps` still says "Up", which is how a
+    restart looked like a crashed cell.
+    """
+    import time
+
+    for attempt in range(1, tries + 1):
+        try:
+            arm.connect()
+            return
+        except Exception as exc:  # noqa: BLE001
+            if attempt == tries:
+                raise
+            print(f"[joint_server] connect failed (attempt {attempt}/{tries}): {exc} — retrying in {delay:.0f}s",
+                  flush=True)
+            time.sleep(delay)
+
+
 def main() -> None:
     print(f"[joint_server] connecting SO100Follower id={ARM_ID} port={SERIAL}", flush=True)
     arm = SO100Follower(SO100FollowerConfig(port=SERIAL, id=ARM_ID))
-    arm.connect()  # calibrate=True by default; raises if the calib file is missing
+    connect_with_retry(arm)  # calibrate=True by default; raises if the calib file is missing
     bus = arm.bus
     names = list(bus.motors.keys())
     # Boot state is ALWAYS torque off: the arm must be free to move by hand until the
