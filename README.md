@@ -983,7 +983,14 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 - **torque**: hold **B for 5 s** to energise or release the **active** arm — the state is read from the arm before flipping, so it cannot get out of sync. A short tap of B still replays.
   **Arming reads the joints, energises, waits for the first reading with torque on and commands exactly
   that**, so the servos take hold where the arm stands and never snap to an old command. The log prints
-  the vector read before and after (`drift 0.0°` when all is well). **Two buzzes, three seconds apart,
+  the vector read before and after (`drift 0.0°` when all is well).
+
+  The jump itself was **server-side**, not in the client: a servo keeps its own `Goal_Position`, so
+  `enable_torque()` alone made it snap back to the last command it had been given — a pose from before
+  the torque was removed. `lerobot_joint_server.py` now writes the **present** positions as goals
+  (before enabling, and once more right after), so "arm" means "stay where you are": measured 0.00° of
+  drift on both arms with nobody touching them, and the position used is the one the arm is in with
+  torque off, not the one it had when it was released. **Two buzzes, one second apart,
   mean armed; one means released**; a long buzz means the pose was stale and nothing was armed.
 - **switch arms**: hold **A for 5 s**. The switch is **silent** — no buzz on A at all, neither on
   success nor on refusal (the log says which, and a refused switch keeps the previous arm).

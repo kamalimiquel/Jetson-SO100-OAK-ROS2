@@ -103,7 +103,20 @@ def main() -> None:
                     length = int(self.headers.get("Content-Length", 0))
                     on = bool(json.loads(self.rfile.read(length) or b"{}").get("on"))
                     if on:
+                        # Freeze the arm where it IS. A servo keeps its own Goal_Position, so
+                        # `enable_torque()` alone makes it snap back to the last command it was
+                        # given — the jump seen when arming, and the reason the arm went to a
+                        # pose from *before* the torque was removed. Writing the present
+                        # positions as goals first (torque still off) makes "arm" mean "stay".
+                        present = {n: float(bus.read("Present_Position", n)) for n in names}
+                        bus.sync_write("Goal_Position", present)
                         bus.enable_torque()
+                        # Some Feetech firmwares ignore goal writes while torque is off and hold
+                        # the OLD goal until the first packet after enabling; write the same
+                        # values again with torque on, so the snap (if any) lasts one packet.
+                        bus.sync_write("Goal_Position", present)
+                        print("[joint_server] goals seeded from present positions: "
+                              + ", ".join(f"{n}={present[n]:.1f}" for n in names), flush=True)
                     else:
                         bus.disable_torque()
                     torque_on = on
