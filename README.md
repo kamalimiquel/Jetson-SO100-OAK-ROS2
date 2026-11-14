@@ -923,7 +923,8 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/google-deepmi
 cd mujoco_menagerie && git sparse-checkout set robotstudio_so101 && cd ..
 ```
 
-`--check` compiles the result and prints the measured gap; it must read the requested 0.300 m. Then:
+`--check` compiles the generated scene and prints the measured gap, which must read the requested
+0.300 m. From the repository root (the folder holding `windows\` and `tools\`):
 
 ```
 .\.venv312\Scripts\python.exe tools\make_two_arm_scene.py D:\10_Repos\Robotics\mujoco_menagerie\robotstudio_so101\scene.xml --check
