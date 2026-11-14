@@ -691,8 +691,13 @@ RViz renders competes with the 3-D view for that same slow renderer: with more t
 arm silently stops being drawn (the frame counter drops to ~9 fps and the grid goes empty), and even
 with exactly two it crawls at 2 fps. So the depth and confidence maps live in the Stereo tab — four
 cheap, labelled panels on one plain-MJPEG page with no renderer cost — and RViz keeps only two:
-the scene colour camera and the **wrist camera**. If one of them shows `No Image`, it is the same
-contention; restarting RViz usually clears it.
+the scene colour camera and one **Wrist cameras** panel. With a second arm there are three camera
+views for those two slots, so `docker/web/wrist_pair.py` composes both jaw cameras into one image
+(arm 1 on the left, arm 2 on the right, each labelled with its topic) and publishes it on
+`/gripper/pair/compressed`; `:8099` starts and stops it together with RViz, so nothing decodes
+frames while the tab is closed. If a panel shows `No Image`, it is either this contention —
+restarting RViz usually clears it — or an image whose texture width is odd: Ogre's upload fails
+silently at that point, which is why the composer pads its canvas to a multiple of 4.
 
 **RViz only runs while its tab is on screen.** It is the most expensive thing in the cell:
 software GL (`LIBGL_ALWAYS_SOFTWARE=1`, there is no GPU path for Qt here) keeps **~155 % of a
