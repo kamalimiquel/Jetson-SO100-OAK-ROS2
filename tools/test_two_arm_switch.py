@@ -192,6 +192,15 @@ def main():
     check("refuses to arm without a fresh pose", fake["on"], False)
     check("long buzz when refusing", buzzes, [("long", 1)])
 
+    print("== X prints the pose every time")
+    said.clear()
+    t._button = lambda b: b == 2          # X held alone
+    t.tick()
+    t.tick()                               # still held: one print per press, not per tick
+    check("X prints the joints, once per press",
+          sum(1 for x in said if "joints now" in x), 1)
+    t._button = lambda b: buttons["a"] if b == 0 else (buttons["b"] if b == 1 else False)
+
     for p in t.pubs:
         p.unadvertise()
     t.client.terminate()

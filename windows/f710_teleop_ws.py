@@ -542,6 +542,17 @@ class Teleop:
             self.cartesian = not self.cartesian
             print("mode:", "cartesian-feel" if self.cartesian else "joint-step")
         if self.pressed(2):        # X
+            # A free reading worth printing every single time: with the torque off this is the
+            # pose the operator left the arm in, and it is the reference the arming will be
+            # compared against. No dedupe here either.
+            arm = self.active
+            if self.fresh_pose(arm):
+                state = {True: "ON", False: "OFF", None: "unknown"}[self.torque_on[arm]]
+                print(f"{ARMS[arm]['name']} joints now (torque {state}): "
+                      f"{fmt(self.arm_targets[arm])}")
+            else:
+                print(f"{ARMS[arm]['name']} joints now: no fresh pose "
+                      f"(last {ARMS[arm]['states']} older than {SWITCH_CONFIRM:.0f} s)")
             self.recording = not self.recording
             if self.recording:
                 self.record = []

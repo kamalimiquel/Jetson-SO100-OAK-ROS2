@@ -982,7 +982,9 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 
 - **joint-step** (default): D-pad L/R picks joint 0–5, left stick Y moves it, LB/RB close/open the gripper.
 - **cartesian-feel**: START toggles — left stick = pan/lift, right stick X = elbow, right stick Y = wrist_roll, **LB + right stick Y = wrist_flex**, triggers = gripper.
-- **record / replay**: X starts/stops recording the targets, B replays them.
+- **record / replay**: X starts/stops recording the targets, B replays them. **Every press of X also
+  prints the six joints as they are right now, with the torque state** (`joints now (torque OFF): …`) —
+  the free reading that proves where the arm actually is before it is armed.
 - **torque**: hold **B for 5 s** to energise or release the **active** arm — the state is read from the arm before flipping, so it cannot get out of sync. A short tap of B still replays.
   **Arming reads the joints, energises, waits for the first reading with torque on and commands exactly
   that**, so the servos take hold where the arm stands and never snap to an old command. The log prints
