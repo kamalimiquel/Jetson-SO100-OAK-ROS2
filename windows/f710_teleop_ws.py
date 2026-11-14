@@ -17,11 +17,14 @@ Modes (same behaviour as the C++ client in this folder):
   cartesian-feel        START toggles: left stick = pan/lift, right stick X =
                         elbow, right stick Y = wrist_roll, LB+right stick Y =
                         wrist_flex, triggers = gripper.
-  record / replay       X starts/stops recording the sent targets, B short
-                        replays.
+  record / replay       pad X starts/stops recording the sent targets, pad Y
+                        replays them.
+  keyboard              X prints the six joints as they are now, with the torque
+                        state; Q (or Esc) quits. The small window is what lets SDL
+                        deliver those keys at all.
 
 Torque and the two-arm switch:
-  - hold B for 5 s to energise / release the ACTIVE arm (a short tap still replays).
+  - hold B for 5 s to energise / release the ACTIVE arm (a tap does nothing).
     Arming first re-seeds the targets from the arm's real pose, so the servos take
     hold exactly where the arm is — never at an old value from the last command;
   - rumble: two short buzzes = armed, one = released, a long one = the arm was not
@@ -66,7 +69,6 @@ GRIP_RATE = 1.0                 # gripper % per tick = 50 %/s
 DEADZONE = 0.15
 HOLD_TORQUE = 5.0               # hold A this long to energise / release the active arm
 HOLD_SWITCH = 5.0               # hold Y this long to switch arms (Plan Phase 5)
-TAP_REPLAY = 0.8                # s: B shorter than this replays, longer does nothing
 ARM_BUZZ_GAP = 1.0              # s between the two buzzes that mean "armed"
 ARM_SETTLE = 1.0                # s to wait for a reading with torque on before commanding it
 ARM_REPORT = 3.0                # s after arming at which the joints are read and printed again
@@ -247,6 +249,21 @@ class Teleop:
             return self.joystick.get_hat(0)[1]
         up, down = self._button(11), self._button(12)
         return (1 if up else 0) - (1 if down else 0)
+
+    def print_pose(self, why=""):
+        """Print the six joints as they are right now, with the torque state, every single time.
+
+        With the torque off this is the pose the arm was left in — the reference the arming is
+        compared against — so it goes out with plain print(), never deduped.
+        """
+        arm = self.active
+        label = f"{ARMS[arm]['name']}" + (f" [{why}]" if why else "")
+        if not self.fresh_pose(arm):
+            print(f"{label} joints now: no fresh pose "
+                  f"(last {ARMS[arm]['states']} older than {SWITCH_CONFIRM:.0f} s)")
+            return
+        state = {True: "ON", False: "OFF", None: "unknown"}[self.torque_on[arm]]
+        print(f"{label} joints now (torque {state}): {fmt(self.arm_targets[arm])}")
 
     def say(self, text, key=None):
         """Print only when the message actually changes.
@@ -497,8 +514,20 @@ class Teleop:
         self.report_phase = "on"
         self.report_input = self.last_input
 
+    def start_replay(self):
+        """Pad Y: replay what was recorded, at the tick rate it was captured with."""
+        if not self.record:
+            print("replay: nothing recorded yet (pad X starts a recording)")
+            return
+        if self.torque_on[self.active] is False:
+            print(f"replay: {ARMS[self.active]['name']} has no torque — arming it first")
+            return
+        self.replaying = True
+        self.replay_i = 0
+        print(f"REPLAY of {len(self.record)} points")
+
     def handle_b(self):
-        """B short = replay; held 5 s = torque on/off for the ACTIVE arm."""
+        """B held 5 s = torque on/off for the ACTIVE arm (a tap does nothing; Y replays)."""
         now = time.time()
         down = self._button(1)
         if down and self.b_down_at is None:
@@ -509,24 +538,36 @@ class Teleop:
             print(f"B held {HOLD_TORQUE:.0f} s")
             self.toggle_torque()
         elif not down and self.b_down_at is not None:
-            held = now - self.b_down_at
             self.b_down_at = None
-            if not self.b_long_fired and held <= TAP_REPLAY and self.record:
-                self.replaying = True
-                self.replay_i = 0
-                print(f"REPLAY of {len(self.record)} points")
 
     # ---- main loop
     def run(self):
         pygame.init()
         pygame.joystick.init()
         clock = pygame.time.Clock()
-        print("F710 teleop — joint-step on arm 1. Both arms start torque-off. START=mode, X=record, B=replay/torque, A=arm, Ctrl+C quits.")
-        print("  hold B 5 s = arm / release the active arm (2 buzzes 3 s apart on, 1 off)")
-        print("  hold A 5 s = switch the teleop to the other arm (Phase 5, silent)")
+        # A small window is the only way to read the keyboard: without a display surface SDL
+        # delivers no key events at all, and the operator asked for the keyboard X on purpose.
+        screen = None
+        try:
+            screen = pygame.display.set_mode((620, 150))
+            pygame.display.set_caption("F710 teleop — keyboard: X = print joints, Q = quit")
+        except Exception as exc:  # noqa: BLE001
+            print(f"no window ({exc}) — keyboard shortcuts disabled, the pad still works")
+        print("F710 teleop — joint-step on arm 1. Both arms start torque-off.")
+        print("  keyboard X = print the joints now (torque state included), Q / Ctrl+C = quit")
+        print("  pad X = record start/stop, pad Y = replay, START = mode, A = arm, B = torque")
         try:
             while True:
-                pygame.event.pump()
+                for ev in pygame.event.get():
+                    if ev.type == pygame.QUIT:
+                        raise KeyboardInterrupt
+                    if ev.type == pygame.KEYDOWN:
+                        if ev.key == pygame.K_x:
+                            self.print_pose("keyboard X")
+                        elif ev.key in (pygame.K_q, pygame.K_ESCAPE):
+                            raise KeyboardInterrupt
+                if screen is not None and not self.draw_status(screen):
+                    raise KeyboardInterrupt
                 if self.joystick is None and pygame.joystick.get_count() > 0:
                     self.joystick = pygame.joystick.Joystick(0)
                     self.joystick.init()
@@ -544,6 +585,29 @@ class Teleop:
             self.client.terminate()
             pygame.quit()
 
+    def draw_status(self, screen):
+        """Cheap status panel in the window: what the pad is driving and the last pose seen."""
+        try:
+            screen.fill((18, 18, 20))
+            font = pygame.font.SysFont("consolas,couriernew", 15)
+            small = pygame.font.SysFont("consolas,couriernew", 13)
+            arm = self.active
+            state = {True: "TORQUE ON", False: "TORQUE OFF", None: "torque ?"}[self.torque_on[arm]]
+            lines = [
+                (f"{ARMS[arm]['name']} · {state} · {'RECORDING' if self.recording else 'idle'}"
+                 + (f" · replay {self.replay_i}" if self.replaying else ""), font, (235, 235, 235)),
+                ("joints: " + fmt(self.arm_targets[arm]), small, (150, 220, 150)),
+                ("X = print joints   Q = quit", small, (150, 150, 160)),
+            ]
+            y = 10
+            for text, f, colour in lines:
+                screen.blit(f.render(text, True, colour), (12, y))
+                y += 22 if f is font else 20
+            pygame.display.flip()
+            return True
+        except Exception:  # noqa: BLE001 — a broken window must not stop the teleop
+            return False
+
     def tick(self):
         self.service_buzz()
         self.service_report()
@@ -551,24 +615,15 @@ class Teleop:
         if self.pressed(7):        # START
             self.cartesian = not self.cartesian
             print("mode:", "cartesian-feel" if self.cartesian else "joint-step")
-        if self.pressed(2):        # X
-            # A free reading worth printing every single time: with the torque off this is the
-            # pose the operator left the arm in, and it is the reference the arming will be
-            # compared against. No dedupe here either.
-            arm = self.active
-            if self.fresh_pose(arm):
-                state = {True: "ON", False: "OFF", None: "unknown"}[self.torque_on[arm]]
-                print(f"{ARMS[arm]['name']} joints now (torque {state}): "
-                      f"{fmt(self.arm_targets[arm])}")
-            else:
-                print(f"{ARMS[arm]['name']} joints now: no fresh pose "
-                      f"(last {ARMS[arm]['states']} older than {SWITCH_CONFIRM:.0f} s)")
+        if self.pressed(2):        # pad X
             self.recording = not self.recording
             if self.recording:
                 self.record = []
                 print("RECORDING started")
             else:
                 print(f"RECORDING stopped — {len(self.record)} points")
+        if self.pressed(3):        # pad Y
+            self.start_replay()
         self.handle_b()
         self.torque_gate()
 

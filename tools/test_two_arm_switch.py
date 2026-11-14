@@ -206,14 +206,26 @@ def main():
     check("refuses to arm without a fresh pose", fake["on"], False)
     check("long buzz when refusing", buzzes, [("long", 1)])
 
-    print("== X prints the pose every time")
+    print("== keyboard X prints, pad X records, pad Y replays")
+    fake["on"] = True
+    t.torque_on[t.active] = True
+    t.arm_state_t[t.active] = time.time()     # a fresh reading, or print_pose says so instead
     said.clear()
-    t._button = lambda b: b == 2          # X held alone
-    t.tick()
-    t.tick()                               # still held: one print per press, not per tick
-    check("X prints the joints, once per press",
-          sum(1 for x in said if "joints now" in x), 1)
-    t._button = lambda b: buttons["a"] if b == 0 else (buttons["b"] if b == 1 else False)
+    t.print_pose("keyboard X")
+    check("keyboard X prints the joints with the torque state",
+          any("joints now (torque ON)" in x and "keyboard X" in x for x in said), True)
+    said.clear()
+    t._button = lambda b: b == 2          # pad X
+    t.prev.clear(); t.tick()
+    check("pad X starts a recording", t.recording, True)
+    check("and says so", any("RECORDING started" in x for x in said), True)
+    t.record = [[1.0] * 6, [2.0] * 6]
+    t._button = lambda b: b == 3          # pad Y
+    t.prev.clear(); t.tick()
+    check("pad Y starts the replay", t.replaying, True)
+    t.replaying = False
+    t.recording = False
+    t._button = lambda b: False
 
     for p in t.pubs:
         p.unadvertise()
