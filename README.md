@@ -285,7 +285,21 @@ arm on the pad) — is in [docs/two-arm-integration-plan.md](docs/two-arm-integr
 - SSH to the Xavier; the deploy directory is `~/so100` and it is **not** a git clone: it is a
   *copy* pushed from the PC with `rsync` ([§6.1](#61-deploying-and-creating-the-containers)), so there is no `.git` folder there and
   `git pull` on the Xavier fails — you re-run the rsync instead.
-- The arm's port is `root:dialout` 0660, so your user must be in **`dialout`**.
+- **The arm's serial port is a device node with Unix permissions**, and those decide who can open it.
+  Out of the box, udev creates `/dev/ttyACM*` as **`root:dialout`, mode `0660`** — `rw` for the owner
+  and for the group, nothing for anyone else — so a user outside `dialout` gets `Permission denied`
+  the moment the SDK opens the port. Check and fix:
+
+  ```
+  ls -l /dev/ttyACM0      # crw-rw---- root dialout      -> 0660
+  id -nG | grep dialout   # is your user in the group?
+  sudo usermod -aG dialout "$USER"   # then log out and back in: a running shell keeps the old groups
+  ```
+
+  **This cell departs from that default on purpose**: `81-so100.rules` sets **`MODE="0666"`** on the
+  CH9102 tty nodes, so both arms' ports are read/write for every user and the group stops mattering —
+  that is why containers can open the device as root and the operator can poke it from the host
+  without a `sudo`. `maju` is in `dialout` anyway, so dropping the rule would not lock anybody out.
 - The OAK needs its udev rule ([§5](#5-camera-bring-up--depthai-on-the-xavier), step 1) — without it a device that enumerates in bootloader
   state cannot be opened.
 - A wired LAN is best. The page derives the host from its own URL, so DHCP is fine; the examples
@@ -531,9 +545,11 @@ Note: `uv venv` creates no `pip` binary — always install through `uv pip insta
 **4. Serial access to the arms**
 
 Each arm's bus adapter is a CH9102 (VID `1a86`) and enumerates as `/dev/ttyACM*`; with **two** adapters
-the number is not stable, so the rules in [§3.5](#35-a-second-arm--what-usb-can-and-cannot-take) pin
-`/dev/arm1_tty` and `/dev/arm2_tty` by serial. Default udev rules create `ttyACM*` as `root:dialout`
-mode 0660 — the `dialout` group is enough for the bus itself; the symlinks are what containers mount.
+the number is not stable, so `81-so100-arm.rules` pins `/dev/arm1_tty` and `/dev/arm2_tty` by serial
+([§3.5](#35-a-second-arm--what-usb-can-and-cannot-take)). Permissions come from a second rule,
+`81-so100.rules`, which sets **`MODE="0666"`** on those nodes; without it udev leaves them
+`root:dialout 0660` and only members of `dialout` can open them ([§3.3](#33-access-groups-network)).
+The symlinks are what the containers mount.
 
 **5. Verify the bus**
 
