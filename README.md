@@ -980,8 +980,17 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 - **joint-step** (default): D-pad L/R picks joint 0–5, left stick Y moves it, LB/RB close/open the gripper.
 - **cartesian-feel**: START toggles — left stick = pan/lift, right stick X = elbow, right stick Y = wrist_roll, **LB + right stick Y = wrist_flex**, triggers = gripper.
 - **record / replay**: X starts/stops recording the targets, B replays them.
-- **torque**: hold **B for 5 s** to energise or release the **active** arm — the state is read from the arm before flipping, so it cannot get out of sync. **Two short buzzes when it arms, one when it releases**, and a long one if the arm's state cannot be read (nothing changes then). A short tap of B still replays.
-- **switch arms**: hold **A for 5 s**; one buzz on arm 1, two on arm 2.
+- **torque**: hold **B for 5 s** to energise or release the **active** arm — the state is read from the arm before flipping, so it cannot get out of sync. A short tap of B still replays.
+  **Arming reads the joints, energises, waits for the first reading with torque on and commands exactly
+  that**, so the servos take hold where the arm stands and never snap to an old command. The log prints
+  the vector read before and after (`drift 0.0°` when all is well). **Two buzzes, three seconds apart,
+  mean armed; one means released**; a long buzz means the pose was stale and nothing was armed.
+- **switch arms**: hold **A for 5 s**. The switch is **silent** — no buzz on A at all, neither on
+  success nor on refusal (the log says which, and a refused switch keeps the previous arm).
+
+**Both arms start torque-off every time the client starts**, whatever they were holding before: the
+client writes torque off to both proxies during start-up and prints the result per arm. Nothing can go
+stiff until the operator asks for it.
 
 If the pad does not vibrate at all, check it with `python windows\f710_teleop_ws.py --rumble-test`: it prints
 the pad's name and guid, whether pygame exposes a rumble API, and whether the driver accepted each buzz.

@@ -67,6 +67,8 @@ DEADZONE = 0.15
 HOLD_TORQUE = 5.0               # hold A this long to energise / release the active arm
 HOLD_SWITCH = 5.0               # hold Y this long to switch arms (Plan Phase 5)
 TAP_REPLAY = 0.8                # s: B shorter than this replays, longer does nothing
+ARM_BUZZ_GAP = 3.0              # s between the two buzzes that mean "armed"
+ARM_SETTLE = 1.0                # s to wait for a reading with torque on before commanding it
 SWITCH_CONFIRM = 1.0            # s the far arm must have answered within, or the switch is refused
 IDLE_STOP = 0.5                 # s without input -> stop publishing
 SEED_TIMEOUT = 20.0             # s to wait for the active arm's first /joint_states
@@ -81,6 +83,11 @@ ARMS = [
     {"name": "arm 1", "targets": "/joint_targets",   "states": "/joint_states",          "torque": 8092},
     {"name": "arm 2", "targets": "/arm2/joint_targets", "states": "/arm2/joint_states",  "torque": 8095},
 ]
+
+
+def fmt(vec, nd=1):
+    """Joint vector for the log: one line, fixed width, no numpy formatting surprises."""
+    return "[" + ", ".join(f"{v:.{nd}f}" for v in vec) + "]"
 
 
 def clamp(v, lo, hi):
@@ -119,6 +126,8 @@ class Teleop:
             t = roslibpy.Topic(self.client, a["states"], "sensor_msgs/JointState")
             t.subscribe(lambda m, i=i: self.on_state(m, i))
 
+        self.state_seq = [0, 0]                           # /joint_states messages seen per arm
+        self.buzz_at = None                               # pending second buzz (arming)
         self.torque_on = [None, None]                     # None=unknown, True/False known
         self.last_torque_check = 0.0
         self.torque_warned = [False, False]
@@ -154,12 +163,29 @@ class Teleop:
                     f"is {ARMS[self.active]['name']}'s container up? (curl :80xx/status)")
             time.sleep(0.05)
 
+        # Every start leaves both arms loose: whatever the servos were holding, the operator
+        # decides when they go stiff. An explicit write, not an assumption about how it booted.
+        self.force_torque_off()
+
+    def force_torque_off(self):
+        """Write torque off to both arms at start-up and report what actually came back."""
+        for arm in (0, 1):
+            state = self.write_arm_torque(arm, False)
+            if state is None:
+                self.torque_on[arm] = False
+                print(f"{ARMS[arm]['name']} torque: OFF requested, proxy "
+                      f":{ARMS[arm]['torque']} unreachable")
+            else:
+                self.torque_on[arm] = state
+                print(f"{ARMS[arm]['name']} torque: {'OFF' if not state else 'COULD NOT TURN OFF'} at start")
+
     # ---- ROS callbacks
     def on_state(self, msg, arm):
         pos = msg.get("position", [])
         if len(pos) < DOF:
             return
         self.arm_state_t[arm] = time.time()
+        self.state_seq[arm] += 1
         if not self.arm_state_seen[arm]:
             self.arm_state_seen[arm] = True
             self.arm_targets[arm] = [float(p) for p in pos[:DOF]]
@@ -237,13 +263,19 @@ class Teleop:
         except Exception as exc:  # noqa: BLE001 — rumble is cosmetic, never fatal
             print(f"buzz failed: {exc}")
 
+    def service_buzz(self):
+        """Fire the pending second "armed" buzz from the main loop — a sleep(3) here would
+        freeze the teleop for three seconds, which on a live arm is not acceptable."""
+        if self.buzz_at is not None and time.time() >= self.buzz_at:
+            self.buzz_at = None
+            self.rumble("short", count=1)
+
     # ---- two-arm switch (Plan Phase 5)
     def switch_arm(self):
         """A held 5 s: move teleop to the other arm, with a feedback check."""
         new = 1 - self.active
         if not self.fresh_pose(new):
             print(f"{ARMS[new]['name']} not answering — switch REFUSED, staying on {ARMS[self.active]['name']}")
-            self.rumble("long")
             return
         # stop publishing to the old topic (we only ever publish to active), re-seed from the
         # new arm's real pose so the first command is "stay", clamp, then resume.
@@ -252,10 +284,9 @@ class Teleop:
         self.torque_on[new] = None                      # re-learn on the next gate
         self.torque_warned[new] = False
         self.last_torque_check = 0.0
-        print(f"-> teleop on {ARMS[new]['name']} ({ARMS[new]['states']})")
-        self.rumble("short", count=new + 1)             # 1 buzz arm1, 2 arm2
+        print(f"-> teleop on {ARMS[new]['name']} ({ARMS[new]['states']}) — the switch is silent by design")
 
-    # ---- torque (A) and arm switch (Y)
+    # ---- torque (B) and arm switch (A)
     def fresh_pose(self, arm):
         """True when that arm published /joint_states recently enough to be trusted."""
         return self.arm_state_seen[arm] and (time.time() - self.arm_state_t[arm]) <= SWITCH_CONFIRM
@@ -339,14 +370,15 @@ class Teleop:
             self.rumble("short", count=1)               # one buzz = loose
             return
 
-        # ---- arm. Hold exactly where the arm is: the targets may be stale (last command, a
-        # replay, or the other arm's pose), and sending them just after the servos go live is
-        # the jump the operator reads as "it goes back to an old value".
+        # ---- arm. Read the joints BEFORE energising, energise, then command exactly what the
+        # arm reads with torque on. That is the only way the servos cannot snap to an old value:
+        # the first target of a live arm is the pose it is standing in.
         if not self.fresh_pose(arm):
             print(f"{ARMS[arm]['name']}: no fresh pose — refusing to arm (it would jump)")
             self.rumble("long")
             return
-        self.targets = list(self.arm_targets[arm])
+        pose_before = list(self.arm_targets[arm])
+        seq = self.state_seq[arm]
         state = self.write_arm_torque(arm, True)
         if state is None:
             self.rumble("long")
@@ -354,9 +386,19 @@ class Teleop:
         self.torque_on[arm] = True
         self.torque_warned[arm] = False
         self.last_torque_check = time.time()
-        self.send()                                    # command the pose it already has
-        print(f"{ARMS[arm]['name']} torque: ARMED, holding its current pose")
-        self.rumble("short", count=2)                   # two buzzes = live
+
+        # Wait for the first reading taken WITH torque on, then command that one.
+        deadline = time.time() + ARM_SETTLE
+        while self.state_seq[arm] == seq and time.time() < deadline:
+            time.sleep(0.01)
+        pose_after = list(self.arm_targets[arm])
+        self.targets = pose_after
+        self.send()
+        drift = max((abs(a - b) for a, b in zip(pose_before, pose_after)), default=0.0)
+        print(f"{ARMS[arm]['name']} torque: ARMED — read {fmt(pose_before)} before, "
+              f"{fmt(pose_after)} after (drift {drift:.1f}°), commanding that")
+        self.rumble("short", count=1)                   # buzz 1 of 2 = live
+        self.buzz_at = time.time() + ARM_BUZZ_GAP       # buzz 2, three seconds later
 
     def handle_b(self):
         """B short = replay; held 5 s = torque on/off for the ACTIVE arm."""
@@ -382,9 +424,9 @@ class Teleop:
         pygame.init()
         pygame.joystick.init()
         clock = pygame.time.Clock()
-        print("F710 teleop — joint-step on arm 1. START=mode, X=record, B=replay/torque, A=arm, Ctrl+C quits.")
-        print("  hold B 5 s = arm / release the active arm (2 buzzes on, 1 off)")
-        print("  hold A 5 s = switch the teleop to the other arm (Phase 5)")
+        print("F710 teleop — joint-step on arm 1. Both arms start torque-off. START=mode, X=record, B=replay/torque, A=arm, Ctrl+C quits.")
+        print("  hold B 5 s = arm / release the active arm (2 buzzes 3 s apart on, 1 off)")
+        print("  hold A 5 s = switch the teleop to the other arm (Phase 5, silent)")
         try:
             while True:
                 pygame.event.pump()
@@ -406,6 +448,7 @@ class Teleop:
             pygame.quit()
 
     def tick(self):
+        self.service_buzz()
         self.handle_a()
         if self.pressed(7):        # START
             self.cartesian = not self.cartesian

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Headless test of the F710 client's torque (A) and arm switch (Y) — no pad needed.
+"""Headless test of the F710 client's torque (B) and arm switch (A) — no pad needed.
 
-Loads `windows/f710_teleop_ws.py`, fakes the buttons and the two HTTP calls (so nothing on the real
-arm is energised), and checks the rules the operator feels:
+Loads `windows/f710_teleop_ws.py`, fakes the buttons **and the two torque HTTP calls**, so nothing on
+the real arm is ever energised, then checks the rules the operator feels:
 
-  switch (A)  starts on arm 1 · a tap does nothing · 5 s switches · no double fire without a release
-              · a second hold switches back · a silent arm is refused
-  torque (B)  5 s arms with two buzzes and publishes the arm's REAL pose (no jump) · 5 s again
-              releases with one buzz · a stale target buffer still resolves to the real pose
-              · a stale pose refuses to arm with a long buzz
+  start-up   both arms end up torque-off without being asked
+  switch (A) starts on arm 1 · a tap does nothing · 5 s switches · no double fire without a release
+             · a second hold switches back · a silent arm is refused · **A never buzzes**
+  torque (B) 5 s arms · one buzz now and the second 3 s later · the commanded pose is the one read
+             with torque on (no jump from a stale buffer) · 5 s again releases with one buzz ·
+             a stale pose refuses to arm with a long buzz
 
     SDL_VIDEODRIVER=dummy uv run --with pygame --with roslibpy python tools/test_two_arm_switch.py
 
@@ -53,36 +54,43 @@ def main():
     sys.modules["teleop"] = mod
     spec.loader.exec_module(mod)
 
+    # Fake the torque HTTP pair at CLASS level, before construction: the client now writes
+    # torque-off to both arms while it starts, and this test must not touch the real servos.
+    fake = {"on": True}
+    real_read = mod.Teleop.read_arm_torque                    # kept for the LAN regression check
+    mod.Teleop.read_arm_torque = lambda self, arm: fake["on"]
+    mod.Teleop.write_arm_torque = lambda self, arm, want: fake.update(on=want) or want
+
     t = mod.Teleop(args.host, args.port)
 
-    # Before anything is faked: the real HTTP path must work. `roslibpy` 2.x has no `.host` on the
-    # Ros object, and reading it there turned every torque call into an exception that looked
-    # exactly like a dead proxy ("torque: cannot read state").
-    check("reads a real arm's torque over the LAN", t.read_arm_torque(0) is not None, True)
+    check("start-up leaves both arms torque-off", t.torque_on, [False, False])
+    check("start-up really wrote torque off", fake["on"], False)
+
+    # Before anything else is faked: the real HTTP path must work. `roslibpy` 2.x has no `.host`
+    # on the Ros object, and reading it there turned every torque call into an exception that
+    # looked exactly like a dead proxy ("torque: cannot read state").
+    check("reads a real arm's torque over the LAN", real_read(t, 0) is not None, True)
 
     buttons = {"a": False, "b": False}
     t._button = lambda b: buttons["a"] if b == 0 else (buttons["b"] if b == 1 else False)
 
     buzzes = []
     t.rumble = lambda kind, count=1: buzzes.append((kind, count))
-
-    # The torque HTTP pair is faked: this test must not energise the real arm.
-    fake = {"on": False}
-    t.read_arm_torque = lambda arm: fake["on"]
-    t.write_arm_torque = lambda arm, want: fake.update(on=want) or want
     sent = []
     t.send = lambda: sent.append(list(t.targets))
 
     def tick_for(seconds):
         t0 = time.time()
         while time.time() - t0 < seconds:
+            t.service_buzz()
             t.handle_a()
             t.handle_b()
             time.sleep(0.02)
 
-    # ---------------------------------------------------------------- switch, on Y
+    # ---------------------------------------------------------------- switch, on A (silent)
     print("== switch (A)")
     check("starts on arm 1", t.active, 0)
+    buzzes.clear()
     buttons["a"] = True
     tick_for(0.4)
     check("a tap does not switch", t.active, 0)
@@ -100,23 +108,30 @@ def main():
     t.arm_state_t[1] = time.time() - 10.0
     t.switch_arm()
     check("refuses a silent arm", t.active, 0)
+    check("A never buzzes", buzzes, [])
 
-    # ---------------------------------------------------------------- torque, on A
+    # ---------------------------------------------------------------- torque, on B
     print("== torque (B)")
     buzzes.clear()
     sent.clear()
+    t.arm_state_t[t.active] = time.time()          # a fresh pose for the arming read
+    t.targets = [0.0] * 6                          # stale: whatever was left in the buffer
     real = list(t.arm_targets[t.active])
-    t.targets = [0.0] * 6                      # stale: whatever was left in the buffer
     fake["on"] = False
     buttons["b"] = True
     tick_for(5.2)
     check("5 s arms the active arm", fake["on"], True)
-    check("two buzzes when arming", buzzes, [("short", 2)])
-    close("armed holding the real pose, not the stale buffer", t.targets, real)
+    check("one buzz at the arm moment", buzzes, [("short", 1)])
+    gap = (t.buzz_at or 0) - time.time()
+    check("the second buzz is scheduled ~3 s later", 2.4 < gap < 3.5, True)
+    close("commands the pose read with torque on, not the stale buffer", t.targets, real)
     check("published exactly one target", len(sent), 1)
-    close("and that target is the real pose", sent[0] if sent else [], real)
+    close("and that target is the read pose", sent[0] if sent else [], real)
+    tick_for(3.2)
+    check("the second buzz fires after 3 s", buzzes, [("short", 1), ("short", 1)])
+    check("and is not left pending", t.buzz_at, None)
     tick_for(4.0)
-    check("does not fire twice while B stays down", len(buzzes), 1)
+    check("does not fire again while B stays down", len(buzzes), 2)
 
     buttons["b"] = False
     t.handle_b()
@@ -129,10 +144,11 @@ def main():
     buttons["b"] = False
     t.handle_b()
     t.targets = [-33.0, 12.0, -80.0, 40.0, -70.0, 5.0]   # an old command, far from reality
+    t.arm_state_t[t.active] = time.time()
     real2 = list(t.arm_targets[t.active])
     buttons["b"] = True
     tick_for(5.2)
-    close("a later arm cycle still holds the real pose", t.targets, real2)
+    close("a later arm cycle still takes the pose it reads", t.targets, real2)
 
     # a silent arm refuses to arm
     buttons["b"] = False
