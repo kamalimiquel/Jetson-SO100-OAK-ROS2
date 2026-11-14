@@ -147,6 +147,22 @@ the later chapters assume it, and the failure they produce points somewhere else
 | Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§8](#8-verifying-the-data-flow) (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Gripper Cams, Temp Xavier NX, Graph, RViz), the MuJoCo twin and the F710 pad |
 | Pad | Logitech F710, back switch in **X** mode | `/joint_targets` over rosbridge |
 | Board | ChArUco `(5,5)`, 0.018 m squares, 0.0135 m markers, `DICT_4X4_50`, printed at a 100 mm side — a ready-to-print page is [docs/charuco-board.pdf](docs/charuco-board.pdf) | hand-eye and depth-scale runs ([§12](#12-perception--what-the-cloud-sees-and-its-calibration)) |
+
+**Power — what each supply has to deliver.** Four supplies, four different jobs, and only the first one
+is adjustable:
+
+| Supply | Must deliver | Feeds | What goes wrong when it cannot |
+|---|---|---|---|
+| **Arm supply** | **7.5 V DC** — this cell is built, calibrated and clamped at 7.5 V, not 12 V — with enough current for **six servos moving at once**, one supply per arm or one sized for both | the Feetech bus of each SO-100 | the servos answer intermittently: `Failed to enable torque … Checksum error`, one motor vanishing from the bus, or an arm that gives way under its own weight. All three look like a broken servo |
+| **Xavier supply** | the carrier's own adapter, at its rated voltage and current, and **not shared with the arms** | Xavier NX + the OAK-D over USB-C | the board reboots with nothing in the journal — a brown-out leaves no trace ([§16.2](#162-implemented-on-the-hardware)); this is what the November 2026 outages were |
+| **Powered USB hub** | self-powered (it has its own adapter), USB 2.0 `480M` is enough | both arm adapters + both wrist cameras | an unpowered hub sags and a device re-enumerates mid-run — the arm container then keeps a dead `/dev/ttyACM0` |
+| **OAK-D** | none of its own: USB-C from the Xavier, **but a USB 3 data port** | the scene camera | on a USB 2 port it still opens and then crawls at 1–3 fps ([§6](#6-camera-bring-up--depthai-on-the-xavier), step 6) |
+
+Two rules that save an evening. **Feed the arms 7.5 V, not 12 V**: this cell is documented, calibrated
+and tested at 7.5 V, and a different bus voltage changes how stiffly the servos hold, how hot they run
+and what a failing supply looks like — if the voltage ever has to change, change it here and recalibrate
+both arms. And **never hang the arms off the Xavier's USB power** through an unpowered hub: that is the
+same brown-out in miniature, with the same silent reboot.
 **The three connections, and the speed each one really negotiates.** These are measured, not assumed
 (`lsusb -t` on the Xavier, 2026-11-11) — which is why the data flow in [§16](#16-status-and-what-is-next)
 colours each arrow by its bus:
@@ -397,7 +413,7 @@ The symlinks are what the containers mount.
 ~/lerobot/.venv/bin/python tools/lerobot_bus_probe.py /dev/ttyACM0
 ```
 
-Expected output: one line per motor with its ID and raw position, then `OK 6/6`. Exit code 0 means the whole chain (wiring, 12 V supply, baudrate, motor IDs) is healthy.
+Expected output: one line per motor with its ID and raw position, then `OK 6/6`. Exit code 0 means the whole chain (wiring, **7.5 V** supply, baudrate, motor IDs) is healthy.
 
 The one-time `lerobot-setup-motors` step (writes unique IDs 1–6 + 1 M baud into each servo's EEPROM) is only needed when IDs don't match; this arm came with them already set.
 
