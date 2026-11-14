@@ -154,7 +154,8 @@ def main() -> None:
                 if not torque_on:
                     # do not energise the servos behind the operator's back: the web
                     # button is the gate, and the boot state is torque off
-                    self._json({"error": "torque is off — press 'Torque brazo' in the web page"}, 409)
+                    self._json({"error": "torque is off — press this arm's torque button in the web page "
+                                 "(or hold B for 5 s on the pad)"}, 409)
                     return
                 for name, value in zip(names, angles):
                     i = names.index(name)

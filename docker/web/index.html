@@ -12,11 +12,13 @@
   nav button.two-line { line-height: 1.05; padding-top: 0.3em; padding-bottom: 0.3em; }
   nav button.two-line span { display: block; font-size: 0.78em; opacity: 0.85; }
   nav button#shutdown { margin-left: auto; background: #c0392b; color: #fff; font-weight: bold; }
-  /* torque switch: red = servos free (boot state), orange = energised */
-  nav button#torque { background: #c0392b; color: #fff; font-weight: bold; margin-right: 0.9em;
-                      border: 1px solid #7f2a1f; }
-  nav button#torque.on { background: #e07b1f; border-color: #9c5413; }
-  nav button#torque:disabled { opacity: 0.6; cursor: progress; }
+  /* torque switches, one per arm: red = servos free (boot state), orange = energised,
+     grey = the proxy did not answer (state unknown, do not pretend it is off) */
+  nav button.torque { background: #c0392b; color: #fff; font-weight: bold; margin-right: 0.35em;
+                      border: 1px solid #7f2a1f; min-width: 8.6em; }
+  nav button.torque.on { background: #e07b1f; border-color: #9c5413; }
+  nav button.torque.unknown { background: #4a5568; border-color: #2d3748; color: #cbd5e0; }
+  nav button.torque:disabled { opacity: 0.6; cursor: progress; }
   nav span.sep { width: 1px; background: #3c4c60; margin: 0.15em 0.4em; }
   iframe { flex: 1; border: 0; background: #10151c; display: none; }
   iframe.active { display: block; }
@@ -24,7 +26,10 @@
 </head>
 <body>
 <nav>
-  <button id="torque" title="Energise the servos (arm is free to move by hand until then)">Arm torque</button>
+  <button class="torque unknown" id="torque1" data-port="8092"
+          title="Arm 1: energise the servos (the arm is free to move by hand until then)">Arm 1 · ?</button>
+  <button class="torque unknown" id="torque2" data-port="8095" style="margin-right: 0.9em"
+          title="Arm 2: energise the servos (the arm is free to move by hand until then)">Arm 2 · ?</button>
   <span class="sep"></span>
   <button class="active two-line" data-tab="term">Terminal<span>Xavier NX</span></button>
   <button class="two-line" data-tab="stereo">Stereo Cams &amp; Depth<span>OAK-D</span></button>
@@ -155,48 +160,63 @@
     || document.querySelector("nav button.active");
   if (initial) showTab(initial);
 
-  // Torque switch: the joint server is loopback-only, so the page talks to the arm
-  // container's tiny proxy on :8092. The arm always boots with torque OFF, so the
-  // state is read from the hardware on load rather than remembered here.
-  const torqueBtn = document.getElementById("torque");
-  const TORQUE_URL = `http://${HOST}:8092/torque`;
+  // Torque switches, one per arm. Each joint server is loopback-only, so the page talks to
+  // the arm container's tiny proxy: :8092 for arm 1, :8095 for arm 2 (docker/ws/arm/torque_api.py,
+  // one instance per container). Both arms boot with torque OFF, so the state is READ from the
+  // hardware on load and every 5 s — never remembered here.
+  function torqueSwitch(btn, arm) {
+    const url = `http://${HOST}:${btn.dataset.port}/torque`;
+    const label = `Arm ${arm}`;
 
-  function paintTorque(on) {
-    torqueBtn.classList.toggle("on", on);
-    torqueBtn.textContent = on ? "Arm torque free" : "Arm torque";
+    function paint(on) {
+      btn.classList.toggle("on", on === true);
+      btn.classList.toggle("unknown", on === null);
+      btn.textContent = on === null ? `${label} · ?` : `${label} · ${on ? "holding" : "loose"}`;
+      btn.title = on === null
+        ? `${label}: proxy :${btn.dataset.port} did not answer — state unknown`
+        : on ? `${label}: servos energised, holding its pose (click to free it)`
+             : `${label}: servos free, move it by hand (click to energise)`;
+    }
+
+    async function read() {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        const data = await r.json();
+        paint(r.ok ? !!data.torque : null);
+      } catch (e) {
+        paint(null);                 // no answer: say so instead of pretending "loose"
+      }
+    }
+
+    btn.addEventListener("click", async () => {
+      const want = !btn.classList.contains("on");
+      btn.disabled = true;
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ on: want }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || r.status);
+        paint(!!data.torque);
+      } catch (e) {
+        alert(`${label} torque: ` + e.message);
+        read();
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    read();
+    return read;
   }
 
-  async function readTorque() {
-    try {
-      const r = await fetch(TORQUE_URL, { cache: "no-store" });
-      paintTorque(!!(await r.json()).torque);
-    } catch (e) {
-      paintTorque(false);          // unreachable means we cannot energise anything
-    }
-  }
-
-  torqueBtn.addEventListener("click", async () => {
-    const want = !torqueBtn.classList.contains("on");
-    torqueBtn.disabled = true;
-    try {
-      const r = await fetch(TORQUE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ on: want }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || r.status);
-      paintTorque(!!data.torque);
-    } catch (e) {
-      alert("Torque: " + e.message);
-      readTorque();
-    } finally {
-      torqueBtn.disabled = false;
-    }
-  });
-
-  readTorque();
-  setInterval(readTorque, 5000);   // keep it honest if another client flips it
+  const torqueReaders = [
+    torqueSwitch(document.getElementById("torque1"), 1),
+    torqueSwitch(document.getElementById("torque2"), 2),
+  ];
+  setInterval(() => torqueReaders.forEach((r) => r()), 5000);   // honest if another client flips it
 
   // Shutdown: POST to the web container's endpoint, which SSHes to the host
   // and runs `sudo shutdown -h now`.

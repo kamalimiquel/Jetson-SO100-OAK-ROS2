@@ -67,7 +67,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [7.2 The arm in RViz — model, URDF and the QoS/view config](#72-the-arm-in-rviz--model-urdf-and-the-qosview-config)
 - **[8. Web interface — Terminal · Stereo & Depth · Cloud · Graph · RViz](#8-web-interface--terminal--stereo--depth--cloud--graph--rviz)**
   - [8.1 Day-to-day: from cold to moving the arms](#81-day-to-day-from-cold-to-moving-the-arms)
-  - [8.2 Torque switch — the red button](#82-torque-switch--the-red-button)
+  - [8.2 Torque switches — one per arm](#82-torque-switches--one-per-arm)
   - [8.3 What runs inside `so100-web`](#83-what-runs-inside-so100-web)
   - [8.4 The image: the **desktop** dusty image, no compiling](#84-the-image-the-desktop-dusty-image-no-compiling)
   - [8.5 `entry.sh` — the container's whole startup](#85-entrysh--the-containers-whole-startup)
@@ -158,7 +158,7 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
 - [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier
 - [x] Compose file + provisioning script for the **seven** services (six cell domains + rosbridge)
 - [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); the Windows twin mirrors `/joint_states` at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC), and with **both arms** since 2026-11-14
-- [x] Web interface: **seven tabs live** — Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Gripper Cams, Temp Xavier NX, Graph, RViz — plus the torque switch (ADR-0014/0015/0018)
+- [x] Web interface: **seven tabs live** — Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Gripper Cams, Temp Xavier NX, Graph, RViz — plus **one torque switch per arm** in the bar (ADR-0014/0015/0018)
 - [x] Point cloud: unprojected with the depth camera's own intrinsics, extended disparity (range from ~0.65 m down to ~0.33 m), left/right check; scale measured at 0.315 m against PnP geometry — depth reads **+3.0%**, spread ±1% over 100k board pixels
 - [x] Colour ↔ depth **registration**: homography from the board, 48 correspondences, 0.69 px rms — `docs/calibration/color_to_depth.yaml`
 
@@ -206,8 +206,6 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
   [§10.5](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm)
 - [ ] **Port-based camera rules if a second identical webcam is added** — today the two wrists are
   different models, so VID:PID is enough; the same camera twice would need `KERNELS==` on the port
-- [ ] **Web torque button for arm 2** — the page's `Arm torque` still talks only to `:8092`; add the
-  second proxy (`:8095`) and follow the Arm 1 / Arm 2 selection the Cams tab already has
 - [ ] **GraspGen (ADR-0013)** and **policy training (ADR-0016)** — need the IK node and the recorder first
 
 ## 3. Prerequisites
@@ -726,8 +724,8 @@ are real ports on the host, so two containers cannot share one.
 | **8091** | the three.js point-cloud viewer | `so100-cams` | the **Point Cloud OAK-D** tab |
 | **8093** | the wristcam focus test (on demand: `/start`, `/stop`) | `so100-web` | the **Wristcam focus test** tab |
 | **8094** | board temperatures from `/sys/class/thermal`, once a second | `so100-web` | the **Temp Xavier NX** tab |
-| **8092** | torque switch proxy → arm 1's joint server | `so100-arm` | the `Arm torque` button |
-| **8095** | torque switch proxy → arm 2's joint server | `so100-arm2` | the pad's B (or `curl -X POST` by hand) |
+| **8092** | torque switch proxy → arm 1's joint server | `so100-arm` | the `Arm 1` button in the bar |
+| **8095** | torque switch proxy → arm 2's joint server | `so100-arm2` | the `Arm 2` button in the bar |
 | **8099** | **no pixels at all**: a small JSON API — `GET /health`, `GET /rviz/state`, `POST /rviz/start`, `POST /rviz/stop`, `POST /shutdown` | `so100-web` | the power button and the RViz tab, which starts and stops the process |
 | **9090** | rosbridge WebSocket | `so100-rosbridge` | the MuJoCo twin, the F710 client, anything on the LAN |
 | **8002** | arm 1's LeRobot joint server (**loopback only**, `127.0.0.1`) | `so100-arm` | the `:8092` proxy, host scripts |
@@ -949,29 +947,36 @@ The cell is meant to be switched on and used, not rebuilt. In order:
    The ROS environment is already sourced. If only one arm answers, `curl -s 127.0.0.1:8002/status`
    and `:8003/status` say which server is down ([§7.1](#71-containers-ports-topics-transforms)).
 4. **Energise the arm you are going to drive.** Both boot with torque off and `/write` answers 409
-   until they are switched on: `Arm torque` in the page for **arm 1** ([§8.2](#82-torque-switch--the-red-button)),
-   hold **B** 5 s on the pad for whichever arm the pad has selected (arm 1 by default).
+   until they are switched on: `Arm 1 · loose` / `Arm 2 · loose` in the bar turn each one holding
+   ([§8.2](#82-torque-switches--one-per-arm)), or hold **B** 5 s on the pad for the arm it has selected
+   (arm 1 by default).
 5. **Start the pad on the PC**: `python windows\f710_teleop_ws.py --host <xavier-ip>`; optionally
    the twin as well (`windows\mujoco_twin.py`, [§9.2](#92-mujoco-twin--live-mirror-of-the-real-arm-rosbridge-websocket-adr-0019)).
 6. **Open RViz only when you need it** — it costs ~155 % of a core. The tab starts and stops it.
 7. **Shut down from the red button** at the top right, not by pulling power: that path stops the
    containers first, which closes the arm's serial port.
 
-### 8.2 Torque switch — the red button
+### 8.2 Torque switches — one per arm
 
-The first control in the bar, left of the tabs, is the arm's torque switch: **red** `Arm torque`
-means the servos are free and the arm can be moved by hand, **orange** `Arm torque free` means they are
-energised and the arm holds its pose. It turns orange once pressed and back to red when pressed again.
+The first two controls in the bar, left of the tabs, are one torque switch **per arm**:
 
-The arm always boots with **torque off**, and that is enforced twice: the joint server calls
+| Button | Colour | Means |
+|---|---|---|
+| `Arm 1 · loose` | red | arm 1's servos are free: move it by hand |
+| `Arm 1 · holding` | orange | arm 1 is energised and holds its pose |
+| `Arm 2 · loose` / `Arm 2 · holding` | the same, for arm 2 | |
+| `Arm N · ?` | grey | that proxy did not answer — the state is **unknown**, not "off" |
+
+A click flips its own arm and nothing else; the label and the colour follow what the hardware reports
+back, never what was clicked. Each button reads its own proxy every 5 s, so a change made from the pad,
+from a `curl` or from another browser shows up here within a few seconds — and a dead proxy says `?`
+instead of quietly painting "loose".
+
+Both arms always boot with **torque off**, and that is enforced twice: each joint server calls
 `disable_torque()` on its own startup and `/write` answers **409** with
-`torque is off — press 'Arm torque' in the web page` until the button is used. So nothing can
-energise the arm behind the operator's back — not a teleop client left running, not a stale target.
-
-**The button in the web page drives arm 1** (`:8092`). Arm 2 has its own proxy on `:8095`, but the page
-has no second button yet — to energise arm 2 from the browser it is `curl -X POST -d '{"on":true}'
-http://<xavier>:8095/torque`, or simply the pad's **B** with arm 2 selected ([§9.3](#93-f710-teleop--the-pad-adr-0017-amended-by-adr-0020)).
-That is on the list in [§2.3](#23-next).
+`torque is off — press this arm's torque button in the web page (or hold B for 5 s on the pad)`
+until that arm's button is used. So nothing can
+energise an arm behind the operator's back — not a teleop client left running, not a stale target.
 
 Each arm has its own proxy — `:8092` for arm 1 and `:8095` for arm 2 — a four-line forwarder
 (`docker/ws/arm/torque_api.py`) that only exposes `/torque` towards the loopback joint server
@@ -1026,7 +1031,7 @@ Two rules learned the hard way:
 
 ## 9. Operator PC — teleop + visualization
 
-Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — seven tabs (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Gripper Cams, Temp Xavier NX, Graph, RViz) and the torque switch. The RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs **no ROS on Windows**: the Python client talks to the rosbridge WebSocket (ADR-0020).
+Visualization needs nothing but a browser (ADR-0015): open http://192.168.1.50/ — seven tabs (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Gripper Cams, Temp Xavier NX, Graph, RViz) and one torque button per arm. The RViz stream alone is at http://192.168.1.50:6080/vnc.html?autoconnect=true. Teleoperation with the F710 needs **no ROS on Windows**: the Python client talks to the rosbridge WebSocket (ADR-0020).
 
 ### 9.1 MuJoCo model check (ADR-0016)
 
@@ -1151,7 +1156,7 @@ python windows\f710_teleop_ws.py --host 192.168.1.50
 
 The pad must be in **X mode** (switch on its back). It waits for `/joint_states`, seeds the targets at the arm's real pose and then starts publishing `/joint_targets` (degrees, 6 values).
 
-**Arm the arm from the pad: hold B for 5 s** (two buzzes = live, one = released), or press `Arm torque` in the web page first. The arm boots with torque off and `/write` refuses until the servos are energised, so the pad looks dead otherwise. Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
+**Arm the arm from the pad: hold B for 5 s** (two buzzes = live, one = released), or press that arm's torque button in the web page first. The arm boots with torque off and `/write` refuses until the servos are energised, so the pad looks dead otherwise. Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
 
 ![Logitech F710 layout](docs/f710-pad.png)
 
