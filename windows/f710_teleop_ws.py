@@ -452,6 +452,13 @@ class Teleop:
         pose_before = list(self.arm_targets[arm])
         print(f"{ARMS[arm]['name']} joints just before torque: {fmt(pose_before)}")
         seq = self.state_seq[arm]
+        if self.replaying:
+            # A replay in progress publishes the recorded pose on the next tick and would drag the
+            # arm there the moment the servos go live — an "old position" by definition. Arming
+            # always wins over a replay.
+            self.replaying = False
+            self.replay_i = 0
+            print(f"{ARMS[arm]['name']}: replay cancelled on arming")
         state = self.write_arm_torque(arm, True)
         if state is None:
             self.rumble("long")
