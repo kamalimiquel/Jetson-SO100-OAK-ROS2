@@ -921,14 +921,21 @@ On the PC, once, next to the Menagerie clone:
 ```
 git clone --depth 1 --filter=blob:none --sparse https://github.com/google-deepmind/mujoco_menagerie.git
 cd mujoco_menagerie && git sparse-checkout set robotstudio_so101 && cd ..
-python tools\make_two_arm_scene.py mujoco_menagerie\robotstudio_so101\scene.xml --check
 ```
 
 `--check` compiles the result and prints the measured gap; it must read the requested 0.300 m. Then:
 
 ```
-python windows\mujoco_twin.py C:\path\to\mujoco_menagerie\robotstudio_so101\scene_two_arms.xml --both-arms
+.\.venv312\Scripts\python.exe tools\make_two_arm_scene.py D:\10_Repos\Robotics\mujoco_menagerie\robotstudio_so101\scene.xml --check
+.\.venv312\Scripts\python.exe windows\mujoco_twin.py D:\10_Repos\Robotics\mujoco_menagerie\robotstudio_so101\scene_two_arms.xml --both-arms
 ```
+
+**Those paths are this cell's, not a requirement**: `D:\10_Repos\Robotics\mujoco_menagerie` is wherever
+the Menagerie clone lives and `Zenoh_Bridge` is wherever this repository was cloned — substitute your own
+install directories. Same for `.\.venv312\Scripts\python.exe`: it is only the venv that has `mujoco` and
+`roslibpy` installed, and the plain `python` on `PATH` is often a different interpreter (wrong one fails
+with `mujoco not importable` or `mujoco ... has no viewer module`). Run both commands from the
+**repository root** — the folder holding `windows\` and `tools\`.
 
 Measured on the cell (2026-11-14): the scene compiles to `nq=12 njnt=12 nbody=17 nu=12` with the two
 gripper bodies at `[0.2932, -0.0002, 0.2344]` and `[0.2932, 0.2998, 0.2344]` — **0.3000 m apart**;
