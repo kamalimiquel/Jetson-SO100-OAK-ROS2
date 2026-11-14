@@ -383,7 +383,7 @@ class OakNode(Node):
 
         The cloud is built on the depth camera's geometry, but colour has to come from a pixel
         of the *colour* camera: the device's own extrinsic is the exact relation between the two
-        sensors, so the board homography of §10.4 (a plane approximation) is not needed here.
+        sensors, so the board homography of §12.4 (a plane approximation) is not needed here.
         Returns None when the unit has no usable calibration, in which case the cloud stays
         uncoloured in the depth frame instead of being coloured wrongly.
         """

@@ -85,7 +85,7 @@ Status: DONE — ADR-0006 (LeRobot SDK + rclpy bridge; amended: no adapter flash
 2. **`depthai-core` built from source + custom node**: full control; the serious route. CHOSEN (node in Python, ADR-0007).
 3. UVC mode + `usb_cam`: zero dependencies, but stereo depth is lost. Emergency only.
 In Docker: mount `/dev/bus/usb` + cgroup rule `c 189:* rmw`, or the camera will not open. Check the USB3 link before blaming the driver.
-**3c. Gripper camera**: decided — a **USB RGB webcam** with manual focus, mounted on the gripper and locked at 10-15 cm (≈12.5 cm mid-band). ADR-0022 supersedes ADR-0008's OAK-D Lite, whose fixed lens and stereo range both sit far beyond that distance; the wrist feed is plain V4L2/UVC, no depthai. Prove the focus with `tools/camfocus.py` before the camera goes on the arm (README §10.5).
+**3c. Gripper camera**: decided — a **USB RGB webcam** with manual focus, mounted on the gripper and locked at 10-15 cm (≈12.5 cm mid-band). ADR-0022 supersedes ADR-0008's OAK-D Lite, whose fixed lens and stereo range both sit far beyond that distance; the wrist feed is plain V4L2/UVC, no depthai. Prove the focus with `tools/camfocus.py` before the camera goes on the arm (README §12.5).
 
 ### Phase 4 — VLM-oriented control concept
 3 alternatives:

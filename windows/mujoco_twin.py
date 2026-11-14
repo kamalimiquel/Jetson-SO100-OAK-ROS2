@@ -130,7 +130,7 @@ def main():
     parser.add_argument("--cell-geometry", default=os.path.join(
                             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "docker", "ws", "cell_geometry.json"),
-                        help="the file that says where arm 2 stands (README §3.6 R3)")
+                        help="the file that says where arm 2 stands (README §15 R3)")
     parser.add_argument("--no-geometry-check", action="store_true",
                         help="do not compare the scene's separation with the cell geometry file")
     args = parser.parse_args()

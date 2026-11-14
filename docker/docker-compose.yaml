@@ -17,7 +17,7 @@ services:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       # Static transform of the wrist webcam (ADR-0022): metres from the moving-jaw link to the
       # lens, then rpy to the optical convention. Nominal bracket values — measure and override,
-      # README §10.5. Set here (not in the entrypoint) so the numbers live beside the hardware.
+      # README §12.5. Set here (not in the entrypoint) so the numbers live beside the hardware.
       - WRIST_TF_X=0.0
       - WRIST_TF_Y=-0.028
       - WRIST_TF_Z=0.035
@@ -58,7 +58,7 @@ services:
       - PORT=8003
       - SO100_PORT=/dev/ttyACM0
       - SO100_ID=so100_cell_b
-      # The 30 cm (README §3.6 R3) — metres, published once on base->arm2_base.
+      # The 30 cm (README §15 R3) — metres, published once on base->arm2_base.
       - ARM2_OFFSET_X=0.0
       - ARM2_OFFSET_Y=0.30
       - ARM2_OFFSET_Z=0.0

@@ -7,7 +7,7 @@ which pulls the arm in through `<include file="so101.xml"/>`) and emits one scen
 
   - the first arm unchanged, at the origin;
   - a deep copy with every id prefixed `arm2_`, rooted at (0, +0.30, 0) — the same 30 cm as the
-    static `base -> arm2_base` in the cell (README §3.6 R3), so the twin and RViz agree.
+    static `base -> arm2_base` in the cell (README §15 R3), so the twin and RViz agree.
 
 What gets renamed is the **ids** (body/joint/geom/site/camera) and the **actuators** that drive that
 arm's joints. What is deliberately *not* renamed: `class`/`childclass` (both arms share the same
@@ -38,7 +38,7 @@ GEOMETRY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 
 
 def cell_offset(path=GEOMETRY):
-    """Where arm 2 stands, from the ONE file that says it (README §3.6 R3)."""
+    """Where arm 2 stands, from the ONE file that says it (README §15 R3)."""
     with open(path, encoding="utf-8") as fh:
         off = json.load(fh)["arm2_offset_m"]
     return float(off["x"]), float(off["y"]), float(off["z"])

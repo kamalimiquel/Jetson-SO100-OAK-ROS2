@@ -57,7 +57,7 @@ fi
 # x/y/z are metres from the jaw link origin to the lens centre, and the rpy turns the link's
 # axes into the optical convention (z forward out of the lens, x right, y down the image).
 # These are the NOMINAL values of the printed bracket. Measure yours and override them from
-# docker-compose (WRIST_TF_X … WRIST_TF_YAW); the procedure is in README §10.5.
+# docker-compose (WRIST_TF_X … WRIST_TF_YAW); the procedure is in README §12.5.
 # A second arm prefixes both frame ids (${FP}moving_jaw… -> ${FP}gripper…), Phase 1.
 ros2 run tf2_ros static_transform_publisher \
   --x "${WRIST_TF_X:-0.0}" --y "${WRIST_TF_Y:-0.028}" --z "${WRIST_TF_Z:-0.035}" \
@@ -66,7 +66,7 @@ ros2 run tf2_ros static_transform_publisher \
 
 # (the second arm no longer publishes a model description of its own — see the block above)
 
-# Where the second arm stands relative to arm 1's base (Phase 1) — the 30 cm of README §3.6 R3.
+# Where the second arm stands relative to arm 1's base (Phase 1) — the 30 cm of README §15 R3.
 # The number is NOT in this script: it lives in docker/ws/cell_geometry.json (mounted at
 # /opt/ws/cell_geometry.json), which is also what the URDF generator, the MuJoCo scene generator and
 # the twin's own check read. ARM2_OFFSET_* in the environment is an escape hatch for testing only.

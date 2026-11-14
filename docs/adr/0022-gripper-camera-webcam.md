@@ -3,7 +3,7 @@
 - Status: Accepted — **amended 2026-11-11**: the webcam is mounted on the moving jaw and
   streams at 10 Hz (`/gripper/image/compressed`, 640x480) with its frame in the TF tree —
   `moving_jaw_so101_v1 → gripper_color_optical_frame` published once on `/tf_static` (nominal
-  bracket offsets, `WRIST_TF_*` in compose, README §10.5). Still open: the *measured* focus and the
+  bracket offsets, `WRIST_TF_*` in compose, README §12.5). Still open: the *measured* focus and the
   measured offsets replacing the nominal ones
 - Date: 2026-11-11
 - Decided by: user
@@ -16,7 +16,7 @@ ADR-0008 chose an OAK-D Lite on the wrist for depth at the jaws. The working dis
 to be compatible with its stereo range; it is not. The jaws and the object sit **10-15 cm** in front
 of the lens, the Lite's minimum depth is well beyond that, and its lens is focused further out still.
 
-The measurements in README §10.5 make the size of the problem concrete: two fixed-focus USB cameras
+The measurements in README §12.5 make the size of the problem concrete: two fixed-focus USB cameras
 on this bench came out focused at opposite ends of the range — one sharpest at 10 cm or closer (444
 at 10 cm, 75 at 15 cm), the other still improving at 15 cm (268 → 408) — and neither covered
 10-15 cm. A fixed lens can only be mounted *at* its plane, so with hardware already in the drawer
@@ -37,7 +37,7 @@ So the requirement is not "a depth camera on the wrist". It is "a camera that is
    the mount invalidates the choice. Rejected as a design rule.
 3. **USB RGB webcam with manual focus, set and locked at the working distance** — Pros: the focus
    plane goes exactly where the work happens (≈12.5 cm, mid-band), and it is verified with a number
-   before the mount is built (README §10.5); plain UVC, no depthai, no USB3 budget, far lighter on a
+   before the mount is built (README §12.5); plain UVC, no depthai, no USB3 budget, far lighter on a
    weak wrist servo. Cons: no depth at the wrist, so grasp refinement falls back to the scene cloud;
    focus can drift when the camera is handled and must be re-checked after mounting.
 
@@ -45,7 +45,7 @@ So the requirement is not "a depth camera on the wrist". It is "a camera that is
 
 **A USB RGB webcam with manual focus, mounted on the gripper and focused at 10-15 cm — set at
 ≈12.5 cm and locked** — driven by plain V4L2/UVC instead of depthai. The focus is proven with
-`tools/camfocus.py` before the camera is mounted (README §10.5).
+`tools/camfocus.py` before the camera is mounted (README §12.5).
 
 ## Consequences
 

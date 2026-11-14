@@ -55,8 +55,8 @@ Fail signal: a link that moves between boots — stop here, the rest of the plan
 - `robot_state_publisher` for arm 2: `frame_prefix: arm2_`, remap `joint_states:=/arm2/joint_states_rad`.
 - Static transform `base → arm2_base` at **(0, 0.30, 0)** — the number now lives in
   `docker/ws/cell_geometry.json`, read by the transform, the URDF, the MJCF scene and the twin's check
-  (README §3.6 R3) — the 30 cm of requirement 2, in metres,
-  published once on `/tf_static` (same mechanism as the wrist camera, §10.7).
+  (README §15 R3) — the 30 cm of requirement 2, in metres,
+  published once on `/tf_static` (same mechanism as the wrist camera, §12.7).
 
 **Tests**
 | Test | How | Pass |
@@ -86,7 +86,7 @@ Fail signal: a link that moves between boots — stop here, the rest of the plan
 |---|---|---|
 | T2.1 both cameras publish | `ros2 topic hz /gripper/image/compressed /arm2/gripper/image/compressed` | ~10 Hz each, simultaneously |
 | T2.2 both frames resolve | `tf2_echo arm2_base arm2_gripper_color_optical_frame` | a pose, not "frame does not exist" |
-| T2.3 bandwidth holds with ROS running | `tools/two_cam_bandwidth.py` while both nodes run | ≥9 fps each, 0 failed reads (the measured budget: §3.5) |
+| T2.3 bandwidth holds with ROS running | `tools/two_cam_bandwidth.py` while both nodes run | ≥9 fps each, 0 failed reads (the measured budget: §2.5) |
 | T2.4 a camera unplugged does not sink the other | `docker exec so100-cams python3 …` with one device removed | the surviving node keeps publishing at 10 Hz |
 
 ---

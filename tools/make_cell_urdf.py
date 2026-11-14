@@ -6,7 +6,7 @@ reports OK but draws nothing (same bug as the second Image display). So both arm
 model: a single robot_state_publisher drives the whole tree, and this file is what it loads.
 
 Arm 1 keeps its plain link names; arm 2's links and joints are prefixed `arm2_` and hang off a fixed
-joint `base -> arm2_base` at (0, 0.30, 0), which is the 30 cm of README §3.6 R3. The MuJoCo twin
+joint `base -> arm2_base` at (0, 0.30, 0), which is the 30 cm of README §15 R3. The MuJoCo twin
 reads the same number.
 
     python3 tools/make_cell_urdf.py        # writes docker/ws/arm/urdf/so101_cell.urdf
@@ -22,7 +22,7 @@ GEOMETRY = os.path.join(ROOT, "docker/ws/cell_geometry.json")
 
 
 def cell_offset(path=GEOMETRY):
-    """Where arm 2 stands, from the ONE file that says it (README §3.6 R3)."""
+    """Where arm 2 stands, from the ONE file that says it (README §15 R3)."""
     with open(path, encoding="utf-8") as fh:
         off = json.load(fh)["arm2_offset_m"]
     return float(off["x"]), float(off["y"]), float(off["z"])

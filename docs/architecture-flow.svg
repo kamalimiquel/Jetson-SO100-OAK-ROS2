@@ -32,13 +32,13 @@
 <rect x="50" y="285" width="320" height="92" rx="8" fill="#10251a" stroke="#3fb950"/>
 <text x="64" y="309" fill="#7ee2a8" font-size="14" font-weight="bold">OAK-D POE — scene camera</text>
 <text x="64" y="327" fill="#8892a6" font-size="11">colour IMX378 + 2× OV9282, 7.5 cm baseline</text>
-<text x="64" y="342" fill="#8892a6" font-size="11">USB 3 at 5 Gb/s — needs the USB 3 cable of §3.1</text>
+<text x="64" y="342" fill="#8892a6" font-size="11">USB 3 at 5 Gb/s — needs the USB 3 cable of §2.1</text>
 <rect x="50" y="392" width="320" height="122" rx="8" fill="#10251a" stroke="#3fb950"/>
 <text x="64" y="416" fill="#7ee2a8" font-size="14" font-weight="bold">2× USB RGB webcams — wrist</text>
 <text x="64" y="434" fill="#8892a6" font-size="11">one on each moving jaw, 640x480 at 10 Hz (ADR-0022)</text>
 <text x="64" y="449" fill="#8892a6" font-size="11">UVC, USB full speed (12 Mb/s)</text>
 <text x="64" y="464" fill="#8892a6" font-size="11">arm1 046d:08aa -&gt; /dev/arm1_wrist · arm2 VF0770 041e:4095 -&gt; /dev/arm2_wrist</text>
-<text x="64" y="479" fill="#8892a6" font-size="11">focus at 10-15 cm: the §10.5 procedure (per camera)</text>
+<text x="64" y="479" fill="#8892a6" font-size="11">focus at 10-15 cm: the §12.5 procedure (per camera)</text>
 <rect x="430" y="170" width="350" height="110" rx="8" fill="#10251a" stroke="#3fb950"/>
 <text x="444" y="194" fill="#7ee2a8" font-size="14" font-weight="bold">so100-arm (arm 1) + so100-arm2 (arm 2)</text>
 <text x="444" y="212" fill="#8892a6" font-size="11">joint servers :8002/:8003 · torque proxies :8092/:8095</text>

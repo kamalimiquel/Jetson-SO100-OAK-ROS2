@@ -108,12 +108,12 @@ card(50, 170, 320, 108, "SO-100 arm 1 + arm 2 — 6 axes each",
       "arm2 5A46085595 -> /dev/arm2_tty · so100_cell_b"], "green")
 card(50, 285, 320, 92, "OAK-D POE — scene camera",
      ["colour IMX378 + 2× OV9282, 7.5 cm baseline",
-      "USB 3 at 5 Gb/s — needs the USB 3 cable of §3.1"])
+      "USB 3 at 5 Gb/s — needs the USB 3 cable of §2.1"])
 card(50, 392, 320, 122, "2× USB RGB webcams — wrist", [
      "one on each moving jaw, 640x480 at 10 Hz (ADR-0022)",
      "UVC, USB full speed (12 Mb/s)",
      "arm1 046d:08aa -> /dev/arm1_wrist · arm2 VF0770 041e:4095 -> /dev/arm2_wrist",
-     "focus at 10-15 cm: the §10.5 procedure (per camera)"], "green")
+     "focus at 10-15 cm: the §12.5 procedure (per camera)"], "green")
 
 # ----------------------------------------------------------------- containers
 card(430, 170, 350, 110, "so100-arm (arm 1) + so100-arm2 (arm 2)", [
