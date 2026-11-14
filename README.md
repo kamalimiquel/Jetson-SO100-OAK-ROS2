@@ -164,7 +164,7 @@ the later chapters assume it, and the failure they produce points somewhere else
 | **USB 3 cable for the OAK** | a **USB 3 (5 Gb/s) data** cable, not a charge-only one — this is the one cable the cell cannot work around | the OAK's link must show `5000M` in `lsusb -t` ([§5](#5-camera-bring-up--depthai-on-the-xavier), step 6) |
 | Wrist camera | USB RGB webcam, manual focus set at 10-15 cm | mounted on the moving jaw, streaming at 10 Hz; the focus requirement and how it is proven are in [§10.5](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm) (ADR-0022) |
 | Host | Jetson Xavier NX 16 GB, JetPack 5.1.5 (Ubuntu 20.04) | the six containers |
-| Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§7](#7-verifying-the-data-flow) (Terminal Xavier NX, Stereo Cam & Depth, Point Cloud, Cams, Xavier NX Temp, Graph, RViz), the MuJoCo twin and the F710 pad |
+| Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§7](#7-verifying-the-data-flow) (Terminal Xavier NX, Stereo Cam & Depth, Point Cloud, Cams, Temp Xavier NX, Graph, RViz), the MuJoCo twin and the F710 pad |
 | Pad | Logitech F710, back switch in **X** mode | `/joint_targets` over rosbridge |
 | Board | ChArUco `(5,5)`, 0.018 m squares, 0.0135 m markers, `DICT_4X4_50`, printed at a 100 mm side — a ready-to-print page is [docs/charuco-board.pdf](docs/charuco-board.pdf) | hand-eye and depth-scale runs ([§10](#10-perception--what-the-cloud-sees-and-its-calibration)) |
 **The three connections, and the speed each one really negotiates.** These are measured, not assumed
@@ -514,7 +514,7 @@ are real ports on the host, so two containers cannot share one.
 | **8090** | MJPEG relé of the scene camera: `/`, `/stereo`, `/<view>/stream` | `so100-cams` | the **Stereo Cam & Depth** tab |
 | **8091** | the three.js point-cloud viewer | `so100-cams` | the **Point Cloud** tab |
 | **8093** | the wristcam focus test (on demand: `/start`, `/stop`) | `so100-web` | the **Wristcam focus test** tab |
-| **8094** | board temperatures from `/sys/class/thermal`, once a second | `so100-web` | the **Xavier NX Temp** tab |
+| **8094** | board temperatures from `/sys/class/thermal`, once a second | `so100-web` | the **Temp Xavier NX** tab |
 | **8092** | torque switch proxy → the loopback joint server | `so100-arm` | the `Arm torque` button |
 | **8099** | power-off endpoint, and RViz `/rviz/start`, `/rviz/stop`, `/rviz/state` | `so100-web` | the power button and the RViz tab |
 | **9090** | rosbridge WebSocket | `so100-rosbridge` | the MuJoCo twin, the F710 client, anything on the LAN |
@@ -667,7 +667,7 @@ One page at **http://<xavier-ip>/** with six tabs, served by the `so100-web` con
 | **Stereo Cam & Depth** | http://192.168.1.50:8090/stereo | four panels, each labelled on the image: **Stereo L** and **Stereo R** (the rectified pair the depth is computed from), **Depth** (0–2 m, turbo colormap) and **Confidence** (the device's per-pixel certainty, mono). Each carries its own resolution and rate |
 | **Point Cloud** | http://192.168.1.50:8091/ | the `/oak/scene/points` cloud in 3D (three.js): opens as a **zenithal view of the arm and the bench** — straight down the camera's optical axis — then drag to orbit, wheel to zoom, **each point in the colour the camera saw there** |
 | **Wristcam focus test** | http://192.168.1.50:8093/ | the wrist camera live with its **sharpness score**, and buttons that write the median of the last scores at 10 / 12.5 / 15 cm to `docker/state/wristcam-focus.csv` on the Xavier. It reads `/gripper/image/compressed` (it does **not** open the device — `so100-cams` owns it), and it **runs only while the tab is open**: `/start` on entry, `/stop` on leaving, plus a 45 s idle watchdog ([§10.5](#105-the-gripper-camera--is-it-in-focus-at-10-15-cm)) |
-| **Xavier NX Temp** | http://192.168.1.50:8094/ | every thermal zone the kernel exposes (`CPU-therm`, `GPU-therm`, `SOC0-2`, `tj-therm`, the board sensors), hottest first, with its peak and a four-minute trace of the three hottest. Green below 60 °C, amber from 60, red from 80 — the NX starts throttling near 95. Thirteen sysfs reads a second, so it always runs |
+| **Temp Xavier NX** | http://192.168.1.50:8094/ | every thermal zone the kernel exposes (`CPU-therm`, `GPU-therm`, `SOC0-2`, `tj-therm`, the board sensors), hottest first, with its peak and a four-minute trace of the three hottest. Green below 60 °C, amber from 60, red from 80 — the NX starts throttling near 95. Thirteen sysfs reads a second, so it always runs |
 | **Graph** | http://192.168.1.50:6081/vnc.html | rqt_graph: every node/topic in the cell and how they connect |
 | **RViz** | http://192.168.1.50:6080/vnc.html | RViz2: the arm at its live pose, drawn with the **SO-101 model** (the hardware is an SO-100, [§2.3](#23-next)), the grid, TF, the scene **Colour camera** and the **Wrist camera** (the gripper webcam, ADR-0022). **Started on demand** — see below |
 
