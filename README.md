@@ -906,6 +906,50 @@ Twin troubleshooting:
 | `mapped 0/6 joints` warning | unknown model joint names | use `robotstudio_so101` — it is this robot; the alias table covers the rest |
 | a joint moves backwards | sign convention differs between model and arm | report it — a per-joint sign flip in the script fixes it |
 
+#### Two arms in the twin (Plan Phase 6)
+
+The same twin mirrors **both** arms when the scene holds both of them. MuJoCo has no "instance", so
+the scene is generated: the arm is copied, every id of the copy is prefixed `arm2_`, and the copy is
+rooted at **(0, +0.30, 0)** — the number R3 fixes, the same one `tf2_echo base arm2_base` reports.
+
+![Both arms in MuJoCo](docs/twin-two-arms.png)
+
+*The generated scene rendered offscreen on the Xavier: two SO-101s, 30 cm apart, on the shared floor.*
+
+On the PC, once, next to the Menagerie clone:
+
+```
+git clone --depth 1 --filter=blob:none --sparse https://github.com/google-deepmind/mujoco_menagerie.git
+cd mujoco_menagerie && git sparse-checkout set robotstudio_so101 && cd ..
+python tools\make_two_arm_scene.py mujoco_menagerie\robotstudio_so101\scene.xml --check
+```
+
+`--check` compiles the result and prints the measured gap; it must read the requested 0.300 m. Then:
+
+```
+python windows\mujoco_twin.py C:\path\to\mujoco_menagerie\robotstudio_so101\scene_two_arms.xml --both-arms
+```
+
+Measured on the cell (2026-11-14): the scene compiles to `nq=12 njnt=12 nbody=17 nu=12` with the two
+gripper bodies at `[0.2932, -0.0002, 0.2344]` and `[0.2932, 0.2998, 0.2344]` — **0.3000 m apart**;
+the twin's own `build_map()` reports **6/6 joints for each arm** (qpos 0–5 and 6–11); and through
+rosbridge both topics answer with their own poses (`/joint_states` and `/arm2/joint_states`, six
+angles each).
+
+Four things about the generator, each of which breaks it if ignored:
+
+- **`scene.xml` does not contain the arm**: it pulls it in with `<include file="so101.xml"/>`, so the
+  includes have to be resolved before anything can be copied — the generator does it recursively.
+- **Do not rename the default classes or the asset references.** Both arms share `class="so101"`,
+  `childclass="so101"`, the meshes and the materials; renaming them invents classes that are never
+  defined, and MuJoCo refuses the model.
+- **The actuators are per-arm too.** Six `<position>` actuators name the six joints; without a second,
+  prefixed copy aimed at `arm2_*` the second arm has no control and no `nu` growth.
+- **`--check` needs a CPU with AVX.** On the Celeron PC it dies with SIGILL (exit 132) after writing
+  the file; the same check runs fine on the Xavier (`uv run --with mujoco`, aarch64 wheel) and the
+  offscreen render needs `MUJOCO_GL=egl` plus a widened buffer
+  (`model.vis.global_.offwidth/offheight`, the default EGL framebuffer is 640 wide).
+
 ### 9.3 F710 teleop — the pad (ADR-0017, amended by ADR-0020)
 
 **Recommended path — Python over rosbridge (no ROS2 on Windows).** Two pip packages, same WebSocket the MuJoCo twin already uses:

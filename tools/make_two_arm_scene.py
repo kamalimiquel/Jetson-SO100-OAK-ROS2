@@ -1,62 +1,91 @@
 #!/usr/bin/env python3
 """Generate a two-arm MuJoCo scene from a single-arm model (two-arm Plan, Phase 6).
 
-MuJoCo has no "instance" — the same <body> cannot appear twice with the same
-names. So this takes the arm model XML (the file whose worldbody holds the
-SO-101, e.g. mujoco_menagerie/robotstudio_so101/scene.xml) and emits a scene
-with the arm twice:
+MuJoCo has no "instance": the same <body> cannot appear twice with the same names. This takes the
+arm model XML (the file whose worldbody holds the SO-101 — `mujoco_menagerie/robotstudio_so101/scene.xml`,
+which pulls the arm in through `<include file="so101.xml"/>`) and emits one scene with the arm twice:
 
-  - the first arm unchanged (its bodies/joints/geoms keep their names);
-  - a deep copy of it with every id-prefixed `arm2_`, rooted at (0, 0.30, 0) —
-    the same 30 cm as the base -> arm2_base static transform (README §3.6 R3).
+  - the first arm unchanged, at the origin;
+  - a deep copy with every id prefixed `arm2_`, rooted at (0, +0.30, 0) — the same 30 cm as the
+    static `base -> arm2_base` in the cell (README §3.6 R3), so the twin and RViz agree.
 
-All ids that MuJoCo disallows duplicates for (body, joint, geom, site, and any
-child worldbody) are prefixed; the shared <asset>s are left shared, which is
-legal — two geoms can use the same mesh.
+What gets renamed is the **ids** (body/joint/geom/site/camera) and the **actuators** that drive that
+arm's joints. What is deliberately *not* renamed: `class`/`childclass` (both arms share the same
+default classes), `mesh`/`material` references (the assets are shared, which MuJoCo allows) and
+anything inside `<asset>`.
 
-Usage (run where the model lives, on the Windows operator PC / in the MuJoCo env):
-    python tools\\make_two_arm_scene.py C:\\path\\to\\robotstudio_so101\\scene.xml
-    # -> scene_two_arms.xml next to it (--out to change, --offset-y to change the gap)
+`<include>` files are resolved first: a scene that only includes the arm has no body of its own to
+copy, which is why the naive version of this tool failed on the real model.
 
-The generated file is what `windows/mujoco_twin.py` loads once the twin knows
-it holds two arms (pass --both-arms).
+Usage (run where the model lives — the Windows operator PC, or any box with mujoco):
+    python tools/make_two_arm_scene.py mujoco_menagerie/robotstudio_so101/scene.xml --check
+    # -> scene_two_arms.xml next to it; --out to change, --offset-y to change the gap
+
+`--check` compiles the result with mujoco (when importable) and prints the joint/body counts plus the
+measured distance between the two arms' gripper bodies, which must read the requested gap.
 """
 
 import argparse
 import copy
+import os
 import sys
 import xml.etree.ElementTree as ET
 
 PREFIX = "arm2_"
-# MuJoCo requires these name ids to be unique across the compiled model.
-RENAME = {"body", "joint", "geom", "site", "tendon", "equality", "exclude", "fixed", "motor",
-          "general", "position", "velocity", "cylinder", "slider", "hinge", "ball", "slide",
-          "free", "touch"}
+
+# Elements whose `name` is an id in the compiled model and must therefore be unique.
+ID_TAGS = {"body", "joint", "geom", "site", "camera", "light", "frame", "tendon", "equality",
+           "exclude", "sensor", "motor", "position", "velocity", "general", "intvelocity",
+           "damper", "cylinder", "muscle", "adhesion", "plugin"}
+
+# MuJoCo's schema wants these sections in this order.
+SECTION_ORDER = ["compiler", "option", "size", "visual", "statistic", "asset", "default",
+                 "worldbody", "contact", "tendon", "actuator", "sensor", "keyframe", "plugin"]
 
 
 def _q(tag):
-    """Local tag without namespace."""
+    """Local tag name without an XML namespace."""
     return tag.rsplit("}", 1)[-1]
 
 
-def rename_ids(elem, ns):
-    """Prefix every id-carrying attribute that MuJoCo must keep unique."""
-    tag = _q(elem.tag)
-    for attr in ("name", "id"):
-        v = elem.get(attr)
-        if v and tag in RENAME:
-            elem.set(attr, f"{PREFIX}{v}")
-    if tag == "class":
-        cls = elem.get("class")
-        if cls:
-            elem.set("class", f"{PREFIX}{cls}")
-    # referential attrs inside an element point at names that were also renamed
-    if tag == "default":
-        for child in elem:
-            if child.get("class"):
-                child.set("class", f"{PREFIX}{child.get('class')}")
-    for child in elem:
-        rename_ids(child, ns)
+def _insert_section(root, section):
+    """Insert <section> at its schema position (after every section that must precede it)."""
+    rank = SECTION_ORDER.index(_q(section.tag)) if _q(section.tag) in SECTION_ORDER else len(SECTION_ORDER)
+    for i, child in enumerate(list(root)):
+        ctag = _q(child.tag)
+        crand = SECTION_ORDER.index(ctag) if ctag in SECTION_ORDER else len(SECTION_ORDER)
+        if crand > rank:
+            root.insert(i, section)
+            return
+    root.append(section)
+
+
+def resolve_includes(path, _depth=0):
+    """Parse `path` and inline every <include>, recursively. Returns the merged root element."""
+    if _depth > 5:
+        raise SystemExit("include nesting too deep at %s" % path)
+    base = os.path.dirname(os.path.abspath(path))
+    root = ET.parse(path).getroot()
+
+    for include in [c for c in list(root) if _q(c.tag) == "include"]:
+        root.remove(include)
+        inc_root = resolve_includes(os.path.join(base, include.get("file")), _depth + 1)
+        for child in list(inc_root):
+            tag = _q(child.tag)
+            if tag == "worldbody":
+                wb = root.find("worldbody")
+                if wb is None:
+                    wb = ET.Element("worldbody")
+                    _insert_section(root, wb)
+                for item in list(child):
+                    wb.append(item)
+            elif tag in ("asset", "default", "actuator", "sensor", "contact", "tendon", "equality") \
+                    and root.find(tag) is not None:
+                for item in list(child):
+                    root.find(tag).append(item)
+            else:
+                _insert_section(root, child)
+    return root
 
 
 def find_arm_body(worldbody):
@@ -64,25 +93,34 @@ def find_arm_body(worldbody):
     for body in worldbody.findall("body"):
         if body.find(".//joint") is not None:
             return body
-    return worldbody.find("body")
+    return None
+
+
+def prefix_ids(elem):
+    """Prefix the ids in this subtree, leaving asset references and default classes alone."""
+    if _q(elem.tag) in ID_TAGS:
+        name = elem.get("name")
+        if name:
+            elem.set("name", PREFIX + name)
+    for child in elem:
+        prefix_ids(child)
+
+
+def joint_names(body):
+    return {j.get("name") for j in body.iter("joint") if j.get("name")}
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("model", help="path to the single-arm model XML (e.g. .../robotstudio_so101/scene.xml)")
     ap.add_argument("--out", default=None, help="output path (default: <model dir>/scene_two_arms.xml)")
-    ap.add_argument("--offset-y", type=float, default=0.30, help="gap in metres (default 0.30, matches base->arm2_base)")
-    ap.add_argument("--keep-first-at", nargs=3, type=float, default=[0.0, 0.0, 0.0],
-                    help="x y z of the first arm's root body (default 0 0 0)")
+    ap.add_argument("--offset-y", type=float, default=0.30,
+                    help="gap in metres (default 0.30, matches base->arm2_base)")
+    ap.add_argument("--check", action="store_true", help="compile with mujoco and report the geometry")
     args = ap.parse_args()
 
-    tree = ET.parse(args.model)
-    root = tree.getroot()
-    ns = ""
-    if "}" in root.tag:
-        ns = root.tag.split("}", 1)[0] + "}"
-
-    worldbody = root.find(f"{ns}worldbody")
+    root = resolve_includes(args.model)
+    worldbody = root.find("worldbody")
     if worldbody is None:
         print("error: no <worldbody> in model", file=sys.stderr)
         return 1
@@ -92,31 +130,49 @@ def main():
         return 1
 
     arm2 = copy.deepcopy(arm1)
-    rename_ids(arm2, ns)
-    # root the second arm at the same height/axis, shifted along -y (matches the
-    # base -> arm2_base static transform at y = +0.30 in the cell frame; the
-    # twin and the bench agree on the number, one literal each).
-    pos = arm2.get("pos")
-    arm2.set("pos", f"{args.keep_first_at[0]} {args.keep_first_at[1] + args.offset_y} {args.keep_first_at[2]}")
+    prefix_ids(arm2)
+    arm2.set("pos", "0 %g 0" % args.offset_y)
 
-    # arm1's root body may itself sit at a nonzero pos in the model; keep it as-is
-    # and make arm2 an explicit copy at the model root's + offset. To keep both at
-    # the same elevation regardless of the input, normalise arm1 to keep_first_at too.
-    arm1x, arm1y, arm1z = (arm1.get("pos") or "0 0 0").split()
-    arm1.set("pos", f"{args.keep_first_at[0]} {args.keep_first_at[1]} {args.keep_first_at[2]}")
-
-    # worldbody children that aren't bodies (lights, cameras) stay in the scene map
-    # we keep; then the two arms.
     other = [c for c in worldbody if _q(c.tag) != "body"]
     worldbody[:] = other + [arm1, arm2]
 
-    out = args.out or (args.model.rsplit("/", 1)[0] + "/scene_two_arms.xml")
-    tree.write(out, encoding="utf-8", xml_declaration=True)
-    print(f"wrote {out}")
-    print("  arm 1: unchanged, rooted as in the source")
-    print(f"  arm 2: {PREFIX}-prefixed, rooted at (0, {args.keep_first_at[1] + args.offset_y}, 0)")
-    print("load it in mujoco_twin with --both-arms and check model.nq has risen and")
-    print("`arm2_` frames show the second arm 0.30 m from the first (Plan Phase 6, T6.1/T6.2).")
+    # The actuators driving this arm's joints need a second, prefixed copy aimed at arm2's joints.
+    actuator = root.find("actuator")
+    if actuator is not None:
+        names = joint_names(arm1)
+        for act in [a for a in actuator if a.get("joint") in names]:
+            twin = copy.deepcopy(act)
+            twin.set("name", PREFIX + (act.get("name") or act.get("joint")))
+            twin.set("joint", PREFIX + act.get("joint"))
+            actuator.append(twin)
+
+    out = args.out or os.path.join(os.path.dirname(os.path.abspath(args.model)), "scene_two_arms.xml")
+    ET.ElementTree(root).write(out, encoding="utf-8", xml_declaration=True)
+    print("wrote %s" % out)
+    print("  arm 1: unchanged, at the origin")
+    print("  arm 2: %s-prefixed, at (0, %g, 0)" % (PREFIX, args.offset_y))
+
+    if args.check:
+        try:
+            import mujoco
+        except ImportError:
+            print("check: mujoco not importable here, skipping")
+            return 0
+        model = mujoco.MjModel.from_xml_path(out)
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
+        g1 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "gripper")
+        g2 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, PREFIX + "gripper")
+        if min(g1, g2) < 0:
+            print("check: gripper bodies not found", file=sys.stderr)
+            return 1
+        d = data.xpos[g2] - data.xpos[g1]
+        print("check: nq=%d njnt=%d nbody=%d nu=%d" % (model.nq, model.njnt, model.nbody, model.nu))
+        print("check: gripper centres differ by (%.4f, %.4f, %.4f) m -> %.4f m apart"
+              % (d[0], d[1], d[2], (d @ d) ** 0.5))
+        if abs(d[1] - args.offset_y) > 1e-6:
+            print("check: FAILED — the y gap is not the requested %.3f m" % args.offset_y, file=sys.stderr)
+            return 1
     return 0
 
 
