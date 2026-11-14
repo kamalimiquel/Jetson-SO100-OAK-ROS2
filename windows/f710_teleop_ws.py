@@ -131,7 +131,8 @@ class Teleop:
         self.state_seq = [0, 0]                           # /joint_states messages seen per arm
         self.buzz_at = None                               # pending second buzz (arming)
         self.report_at = None                             # pending "3 s after arming" report
-        self.report_ref = None                            # joints printed just before torque on
+        self.report_ref = None                            # joints printed just before the change
+        self.report_phase = "on"                          # "on" or "off": which way it went
         self.report_arm = None
         self.report_input = 0.0                           # last user input when arming happened
         self.torque_on = [None, None]                     # None=unknown, True/False known
@@ -289,35 +290,35 @@ class Teleop:
                 self.say(f"buzz failed: {exc}")
 
     def service_report(self):
-        """Print the joints three seconds after arming, and undo a drift nobody asked for.
+        """Print the joints three seconds after a torque change — arming or releasing alike.
 
-        This is the honest measurement of "does it move when I arm it": the reference is the
-        vector read just before the torque went on, taken while the arm was still loose — the
-        pose the operator left it in — not anything commanded earlier.
+        These lines are the measurement, so they are printed with plain print(): the dedupe in
+        `say()` would swallow the second cycle when the arm happens to be at the same pose.
         """
         if self.report_at is None or time.time() < self.report_at:
             return
-        arm = self.report_arm
+        arm, phase = self.report_arm, self.report_phase
         self.report_at = None
         if arm != self.active:
             return
         if not self.fresh_pose(arm):
-            self.say(f"{ARMS[arm]['name']}: no fresh pose for the 3 s report", key=f"report{arm}")
+            print(f"{ARMS[arm]['name']}: no fresh pose for the 3 s report after torque {phase}")
             return
         now = list(self.arm_targets[arm])
         drift = [n - r for n, r in zip(now, self.report_ref)]
         worst = max((abs(d) for d in drift), default=0.0)
-        self.say(f"{ARMS[arm]['name']} joints 3 s after torque: {fmt(now)} "
-                 f"(drift {fmt(drift)}, worst {worst:.1f}deg)", key=f"report{arm}")
+        print(f"{ARMS[arm]['name']} joints 3 s after torque {phase}: {fmt(now)} "
+              f"(drift {fmt(drift)}, worst {worst:.1f}deg)")
+        if phase != "on":
+            return
         if worst <= ARM_TOLERANCE:
-            self.say(f"{ARMS[arm]['name']}: held its pose (<= {ARM_TOLERANCE:.0f}deg)", key=f"held{arm}")
+            print(f"{ARMS[arm]['name']}: held its pose (<= {ARM_TOLERANCE:.0f}deg)")
             return
         if self.last_input > self.report_input:
-            self.say(f"{ARMS[arm]['name']}: moved because the pad moved it after arming — left alone",
-                     key=f"held{arm}")
+            print(f"{ARMS[arm]['name']}: moved because the pad moved it after arming — left alone")
             return
-        self.say(f"{ARMS[arm]['name']}: DRIFTED {worst:.1f}deg with no input — re-commanding the "
-                 f"pose it was armed at", key=f"held{arm}")
+        print(f"{ARMS[arm]['name']}: DRIFTED {worst:.1f}deg with no input — re-commanding the "
+              f"pose it was armed at")
         self.targets = list(self.report_ref)
         self.send()
 
@@ -416,17 +417,25 @@ class Teleop:
             return
 
         if on:                                          # ---- release
+            pose_before = list(self.arm_targets[arm])
+            fresh = self.fresh_pose(arm)
+            print(f"{ARMS[arm]['name']} joints just before releasing torque"
+                  f"{'' if fresh else ' (STALE reading)'}: {fmt(pose_before)}")
             state = self.write_arm_torque(arm, False)
             if state is None:
                 self.rumble("long")
                 return
             self.torque_on[arm] = False
             self.torque_warned[arm] = False
-            self.report_at = None
-            if self.fresh_pose(arm):
+            if fresh:
                 self.targets = list(self.arm_targets[arm])
             self.say(f"{ARMS[arm]['name']} torque: RELEASED", key=f"torque{arm}")
             self.rumble("short", count=1)               # one buzz = loose
+            # Same measurement on the way out: where it is 3 s later, once gravity has had it.
+            self.report_at = time.time() + ARM_REPORT
+            self.report_ref = pose_before
+            self.report_arm = arm
+            self.report_phase = "off"
             return
 
         # ---- arm. Read the joints BEFORE energising, energise, then command exactly what the
@@ -438,8 +447,7 @@ class Teleop:
             self.rumble("long")
             return
         pose_before = list(self.arm_targets[arm])
-        self.say(f"{ARMS[arm]['name']} joints just before torque: {fmt(pose_before)}",
-                 key=f"before{arm}")
+        print(f"{ARMS[arm]['name']} joints just before torque: {fmt(pose_before)}")
         seq = self.state_seq[arm]
         state = self.write_arm_torque(arm, True)
         if state is None:
@@ -472,6 +480,7 @@ class Teleop:
         self.report_at = time.time() + ARM_REPORT
         self.report_ref = list(pose_before)
         self.report_arm = arm
+        self.report_phase = "on"
         self.report_input = self.last_input
 
     def handle_b(self):

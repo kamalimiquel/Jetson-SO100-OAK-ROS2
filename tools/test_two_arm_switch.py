@@ -78,6 +78,8 @@ def main():
     t.rumble = lambda kind, count=1, **kw: buzzes.append((kind, count))   # `quiet` only silences the log
     said = []
     t.say = lambda text, key=None: said.append(text)
+    # The measurement lines are plain print() on purpose (no dedupe), so capture those too.
+    mod.print = lambda *a, **k: said.append(" ".join(str(x) for x in a))
     sent = []
     t.send = lambda: sent.append(list(t.targets))
 
@@ -160,6 +162,12 @@ def main():
     tick_for(5.2)
     check("5 s again releases it", fake["on"], False)
     check("one buzz when releasing", buzzes, [("short", 1)])
+
+    check("the release prints the joints before it",
+          any("just before releasing torque" in x for x in said), True)
+    tick_for(3.3)
+    check("and again three seconds after releasing",
+          any("3 s after torque off" in x for x in said), True)
 
     buttons["b"] = False
     t.handle_b()

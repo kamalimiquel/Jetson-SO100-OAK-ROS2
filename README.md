@@ -998,18 +998,23 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
   **Two buzzes, one second apart, mean armed; one means released**; a long buzz means the pose was stale
   and nothing was armed.
 
-  The pad prints the measurement itself, so a doubt is settled from the console instead of by eye:
+  The pad prints the measurement itself **on every change, both ways**, so a doubt is settled from the
+  console instead of by eye:
 
   ```
-  arm 1 joints just before torque: [-40.1, -12.1, -70.4, 3.4, -79.3, 9.2]
+  arm 1 joints just before torque: [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8]
   arm 1 torque: ARMED — read [...] before, [...] after (drift 0.0°), commanding that
-  arm 1 joints 3 s after torque: [-40.1, -12.1, -70.4, 3.4, -79.3, 9.2] (drift [0.0, ...], worst 0.0deg)
+  arm 1 joints 3 s after torque on: [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8] (drift [0.0, ...], worst 0.0deg)
   arm 1: held its pose (<= 1deg)
+  arm 1 joints just before releasing torque: [-24.7, ...]
+  arm 1 torque: RELEASED
+  arm 1 joints 3 s after torque off: [-24.7, ...] (drift [0.0, ...], worst 0.0deg)
   ```
 
   The reference is read **while the arm is still loose** — after your hand has left it — and compared
   three seconds after the torque went on. If it moved more than 1° with no stick input in between, the
-  client re-commands that same pose and says `DRIFTED … re-commanding`.
+  client re-commands that same pose and says `DRIFTED … re-commanding`. These lines bypass the console
+  dedupe on purpose: the second cycle prints them again even when the pose has not changed.
 - **switch arms**: hold **A for 5 s**. The switch is **silent** — no buzz on A at all, neither on
   success nor on refusal (the log says which, and a refused switch keeps the previous arm).
 
