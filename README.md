@@ -315,7 +315,13 @@ arm on the pad) — is in [docs/two-arm-integration-plan.md](docs/two-arm-integr
 
 - **On the Xavier**: the `docker/` and `scripts/` folders ([§6.1](#61-deploying-and-creating-the-containers) copies them over).
 - **On the PC**: `windows/`, for the MuJoCo twin and the F710 client — so a `git clone` /
-  `git pull` there, separate from the deploy directory.
+  `git pull` there, separate from the deploy directory. **Nothing from `tools/` is needed to run
+  either of them** (neither script imports the folder); two files there are *optional* on Windows:
+  `tools/make_two_arm_scene.py`, if you want to regenerate `scene_two_arms.xml` instead of reusing the
+  one already generated, and `tools/test_two_arm_switch.py`, the headless check of the pad logic. Both
+  need the same venv the twin uses (`mujoco`, `roslibpy`, `pygame`). Everything else in `tools/` is
+  bench or Xavier work: `oak_*`, `handeye_*`, `lerobot_*`, `ik_*`, `camfocus.py`, the figure generators
+  and the URDF/MJCF converters.
 
 ### 3.5 A second arm — what USB can and cannot take
 
