@@ -179,15 +179,15 @@ Fail signal: a link that moves between boots — stop here, the rest of the plan
 | T6.4 no joint swap | move `shoulder_pan` on arm 2 | only arm 2's shoulder turns |
 | T6.5 the twin survives one arm down | stop arm 2's container | the twin keeps drawing arm 1 and logs the missing one |
 
-Status 2026-11-14: **T6.1 and T6.2 done and measured** — the generated `scene_two_arms.xml` compiles
-(`nq=12`, `nu=12`) and its two gripper bodies are 0.3000 m apart, the same number `tf2_echo base
-arm2_base` reports; the twin's joint map resolves 6/6 per arm (qpos 0–5, 6–11) and rosbridge delivers
-both `/joint_states` and `/arm2/joint_states`. T6.3–T6.5 need the physical arm being moved and the
-window open on the Windows PC. The generator had to be fixed first: `scene.xml` only *includes*
-`so101.xml`, so the tool now resolves includes, keeps the default classes and asset references shared,
-and duplicates the six actuators alongside the arm.
+Status 2026-11-14: **T6.1–T6.4 done, measured twice** — once on the Xavier (the scene compiles to
+`nq=12 njnt=12 nbody=17 nu=12`, gripper bodies 0.3000 m apart) and once on the operator PC, where the
+twin printed `arm 1: mapped 6/6 joints` (qpos 0–5), `arm 2: mapped 6/6 joints` (qpos 6–11) and
+`subscribed: /joint_states, /arm2/joint_states`, and both arms follow their own robot with no swap.
+T6.5 (one arm down) is still open — it needs the twin window open while `arm2` stops.
 
----
+The generator had to be fixed first: `scene.xml` only *includes* `so101.xml`, so the tool now resolves
+includes, keeps the default classes and asset references shared (renaming them invents classes MuJoCo
+refuses) and duplicates the six actuators alongside the arm.
 
 ## Phase 7 — IK for the second arm, and the small things that follow
 

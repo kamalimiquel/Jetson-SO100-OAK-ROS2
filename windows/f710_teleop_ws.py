@@ -450,7 +450,7 @@ def dump(seconds=20):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--host", default="192.168.1.50", help="the Xavier's LAN address")
+    ap.add_argument("--host", default="192.168.1.185", help="the Xavier's LAN address")
     ap.add_argument("--port", type=int, default=9090)
     ap.add_argument("--dump", action="store_true", help="only print pad input (mapping aid)")
     ap.add_argument("--scale", type=float, default=1.0,
