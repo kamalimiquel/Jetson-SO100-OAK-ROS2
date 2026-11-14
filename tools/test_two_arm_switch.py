@@ -75,7 +75,7 @@ def main():
     t._button = lambda b: buttons["a"] if b == 0 else (buttons["b"] if b == 1 else False)
 
     buzzes = []
-    t.rumble = lambda kind, count=1: buzzes.append((kind, count))
+    t.rumble = lambda kind, count=1, **kw: buzzes.append((kind, count))   # `quiet` only silences the log
     sent = []
     t.send = lambda: sent.append(list(t.targets))
 

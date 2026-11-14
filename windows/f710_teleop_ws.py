@@ -149,6 +149,7 @@ class Teleop:
         self.y_long_fired = False
 
         self.prev = {}
+        self.said = {}                       # last message per key: identical repeats stay silent
 
         print(f"waiting for {ARMS[self.active]['states']} ...")
         # Seed the active arm from its real pose before any teleop is allowed. roslibpy's
@@ -173,11 +174,12 @@ class Teleop:
             state = self.write_arm_torque(arm, False)
             if state is None:
                 self.torque_on[arm] = False
-                print(f"{ARMS[arm]['name']} torque: OFF requested, proxy "
-                      f":{ARMS[arm]['torque']} unreachable")
+                self.say(f"{ARMS[arm]['name']} torque: OFF requested, proxy "
+                         f":{ARMS[arm]['torque']} unreachable", key=f"start{arm}")
             else:
                 self.torque_on[arm] = state
-                print(f"{ARMS[arm]['name']} torque: {'OFF' if not state else 'COULD NOT TURN OFF'} at start")
+                self.say(f"{ARMS[arm]['name']} torque: "
+                         f"{'OFF' if not state else 'COULD NOT TURN OFF'} at start", key=f"start{arm}")
 
     # ---- ROS callbacks
     def on_state(self, msg, arm):
@@ -236,39 +238,56 @@ class Teleop:
         up, down = self._button(11), self._button(12)
         return (1 if up else 0) - (1 if down else 0)
 
-    def rumble(self, kind, count=1):
+    def say(self, text, key=None):
+        """Print only when the message actually changes.
+
+        The status lines are polled several times a second (torque gate) and the buzzes come in
+        pairs, so a plain print() floods the console with the same sentence. One line per new
+        message; the key says which message is being compared.
+        """
+        key = key or text
+        if self.said.get(key) == text:
+            return
+        self.said[key] = text
+        print(text)
+
+    def rumble(self, kind, count=1, quiet=False):
         """Short buzzes (one = arm 1 / released, two = arm 2 / armed) or one long one (refused).
 
         The log line matters as much as the buzz: SDL silently ignores rumble on pads and
         drivers that do not implement it, and then "it does not vibrate" has no other clue.
         """
         if self.joystick is None:
-            print(f"buzz {kind} x{count}: no controller — nothing to rumble")
+            if not quiet:
+                self.say("buzz: no controller — nothing to rumble")
             return
         # pygame 2 exposes both names depending on version; take whichever exists.
         buzz = getattr(self.joystick, "rumble", None) or getattr(self.joystick, "set_rumble", None)
         if buzz is None:
-            print(f"buzz {kind} x{count}: this pygame has no rumble API")
+            if not quiet:
+                self.say("buzz: this pygame has no rumble API")
             return
         try:
             if kind == "long":
                 ok = buzz(0.9, 0.9, 900)
-                print("buzz long x1:", "ok" if ok is not False else "NOT SUPPORTED by this pad")
-                return
-            ok = True
-            for i in range(count):
+            else:
                 ok = buzz(0.7, 0.7, 320)
-                print(f"buzz {i + 1}/{count}:", "ok" if ok is not False else "NOT SUPPORTED by this pad")
-                time.sleep(0.26)                    # gap, so two buzzes read as two
+                for _ in range(count - 1):
+                    time.sleep(0.26)                # gap, so two buzzes read as two
+                    ok = buzz(0.7, 0.7, 320)
+            if not quiet:
+                self.say(f"buzz {kind} x{count}: " + ("ok" if ok is not False else
+                         "NOT SUPPORTED by this pad or its driver"))
         except Exception as exc:  # noqa: BLE001 — rumble is cosmetic, never fatal
-            print(f"buzz failed: {exc}")
+            if not quiet:
+                self.say(f"buzz failed: {exc}")
 
     def service_buzz(self):
         """Fire the pending second "armed" buzz from the main loop — a sleep(3) here would
         freeze the teleop for three seconds, which on a live arm is not acceptable."""
         if self.buzz_at is not None and time.time() >= self.buzz_at:
             self.buzz_at = None
-            self.rumble("short", count=1)
+            self.rumble("short", count=1, quiet=True)   # same message as the first one
 
     # ---- two-arm switch (Plan Phase 5)
     def switch_arm(self):
@@ -330,8 +349,8 @@ class Teleop:
         if on is None:
             return
         self.torque_on[arm] = on
-        print(f"{ARMS[arm]['name']} torque: {'ENABLED' if on else 'OFF'}" +
-              ("" if on else " — hold B 5 s to arm it"))
+        self.say(f"{ARMS[arm]['name']} torque: {'ENABLED' if on else 'OFF'}" +
+                 ("" if on else " — hold B 5 s to arm it"), key=f"gate{arm}")
 
     def handle_a(self):
         """A short = nothing; held 5 s = switch arms, firing once, needs a release."""
@@ -352,8 +371,8 @@ class Teleop:
         arm = self.active
         on = self.read_arm_torque(arm)
         if on is None:
-            print(f"{ARMS[arm]['name']}: torque state unreadable (proxy :{ARMS[arm]['torque']}) "
-                  "— nothing changed")
+            self.say(f"{ARMS[arm]['name']}: torque state unreadable (proxy :{ARMS[arm]['torque']}) "
+                     "— nothing changed", key=f"torque{arm}")
             self.rumble("long")
             return
 
@@ -366,7 +385,7 @@ class Teleop:
             self.torque_warned[arm] = False
             if self.fresh_pose(arm):
                 self.targets = list(self.arm_targets[arm])
-            print(f"{ARMS[arm]['name']} torque: RELEASED")
+            self.say(f"{ARMS[arm]['name']} torque: RELEASED", key=f"torque{arm}")
             self.rumble("short", count=1)               # one buzz = loose
             return
 
@@ -374,7 +393,8 @@ class Teleop:
         # arm reads with torque on. That is the only way the servos cannot snap to an old value:
         # the first target of a live arm is the pose it is standing in.
         if not self.fresh_pose(arm):
-            print(f"{ARMS[arm]['name']}: no fresh pose — refusing to arm (it would jump)")
+            self.say(f"{ARMS[arm]['name']}: no fresh pose — refusing to arm (it would jump)",
+                     key=f"torque{arm}")
             self.rumble("long")
             return
         pose_before = list(self.arm_targets[arm])
@@ -393,10 +413,16 @@ class Teleop:
             time.sleep(0.01)
         pose_after = list(self.arm_targets[arm])
         self.targets = pose_after
-        self.send()
+        # Only command it if the reading is real: the server already holds the arm at the pose it
+        # read, so a stale vector here would be the only way left to make it jump.
+        if self.fresh_pose(arm):
+            self.send()
+        else:
+            self.say(f"{ARMS[arm]['name']}: armed, but no fresh pose to confirm — not publishing",
+                     key=f"torque{arm}")
         drift = max((abs(a - b) for a, b in zip(pose_before, pose_after)), default=0.0)
-        print(f"{ARMS[arm]['name']} torque: ARMED — read {fmt(pose_before)} before, "
-              f"{fmt(pose_after)} after (drift {drift:.1f}°), commanding that")
+        self.say(f"{ARMS[arm]['name']} torque: ARMED — read {fmt(pose_before)} before, "
+                 f"{fmt(pose_after)} after (drift {drift:.1f}°), commanding that", key=f"torque{arm}")
         self.rumble("short", count=1)                   # buzz 1 of 2 = live
         self.buzz_at = time.time() + ARM_BUZZ_GAP       # buzz 2, three seconds later
 

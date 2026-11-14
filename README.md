@@ -1053,6 +1053,9 @@ Two things about the client that are easy to get wrong:
   client now keeps the address it was given.
 - **The wait for the first state has a timeout** (20 s, then a clear message naming the missing topic and the
   container to check). Waiting forever looks like a hang when the real problem is an arm that never came up.
+- **One console line per message, not per poll.** The status lines are read several times a second and the
+  buzzes come in pairs, so `print()` flooded the console with identical lines; `Teleop.say(text, key)`
+  remembers the last line per key and only prints when it actually changes.
 
 The two-arm switch can be tested **without a pad**, by faking the button against the live cell:
 

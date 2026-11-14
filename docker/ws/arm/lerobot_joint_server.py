@@ -16,6 +16,7 @@ Env: SO100_PORT (default /dev/ttyACM0), SO100_ID (default so100_cell),
 import json
 import os
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from lerobot.robots.so_follower import SO100Follower, SO100FollowerConfig
@@ -114,9 +115,23 @@ def main() -> None:
                         # Some Feetech firmwares ignore goal writes while torque is off and hold
                         # the OLD goal until the first packet after enabling; write the same
                         # values again with torque on, so the snap (if any) lasts one packet.
-                        bus.sync_write("Goal_Position", present)
-                        print("[joint_server] goals seeded from present positions: "
-                              + ", ".join(f"{n}={present[n]:.1f}" for n in names), flush=True)
+                        # Close the loop. Even with the goal equal to the present position a
+                        # servo taking up a gravity load sags a little before it settles, and a
+                        # firmware that ignored the loose write snaps first. Two or three short
+                        # corrections put the arm back exactly where it was before arming.
+                        corrections, worst = 0, 0.0
+                        for _ in range(4):
+                            time.sleep(0.15)
+                            now = {n: float(bus.read("Present_Position", n)) for n in names}
+                            worst = max(abs(now[n] - present[n]) for n in names)
+                            if worst <= 0.5:
+                                break
+                            corrections += 1
+                            bus.sync_write("Goal_Position", present)
+                        print("[joint_server] armed at " +
+                              ", ".join(f"{n}={present[n]:.1f}" for n in names) +
+                              (f" — {corrections} correction(s), worst {worst:.1f}deg" if corrections
+                               else f" — held it (worst {worst:.1f}deg)"), flush=True)
                     else:
                         bus.disable_torque()
                     torque_on = on
