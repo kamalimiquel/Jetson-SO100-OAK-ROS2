@@ -1008,6 +1008,32 @@ and to capture episodes, cartesian-feel to work quickly by eye.
 
 **Safety**: `/joint_targets` is only sent after feedback arrives; per-tick deltas and the joint ranges are clamped, and the Jetson bridge enforces the real limits regardless.
 
+**Holding A 5 s switches arms** (Plan Phase 5). The switch is **seeded from the far arm's real pose**, so the first
+command after it is "stay", and it is **refused** — with one long buzz — if that arm has not published within the
+last second. A tap does nothing; a long hold fires once and needs a release before it can fire again.
+
+Two things about the client that are easy to get wrong:
+
+- **`roslibpy` 2.x has no `run_once()`.** `Ros.run()` is the non-blocking one — it starts the event loop on its own
+  thread and returns — so callbacks land while the main loop sleeps. Calling a pump that does not exist is what
+  crashed the client on its first run (`AttributeError: 'Ros' object has no attribute 'run_once'`).
+- **The wait for the first state has a timeout** (20 s, then a clear message naming the missing topic and the
+  container to check). Waiting forever looks like a hang when the real problem is an arm that never came up.
+
+The two-arm switch can be tested **without a pad**, by faking the button against the live cell:
+
+```
+uv run --with pygame --with roslibpy python tools/test_two_arm_switch.py --host 192.168.1.185
+```
+
+It checks six rules (starts on arm 1, a tap does nothing, 5 s switches, no double fire without release, a
+second hold switches back, and a silent arm is refused) and exits 0 only when all pass. Measured 2026-11-14: all
+six checks pass; over WiFi the same test is flaky because the stream stalls — see §9.4.
+
+**If rosbridge stops delivering**: it logs `Client connected` and `Subscribed to /joint_states` and then sends
+nothing, while `ros2 topic hz` inside the arm container still shows 25 Hz. That is stale DDS shared memory after
+the arm container was recreated; `docker restart so100-rosbridge` fixes it (measured: 0 → 43 msg/s).
+
 Transport verified 2026-11-09: a target vector published through rosbridge reached the arm bridge, and sending the current pose produced zero movement.
 
 **GPU check (Isaac Sim viability):** run windows/check-gpu.cmd — needs an NVIDIA RTX-class GPU and driver ≥ 535 for Isaac Sim.

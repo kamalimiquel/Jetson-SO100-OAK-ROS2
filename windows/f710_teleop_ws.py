@@ -62,6 +62,7 @@ HOLD_TORQUE = 5.0               # hold B this long to switch the servos on/off
 HOLD_SWITCH = 5.0               # hold A this long to switch arms (Plan Phase 5)
 SWITCH_CONFIRM = 1.0            # s the far arm must have answered within, or the switch is refused
 IDLE_STOP = 0.5                 # s without input -> stop publishing
+SEED_TIMEOUT = 20.0             # s to wait for the active arm's first /joint_states
 TORQUE_RE_CHECK = 1.5           # s between re-queries of the active arm's torque
 LIM_LO = [-170.0, -170.0, -170.0, -170.0, -170.0, 0.0]
 LIM_HI = [170.0, 170.0, 170.0, 170.0, 170.0, 100.0]
@@ -92,7 +93,12 @@ class Teleop:
         self.scale = scale
         self.active = 0
         self.client = roslibpy.Ros(host=host, port=port)
-        self.client.run()
+        try:
+            self.client.run()          # non-blocking: starts the event loop in its own thread
+        except Exception as exc:  # noqa: BLE001 — roslibpy raises RosTimeoutError
+            raise SystemExit(
+                f"cannot reach rosbridge at ws://{host}:{port} ({exc}) — is the cell up, "
+                f"and is {host} the Xavier's current address? (`--host` changes it)")
         self.pubs = [roslibpy.Topic(self.client, a["targets"], "std_msgs/Float64MultiArray")
                      for a in ARMS]
         for p in self.pubs:
@@ -124,10 +130,18 @@ class Teleop:
         self.a_long_fired = False
 
         self.prev = {}
-        print("waiting for /joint_states ...")
-        # seed the active arm from its real pose before any teleop is allowed
+
+        print(f"waiting for {ARMS[self.active]['states']} ...")
+        # Seed the active arm from its real pose before any teleop is allowed. roslibpy's
+        # `run()` is non-blocking (it starts its own event-loop thread), so the callbacks land
+        # while this waits — there is no `run_once()` to pump. Waiting forever is worse than
+        # failing: it looks like a hang when the real problem is a container that never came up.
+        t0 = time.time()
         while not self.arm_state_seen[self.active]:
-            self.client.run_once()
+            if time.time() - t0 > SEED_TIMEOUT:
+                raise SystemExit(
+                    f"no {ARMS[self.active]['states']} after {SEED_TIMEOUT:.0f} s — "
+                    f"is {ARMS[self.active]['name']}'s container up? (curl :80xx/status)")
             time.sleep(0.05)
 
     # ---- ROS callbacks
