@@ -256,13 +256,28 @@ arm on the pad) — is in [docs/two-arm-integration-plan.md](docs/two-arm-integr
 - **Docker Engine 20.10+ and compose v2** (`docker compose version`). Compose v1 rejects
   `device_cgroup_rules` with a misleading error; v2 is not optional.
 - `curl` and `rsync` on the Xavier, `git` and `rsync` on the PC.
-- **No ROS2 on the host.** Every ROS process lives in a container. Installing Humble on the
-  Xavier as well is how you get a topic list that half-works: a host-side Humble brings its own
-  `ros2 daemon` and its own DDS participant, the daemon answers `ros2 topic list` from a *cache*
-  while the containers keep their own discovery, and the result is a list that mixes what the host
-  saw at some point with what the containers see now — so `ros2 topic echo` hangs on topics that
-  were listed but no longer have a publisher. One ROS, inside the containers; the host only runs
-  Docker.
+- **No ROS2 on the host.** Every ROS process lives in a container; the Xavier itself only runs Docker,
+  `rsync` and the LeRobot venv. This is a hard rule, and the reason is that breaking it does not fail
+  loudly — it half-works:
+
+  - Installing Humble on the host gives the machine **two independent ROS worlds**: the containers'
+    (one DDS participant each, discovering each other) and the host's.
+  - The host-side `ros2` starts a **daemon** that answers `ros2 topic list` **from its own cache**, while
+    the containers keep discovering live.
+  - So the list you read is a **mix of two different moments**: names the host learnt at some point,
+    plus whatever exists now. Nothing errors, because every command answers — with stale data.
+  - The symptoms, in the order people hit them: a topic in the list that `ros2 topic echo` **hangs** on
+    (it was listed, but has no publisher any more); `ros2 node list` missing nodes that are plainly
+    running; a `ros2 topic hz` that reports nothing on a topic the twin is happily using.
+  - `ros2 daemon stop` clears it for exactly one command, which is what makes it so confusing; changing
+    `ROS_DOMAIN_ID` makes it worse, because now the two worlds really cannot see each other.
+
+  The fix is not to tune anything: it is to have **one** ROS, inside the containers. To use ROS tooling,
+  step inside one — that is exactly what the Terminal tab does:
+
+  ```
+  docker exec -it so100-arm bash -c "source /opt/ros/humble/install/setup.bash && ros2 topic list"
+  ```
 - If compose v2 is missing, `scripts/provision-jetson.sh` installs it into the user (no sudo).
 
 ### 3.3 Access, groups, network
