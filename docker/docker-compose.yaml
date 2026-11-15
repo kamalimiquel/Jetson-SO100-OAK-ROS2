@@ -30,6 +30,8 @@ services:
       # started against the old node keeps a dead device forever.
       - /dev/so100_arm:/dev/ttyACM0
     volumes:
+      # Interactive bash that already knows where ROS is (see docker/bashrc-cell).
+      - ./bashrc-cell:/root/.bashrc:ro
       # Host LeRobot venv (py3.12) + the uv-managed CPython it symlinks to + calibration.
       - /home/maju/lerobot/.venv:/home/maju/lerobot/.venv:ro
       - /home/maju/.local/share/uv/python:/home/maju/.local/share/uv/python:ro
@@ -72,6 +74,8 @@ services:
       # Phase 0 udev rule (provision-jetson.sh): serial 5A46085595 -> /dev/arm2_tty.
       - /dev/arm2_tty:/dev/ttyACM0
     volumes:
+      # Interactive bash that already knows where ROS is (see docker/bashrc-cell).
+      - ./bashrc-cell:/root/.bashrc:ro
       - /home/maju/lerobot/.venv:/home/maju/lerobot/.venv:ro
       - /home/maju/.local/share/uv/python:/home/maju/.local/share/uv/python:ro
       - /home/maju/.cache/huggingface/lerobot:/home/maju/.cache/huggingface/lerobot
@@ -97,6 +101,8 @@ services:
       # DEPTH_SCALE corrects a depth map that comes out proportional instead of mm.
       - OAK_SCENE_DEPTH_SCALE=1.0
     volumes:
+      # Interactive bash that already knows where ROS is (see docker/bashrc-cell).
+      - ./bashrc-cell:/root/.bashrc:ro
       # OAK devices (VID 03e7) + the cgroup rule below (ADR-0007).
       - /dev/bus/usb:/dev/bus/usb
       # Wrist camera (ADR-0022): a udev symlink, so re-enumeration to another /dev/videoN does
@@ -121,6 +127,8 @@ services:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
+      # Interactive bash that already knows where ROS is (see docker/bashrc-cell).
+      - ./bashrc-cell:/root/.bashrc:ro
       - ./ws:/opt/ws
     command: ["sleep", "infinity"]
 
@@ -135,6 +143,8 @@ services:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - IK_APPLY=0
     volumes:
+      # Interactive bash that already knows where ROS is (see docker/bashrc-cell).
+      - ./bashrc-cell:/root/.bashrc:ro
       - ./ws:/opt/ws
       - ../tools:/opt/tools:ro
     command: ["bash", "/opt/ws/control/entry.sh"]
@@ -152,6 +162,8 @@ services:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
+      # Interactive bash that already knows where ROS is (see docker/bashrc-cell).
+      - ./bashrc-cell:/root/.bashrc:ro
       - ./web:/srv/web
       # The entrypoint and the shutdown server are COPYed into the image, so editing them in
       # docker/web/ only took effect after a rebuild — mount them instead: a script fix is then
@@ -179,3 +191,6 @@ services:
     environment:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    volumes:
+      # Interactive bash that already knows where ROS is (see docker/bashrc-cell).
+      - ./bashrc-cell:/root/.bashrc:ro

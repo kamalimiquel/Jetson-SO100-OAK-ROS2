@@ -1,0 +1,31 @@
+# /root/.bashrc inside every cell container — bind-mounted by docker-compose.yaml.
+#
+# Why: `docker exec -it so100-arm bash` used to give a bare shell with no `ros2` on the PATH (the
+# dustynv L4T images keep ROS at /opt/ros/humble/install/, not /opt/ros/humble/), so the first command
+# anyone typed failed and the container looked broken. Bash sources this file on every interactive
+# start, so the shell now comes up ready: ROS sourced, domain 42, prompt naming the container.
+
+# ROS is not in the same place in every image; source whichever exists, quietly.
+for _f in /opt/ros/humble/setup.bash /opt/ros/humble/install/setup.bash /opt/ws/install/setup.bash; do
+  if [ -f "$_f" ]; then . "$_f" >/dev/null 2>&1; fi
+done
+unset _f
+
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
+export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
+
+# Colours, history, and a prompt that says which container you are in (easy to mix up seven of them).
+export TERM="${TERM:-xterm-256color}"
+export HISTFILE=/tmp/.bash_history
+export HISTSIZE=2000
+PS1='\[\e[1;36m\]${HOSTNAME%%.*}\[\e[0m\]:\[\e[1;33m\]\w\[\e[0m\]\$ '
+
+alias ll='ls -alF --color=auto'
+alias topics='ros2 topic list'
+alias nodes='ros2 node list'
+alias hz='ros2 topic hz'
+
+# The workspace is mounted read-only at /opt/ws; that is where the code you are debugging lives.
+[ -d /opt/ws ] && cd /opt/ws
+
+echo "ROS ${ROS_DISTRO:-?} · domain ${ROS_DOMAIN_ID} · $(hostname) — topics / nodes / hz, code in /opt/ws"

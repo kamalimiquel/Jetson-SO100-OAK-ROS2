@@ -495,6 +495,13 @@ The result is written to `~/.cache/huggingface/lerobot/calibration/robots/so_fol
 
 4. **Step 2 — sweep each joint** slowly through its full range, one joint at a time, returning to mid before the next (panels B1–B6 show the direction for each). A hard stop is a mechanical limit — stop pushing.
 5. **Bring the arm back**: `docker start so100-arm`. The joint server reads the new JSON on start; `/joint_states`, TF and the RViz model follow immediately.
+6. **Archive the result — do not skip this.** LeRobot overwrites `~/.cache/huggingface/lerobot/calibration/robots/so_follower/so100_cell.json` **in place, on the Xavier, inside a cache that no `git` sees**: one re-calibration and the previous numbers are gone for good. So **every calibration leaves a dated copy in `docs/calibration/arms/`**, committed with the change it belongs to (`2026-11-09-so100_cell.json`, `2026-11-14-so100_cell_b.json`). One command does stop → calibrate → start → archive:
+
+   ```
+   ./scripts/calibrate.sh arm1        # or arm2
+   ```
+
+   By hand: `python3 tools/archive_calibration.py` on the Xavier, then copy the folder back and commit. It is idempotent — an unchanged profile is reported and skipped, and two calibrations on the same day get `-b`, `-c`, … — and it prints each joint's range, which is the part worth putting in the commit message.
 
 Two notes on that reference page. It calibrates a **leader/follower pair** (a teleop arm driving a robot
 arm), while this cell drives its SO-100 followers alone — the pad is the leader — so only its *follower*
@@ -534,8 +541,10 @@ details that look like faults and are not:
 
 Measured ranges after the sweep (`shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`,
 `gripper`): 658–3344, 911–3186, 816–2972, 740–3193, 1250–2047, all with homing offsets written next
-to them in `~/.cache/huggingface/lerobot/calibration/robots/so_follower/so100_cell_b.json`. Then the
-container comes up on that profile and answers on its own port:
+to them in `~/.cache/huggingface/lerobot/calibration/robots/so_follower/so100_cell_b.json` — and **also
+archived in the repository** as `docs/calibration/arms/2026-11-14-so100_cell_b.json`
+([§4.1](#41-re-calibrating-the-arm-with-pose-pictures)), so the numbers survive a wiped cache or a
+new SD card. Then the container comes up on that profile and answers on its own port:
 
     cd ~/so100/docker && docker compose up -d arm2
     curl -s http://127.0.0.1:8003/status      # {"connected": true, "calibrated": true}
@@ -594,6 +603,40 @@ boxed Linux with exactly what its job needs — nothing more. All seven are star
 share the Xavier's network and memory with the host (host network + `ipc: host`), and they talk to each
 other in ROS2 on domain 42 with FastDDS. Two arms are two serial ports and two joint servers; everything
 above them (the tf tree, the model RViz draws, the twin) is deliberately shared ([§3](#3-the-joints--one-name-for-every-layer)).
+
+**Why seven and not one.** Each container is the smallest thing that can be restarted without dragging the
+rest down, and each has a different failure mode:
+
+| Container | Its one job | Why it is separate |
+|---|---|---|
+| `so100-arm` | arm 1's joint server (`:8002`, torque `:8092`) + its TF and model | it owns `/dev/arm1_tty`, and the serial port cannot be opened twice — so it must stop while you calibrate arm 1 |
+| `so100-arm2` | the same for arm 2 (`:8003`, `:8095`) | a crash or a re-plug of one arm must not touch the other |
+| `so100-cams` | the OAK-D nodes, the two wrist cameras, the 4 Hz composite | USB churn: unplugging a camera restarts this one, not the arms |
+| `so100-perception` | depth, point cloud, pose | the heaviest CPU consumer; restarting it must not move an arm |
+| `so100-control` | the control loop and the IK service | a control bug that loops must not take the cameras with it |
+| `so100-web` | the tabbed UI, MJPEG, RViz and Graph over noVNC | the only one a browser touches; if it hangs, the robot keeps running |
+| `so100-rosbridge` | the JSON bridge to the operator PC (twin and pad) | the seam to Windows: restart it and the twin reconnects, nothing else notices |
+
+Seven boxes on an 8 GB board is not waste — `docker stats` shows the idle ones at ~1 % CPU — and the
+alternative, one container running everything, means a single crash takes the whole cell down and every
+restart re-opens both serial ports. It **looked** worse than it was: `docker ps -a` was carrying 13 dead
+containers from a week of `docker run` experiments (5.9 GB of layers on the eMMC). Those are pruned;
+`docker container prune` is safe and worth running whenever the list gets long.
+
+**Every container opens a bash that already works.** All seven images ship `/bin/bash`, and each one
+bind-mounts `docker/bashrc-cell` as `/root/.bashrc`, so the shell comes up with ROS sourced, domain 42 and a
+prompt naming the container:
+
+```
+docker exec -it so100-arm2 bash      # ROS ready — no wrapper needed
+./scripts/shell.sh arm2              # same thing by short name; `shell.sh` alone lists the seven
+./scripts/shell.sh cams "ros2 topic list | head"
+```
+
+`ros2` is *not* on the PATH until ROS is sourced, and the `dustynv` L4T image keeps it at
+`/opt/ros/humble/install/` rather than `/opt/ros/humble/` — which is why a bare `docker exec … bash` used to
+answer `ros2: command not found` and the container looked broken. The mounted `.bashrc` tries all three
+locations and stays quiet when one is missing.
 
 **Two scripts with almost the same name, one inside the image and one from this repository:**
 
