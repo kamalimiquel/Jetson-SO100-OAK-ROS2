@@ -20,6 +20,7 @@ FP="${NS:+${NS}_}"          # frame prefix: "" for arm 1, "arm2_" for arm 2
 JSR="${NS:+${NS}/}joint_states_rad"   # RSP consumes the radians topic of THIS arm
 
 /home/maju/lerobot/.venv/bin/python /opt/ws/arm/lerobot_joint_server.py &
+JOINT_PID=$!
 sleep 2
 # arm_bridge and deg2rad read the port/namespace from their own env (inherited).
 python3 /opt/ws/arm/torque_api.py &
@@ -89,4 +90,11 @@ if [ -n "$NS" ]; then
     --frame-id base --child-frame-id "${NS}_base" &
 fi
 
-wait
+# Supervise the joint server. It is the one process whose death used to leave the container "Up"
+# with a silent arm (the other nodes keep running and `wait` never returns): now its exit takes the
+# container down, and docker's `restart: unless-stopped` starts a fresh attempt.
+rc=0
+wait "$JOINT_PID" || rc=$?
+echo "[entry] joint server exited (rc=$rc) — stopping the container so it restarts" >&2
+kill $(jobs -p) 2>/dev/null || true
+exit "$rc"

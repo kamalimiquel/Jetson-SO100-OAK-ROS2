@@ -32,7 +32,7 @@ LO = [-170.0, -170.0, -170.0, -170.0, -170.0, 0.0]
 HI = [170.0, 170.0, 170.0, 170.0, 170.0, 100.0]
 
 
-def connect_with_retry(arm, tries=15, delay=2.0):
+def connect_with_retry(arm, tries=30, delay=2.0):
     """Connect, and survive the glitches right after the board powers up.
 
     A checksum error on one motor (`Failed to enable torque ... Checksum error`) kills
@@ -48,10 +48,19 @@ def connect_with_retry(arm, tries=15, delay=2.0):
             arm.connect()
             return
         except Exception as exc:  # noqa: BLE001
+            # LeRobot's connect() marks the object connected *before* configure() talks to the
+            # servos, so when configure() fails (a timeout at power-up is the usual one) the next
+            # attempt dies instantly with DeviceAlreadyConnectedError and the retries do nothing.
+            # Drop the half-open connection first, then the retry is a real one.
+            try:
+                if getattr(arm, "is_connected", False):
+                    arm.disconnect()
+            except Exception:  # noqa: BLE001 — a failed cleanup must not stop the retry
+                pass
             if attempt == tries:
                 raise
-            print(f"[joint_server] connect failed (attempt {attempt}/{tries}): {exc} — retrying in {delay:.0f}s",
-                  flush=True)
+            print(f"[joint_server] connect failed (attempt {attempt}/{tries}): {exc} — "
+                  f"retrying in {delay:.0f}s (the bus may still be powering up)", flush=True)
             time.sleep(delay)
 
 
