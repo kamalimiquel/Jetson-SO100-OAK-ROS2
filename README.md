@@ -38,8 +38,10 @@ rather than redrawn, and the band at the bottom lists what is still to build.
 | **WebSocket / rosbridge** | a persistent TCP connection a browser can speak; *rosbridge* turns those into ROS topics (used by the MuJoCo twin and the pad) |
 | **ttyd** | the tiny web server in `so100-web` that exposes the Terminal Xavier NX tab (a shell on the host, in the browser) |
 | **noVNC / websockify / VNC** | browser-friendly virtual screens: *Xvfb* fakes a monitor, *x11vnc* shares it, *websockify* lets a browser view it |
-| **X11 / X server / Qt** | the Linux graphical system (X11); Qt is the toolkit RViz2 is built on |
-| **llvmpipe** | the software 3-D renderer used here because this board has no GPU path for Qt — it costs CPU |
+| **X11 / X server** | the Linux graphical system: a program that owns a screen, and the protocol applications draw through. Here the server is **Xvfb**, a virtual one (no monitor, no GPU) |
+| **Qt** | the GUI toolkit RViz2 is built on — every button and panel is Qt. Its 3-D view is Ogre, and Ogre needs **OpenGL**, which is why Qt is the thing that ends up on the CPU here ([§9.5](#95-the-renderer--why-qt-draws-on-the-cpu)) |
+| **OpenGL / GLX / EGL** | the 3-D API and the two ways a program gets a hardware context on Linux (an X display, or directly). Neither reaches the GPU inside this container |
+| **llvmpipe / swrast** | Mesa's **software** OpenGL renderer: it draws with the CPU. The one in use here, because there is no GPU path — it costs ~155 % of a core in RViz ([§9.5](#95-the-renderer--why-qt-draws-on-the-cpu)) |
 | **MuJoCo** | the physics simulator used for the twin and for training data |
 | **F710** | the Logitech Wireless Gamepad F710 used for teleop |
 | **ChArUco** | a printed calibration board (chessboard fused with ArUco markers) used to locate the camera in the world |
@@ -71,6 +73,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [9.2 What runs inside `so100-web`](#92-what-runs-inside-so100-web)
   - [9.3 The image: the **desktop** dusty image, no compiling](#93-the-image-the-desktop-dusty-image-no-compiling)
   - [9.4 `entry.sh` — the container's whole startup](#94-entrysh--the-containers-whole-startup)
+  - [9.5 The renderer — why Qt draws on the CPU](#95-the-renderer--why-qt-draws-on-the-cpu)
 - **[10. Operator PC — teleop + visualization](#10-operator-pc--teleop--visualization)**
   - [10.1 MuJoCo model check (ADR-0016)](#101-mujoco-model-check-adr-0016)
   - [10.2 MuJoCo twin — live mirror of the real arm (rosbridge WebSocket, ADR-0019)](#102-mujoco-twin--live-mirror-of-the-real-arm-rosbridge-websocket-adr-0019)
@@ -888,17 +891,8 @@ frames while the tab is closed. If a panel shows `No Image`, it is either this c
 restarting RViz usually clears it — or an image whose texture width is odd: Ogre's upload fails
 silently at that point, which is why the composer pads its canvas to a multiple of 4.
 
-**Why the GPU does not help.** RViz2 is a Qt5 window whose 3-D view is Ogre, and Ogre needs an
-**OpenGL context** — in practice GLX on whatever X display it was given. Here that display is
-`Xvfb :10`, a *virtual* framebuffer: nothing drives a GPU for it, and its GLX is Mesa's software one.
-The container has no GPU device at all — `/dev/nvhost*`, `/dev/dri` and `/dev/nvidia*` are all absent
-inside `so100-web`, while on the host the board's GPU is reached through the `nvgpu` kernel module and
-`/dev/nvhost-gpu` — so even a hardware-EGL client would have nothing to open. The renderer is
-therefore **llvmpipe**, Mesa's CPU rasteriser, and `LIBGL_ALWAYS_SOFTWARE=1` only makes that explicit
-instead of letting Qt try GLX first, fail, and fall back. A real GPU path would take an Xorg on the
-host driving that display, the device nodes bind-mounted into the container and L4T GL/EGL libraries
-matching the image — a day's work for a window nobody is looking at, on a board whose GPU is better
-spent on perception. Hence software GL.
+**The renderer is the CPU here, and that is why the tabs are split the way they are** — the whole
+chain, from Qt to llvmpipe, is [§9.5](#95-the-renderer--why-qt-draws-on-the-cpu).
 
 **RViz only runs while its tab is on screen.** It is the most expensive thing in the cell:
 software GL keeps **~155 % of a core** busy just redrawing the arm. So `entry.sh` no longer starts it; the page POSTs
@@ -985,6 +979,37 @@ Two rules learned the hard way:
 
 1. **Never use displays `:0`/`:1` in the container.** The Xavier's own desktop runs Xorg on `:0`; with `--network host` the X11 abstract socket namespace is shared, so a container Xvfb on `:0` dies with *"server already running"* while everything else looks healthy (and rviz2 then fails with `qt.qpa.xcb: could not connect to display`).
 2. **Clear `/tmp/.X10-lock` and `/tmp/.X11-unix/X10` on start.** A container restart can leave them behind and Xvfb refuses to start.
+
+### 9.5 The renderer — why Qt draws on the CPU
+
+RViz2 is a **Qt5** application: a normal desktop window (menus, docked panels, tab bars) whose central
+widget is an **Ogre** 3-D view. Both halves want the GPU, and on this board neither gets it. The chain,
+with what actually happens at each step:
+
+| Step | What it is | What happens in this cell |
+|---|---|---|
+| **Qt** | the toolkit that draws every widget — this is why the question is about Qt and not about RViz alone | paints through its raster engine on the CPU; the widgets cost little |
+| **Ogre** | the 3-D engine inside the Qt window; it uploads meshes, textures and the grid | asks for an **OpenGL context**, which is the expensive part |
+| **OpenGL** | the API; on Linux it reaches a driver through **GLX** (on an X display) or **EGL** | no driver to reach, for the two reasons below |
+| **X display** | where a GLX context lives | it is `Xvfb :10` — a *virtual* framebuffer. Xvfb has no GPU by construction: its GLX comes from Mesa and renders in software |
+| **Device node** | what a real driver would open (`/dev/nvidia*`, `/dev/nvhost-gpu`, `/dev/dri/*`) | **none of them exist inside `so100-web`** — checked: `/dev/nvhost*`, `/dev/dri` and `/dev/nvidia*` are all absent. On the host the GPU is reached through the `nvgpu` module and `/dev/nvhost-gpu`, and the compose file does not pass them in |
+| **Renderer** | the last stop | **llvmpipe**, Mesa's CPU rasteriser (`swrast_dri.so` is in the image). `LIBGL_ALWAYS_SOFTWARE=1` does not create the limitation, it declares it: without it Qt probes GLX first, fails, and sometimes lands on a worse path |
+
+So "no GPU path for Qt" means exactly this: **the GPU exists, but nothing on the path from Qt to it can
+use it.** A hardware context would need all three of: a real X server on the host owning the display
+(`Xorg` with the L4T driver, not Xvfb), the `nvhost`/`dri` device nodes bind-mounted into the container,
+and GL/EGL userspace libraries matching the image's Mesa/NVIDIA versions. That is a day of work for a
+window nobody watches on a headless board — and the GPU is better spent on perception.
+
+What it costs, measured: **~155 % of a core** to redraw the arm continuously, against **2 %** for the web
+container with RViz off. Which is the reason for two decisions elsewhere in this chapter: RViz is started
+by the tab and stopped when you leave it ([§9.2](#92-what-runs-inside-so100-web)), and the heavy image
+panels live in the plain-MJPEG Stereo tab instead of in RViz, whose own image displays would compete with
+the 3-D view for the same software renderer.
+
+If someone does want the GPU path, the order is: `Xorg` on the host → `docker exec` test with
+`DISPLAY=:0` and `LIBGL_ALWAYS_SOFTWARE=0` → mount the nodes → fix the library versions. Do not start at
+the container.
 
 ## 10. Operator PC — teleop + visualization
 
