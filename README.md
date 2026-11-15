@@ -849,17 +849,19 @@ The page derives the Xavier's address from its own URL (`location.hostname`), so
 
 The first two controls in the bar, left of the tabs, are one torque switch **per arm**:
 
-| Button | Colour | Means |
-|---|---|---|
-| `Arm 1 · loose` | red | arm 1's servos are free: move it by hand |
-| `Arm 1 · holding` | orange | arm 1 is energised and holds its pose |
-| `Arm 2 · loose` / `Arm 2 · holding` | the same, for arm 2 | |
-| `Arm N · ?` | grey | that proxy did not answer — the state is **unknown**, not "off" |
+| Button | Colour | What the arm is doing | What a click does |
+|---|---|---|---|
+| `Torque Arm 1` | red | arm 1's servos are **free** — move it by hand | energises them |
+| `Arm 1 loose` | orange | arm 1 is **holding** its pose | releases them |
+| `Torque Arm 2` / `Arm 2 loose` | the same, for arm 2 | | |
+| `Torque Arm N · ?` | grey | that proxy did not answer — the state is **unknown**, not "off" | nothing, and the tooltip says so |
 
-A click flips its own arm and nothing else; the label and the colour follow what the hardware reports
-back, never what was clicked. Each button reads its own proxy every 5 s, so a change made from the pad,
-from a `curl` or from another browser shows up here within a few seconds — and a dead proxy says `?`
-instead of quietly painting "loose".
+**The label names the action, not the state** — which is why an energised arm shows `Arm 1 loose` (press
+it and the arm goes loose). The colour carries the state, and so does the tooltip. A click flips its own
+arm and nothing else, and both the label and the colour follow what the hardware reports back, never
+what was clicked. Each button reads its own proxy every 5 s, so a change made from the pad, from a
+`curl` or from another browser shows up here within seconds — and a dead proxy says `?` instead of
+quietly painting itself "loose".
 
 Both arms always boot with **torque off**, and that is enforced twice: each joint server calls
 `disable_torque()` on its own startup and `/write` answers **409** with

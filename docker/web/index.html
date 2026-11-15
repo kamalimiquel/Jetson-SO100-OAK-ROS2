@@ -15,7 +15,7 @@
   /* torque switches, one per arm: red = servos free (boot state), orange = energised,
      grey = the proxy did not answer (state unknown, do not pretend it is off) */
   nav button.torque { background: #c0392b; color: #fff; font-weight: bold; margin-right: 0.35em;
-                      border: 1px solid #7f2a1f; min-width: 8.6em; }
+                      border: 1px solid #7f2a1f; min-width: 9.6em; }
   nav button.torque.on { background: #e07b1f; border-color: #9c5413; }
   nav button.torque.unknown { background: #4a5568; border-color: #2d3748; color: #cbd5e0; }
   nav button.torque:disabled { opacity: 0.6; cursor: progress; }
@@ -27,9 +27,9 @@
 <body>
 <nav>
   <button class="torque unknown" id="torque1" data-port="8092"
-          title="Arm 1: energise the servos (the arm is free to move by hand until then)">Arm 1 · ?</button>
+          title="Torque Arm 1 — energises the servos; the arm is free to move by hand until then">Torque Arm 1 · ?</button>
   <button class="torque unknown" id="torque2" data-port="8095" style="margin-right: 0.9em"
-          title="Arm 2: energise the servos (the arm is free to move by hand until then)">Arm 2 · ?</button>
+          title="Torque Arm 2 — energises the servos; the arm is free to move by hand until then">Torque Arm 2 · ?</button>
   <span class="sep"></span>
   <button class="active two-line" data-tab="term">Terminal<span>Xavier NX</span></button>
   <button class="two-line" data-tab="stereo">Stereo Cams &amp; Depth<span>OAK-D</span></button>
@@ -171,11 +171,15 @@
     function paint(on) {
       btn.classList.toggle("on", on === true);
       btn.classList.toggle("unknown", on === null);
-      btn.textContent = on === null ? `${label} · ?` : `${label} · ${on ? "holding" : "loose"}`;
+      // The label names what a click DOES, not what the arm is doing now:
+      // loose -> the button energises it ("Torque Arm N"); holding -> the button frees it.
+      btn.textContent = on === null ? `Torque Arm ${arm} · ?`
+                     : on ? `Arm ${arm} loose`
+                          : `Torque Arm ${arm}`;
       btn.title = on === null
-        ? `${label}: proxy :${btn.dataset.port} did not answer — state unknown`
-        : on ? `${label}: servos energised, holding its pose (click to free it)`
-             : `${label}: servos free, move it by hand (click to energise)`;
+        ? `Torque Arm ${arm}: proxy :${btn.dataset.port} did not answer — state unknown`
+        : on ? `Arm ${arm}: servos energised, holding its pose — click to release it`
+             : `Arm ${arm}: servos free, move it by hand — click to energise it`;
     }
 
     async function read() {
