@@ -759,9 +759,25 @@ The script is safe to run again and again. It: installs the compose v2 plugin if
    docker compose up -d --build rosbridge
    ```
 
-**Day-to-day:** `docker ps` shows the six `so100-*` containers; the containers come back up by themselves after a Xavier reboot (`restart: unless-stopped`). Open a shell inside one with `docker exec -it so100-arm bash`. To use ROS2 commands inside a shell, source the ROS environment first: `bash -c "source /opt/ros/humble/install/setup.bash && ros2 topic list"`.
+**Day-to-day:** `docker ps` shows **seven** `so100-*` containers — `so100-arm`, `so100-arm2`, `so100-cams`, `so100-perception`, `so100-control`, `so100-web`, `so100-rosbridge` (one per job, and why in [§7](#7-container-stack--how-the-xavier-runs-the-robot)). They come back up by themselves after a Xavier reboot (`restart: unless-stopped`), and a container that has been up for hours without its service answering is not healthy — check its log.
 
-Verified 2026-11-10: five tabs live (Stereo Cam and Point Cloud added), F710 torque on/off by holding B, cloud on the device's own intrinsics, colour↔depth homography solved at 0.69 px. Verified 2026-11-09: shutdown button (:8099) and Terminal tab (:7681) confirmed working by the operator; six containers up — `so100-arm` (bus 6/6, `/joint_states` at 50 Hz), `so100-cams` (OAK capture 1/1), `so100-control`, `so100-perception`, `so100-web` (tabs page + RViz2 arm + rqt_graph + ttyd live), `so100-rosbridge` (:9090 serving `/joint_states` to a LAN PC at 50 Hz).
+Open a shell in any of them with `docker exec -it so100-arm2 bash`: `docker/bashrc-cell` is mounted as `/root/.bashrc`, so ROS is already sourced, the domain is 42 and the prompt names the container ([§7](#7-container-stack--how-the-xavier-runs-the-robot)). `./scripts/shell.sh arm2` does the same by short name.
+
+**Which container is a node running in?** No ROS 2 command can answer that, and that is by design: all seven share the host network and the host IPC (`network_mode: host`, `ipc: host`), so every node is, as far as DDS is concerned, on **one machine** — `ros2 doctor --report` inside any container shows the host's own interfaces (`192.168.1.185` on `wlan0`, `docker0`). The ROS tools tell you *what* a node does; Docker tells you *where* it lives:
+
+| Question | Command |
+|---|---|
+| which nodes exist | `ros2 node list` · `ros2 node list -c` (how many) · `ros2 node list -a` (including hidden ones) |
+| what one node talks to | `ros2 node info /arm2_ik` — subscribers, publishers, services |
+| how many participants, and their DDS identities | `ros2 topic info -v /arm2/joint_states` — one `GID` per endpoint, plus the node name and the QoS actually in force |
+| which machine / interfaces ROS sees | `ros2 doctor --report` (network section) |
+| which container a node lives in | ROS does not know, so go through the code: `grep -rn "arm2_ik" docker/ws` says the node is created in `control/ik_node.py`, then `for c in $(docker ps --format '{{.Names}}'); do docker top $c -eo pid,args \| grep -q ik_node.py && echo "ik_node.py -> $c"; done` answers `so100-control`. Note the **node name is not the file name** (`/arm2_ik` lives in `ik_node.py`), and `docker top` must carry `pid` in its field list or it answers *Couldn't find PID field in ps output* |
+| which scripts each container is running | `for c in $(docker ps --filter name=so100- --format '{{.Names}}'); do echo "== $c"; docker top $c -eo pid,args \| grep -oE '/opt/ws/[a-z0-9_/]+\.py' \| xargs -r -n1 basename \| sort -u; done` |
+| the host/IPC mode itself | `docker inspect -f '{{.Name}} net={{.HostConfig.NetworkMode}} ipc={{.HostConfig.IpcMode}}' $(docker ps -q)` |
+
+There is no `-t` on `ros2 node list` (that flag belongs to `ros2 topic list -t`, which prints the message type next to each topic).
+
+Verified 2026-11-15: seven containers up with **both arms** `connected + calibrated` (`:8002`, `:8003`), torque proxies `:8092`/`:8095` answering, `/joint_states` 34.6 Hz, `/arm2/joint_states` 43.4 Hz, `/cell/joint_states_rad` 78.6 Hz, both wrist cameras streaming, web 200, and an interactive bash in **all seven** containers with ROS sourced. Verified 2026-11-10: five tabs live (Stereo Cam and Point Cloud added), F710 torque on/off by holding B, cloud on the device's own intrinsics, colour↔depth homography solved at 0.69 px. Verified 2026-11-09: shutdown button (:8099) and Terminal tab (:7681) confirmed working by the operator; six containers up then, because arm 2 did not exist yet — `so100-arm` (bus 6/6, `/joint_states` at 50 Hz), `so100-cams` (OAK capture 1/1), `so100-control`, `so100-perception`, `so100-web` (tabs page + RViz2 arm + rqt_graph + ttyd live), `so100-rosbridge` (:9090 serving `/joint_states` to a LAN PC at 50 Hz).
 
 Notes (traps we hit — read before changing the stack):
 - Compose v2 is required — v1 rejects `device_cgroup_rules` with a misleading error.
