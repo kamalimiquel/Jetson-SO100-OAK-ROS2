@@ -766,7 +766,7 @@ Open a shell in any of them with `docker exec -it so100-arm2 bash`: `docker/bash
 **Which container is a node running in, and what is each node doing?** The commands that answer this —
 and the reason no ROS 2 command can answer the first half — are in
 [§14](#14-useful-ros-2-commands).
-Verified 2026-11-15: seven containers up with **both arms** `connected + calibrated` (`:8002`, `:8003`), torque proxies `:8092`/`:8095` answering, `/joint_states` 34.6 Hz, `/arm2/joint_states` 43.4 Hz, `/cell/joint_states_rad` 78.6 Hz, both wrist cameras streaming, web 200, and an interactive bash in **all seven** containers with ROS sourced. Verified 2026-11-10: five tabs live (Stereo Cam and Point Cloud added), F710 torque on/off by holding B, cloud on the device's own intrinsics, colour↔depth homography solved at 0.69 px. Verified 2026-11-09: shutdown button (:8099) and Terminal tab (:7681) confirmed working by the operator; six containers up then, because arm 2 did not exist yet — `so100-arm` (bus 6/6, `/joint_states` at 50 Hz), `so100-cams` (OAK capture 1/1), `so100-control`, `so100-perception`, `so100-web` (tabs page + RViz2 arm + rqt_graph + ttyd live), `so100-rosbridge` (:9090 serving `/joint_states` to a LAN PC at 50 Hz).
+Verified 2026-11-15: seven containers up with **both arms** `connected + calibrated` (`:8002`, `:8003`), torque proxies `:8092`/`:8095` answering, `/joint_states` 34.6 Hz, `/arm2/joint_states` 43.4 Hz, `/cell/joint_states_rad` 78.6 Hz, both wrist cameras streaming, web 200, and an interactive bash in **all seven** containers with ROS sourced.
 
 Notes (traps we hit — read before changing the stack):
 - Compose v2 is required — v1 rejects `device_cgroup_rules` with a misleading error.
