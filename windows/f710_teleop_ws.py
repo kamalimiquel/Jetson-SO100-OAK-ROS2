@@ -582,7 +582,12 @@ class Teleop:
         finally:
             for p in self.pubs:
                 p.unadvertise()
-            self.client.terminate()
+            try:
+                self.client.terminate()
+            except Exception as exc:                           # noqa: BLE001
+                # roslibpy 2.x raises AttributeError here when the loop never started; a traceback on
+                # exit reads like a crash and hides the real one.
+                print(f"(rosbridge connection closed: {type(exc).__name__})")
             pygame.quit()
 
     def draw_status(self, screen):

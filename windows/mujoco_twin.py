@@ -21,6 +21,7 @@ import argparse
 import json
 import math
 import os
+import time
 
 import mujoco
 import roslibpy
@@ -120,6 +121,15 @@ def check_geometry(model, data, path):
     return ok
 
 
+def safe_terminate(client):
+    """roslibpy 2.x raises AttributeError on terminate() when the Twisted loop never started; that
+    traceback at exit hides the real reason a run ended, so swallow it."""
+    try:
+        client.terminate()
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"(rosbridge connection closed: {type(exc).__name__})")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("model", help="path to the MuJoCo scene.xml (single- or two-arm)")
@@ -133,6 +143,12 @@ def main():
                         help="the file that says where arm 2 stands (README §15 R3)")
     parser.add_argument("--no-geometry-check", action="store_true",
                         help="do not compare the scene's separation with the cell geometry file")
+    parser.add_argument("--fps", type=float, default=60.0,
+                        help="how often to redraw (default 60). The loop used to run flat out, which "
+                             "pinned a core and made every other window on the PC stutter")
+    parser.add_argument("--headless", action="store_true",
+                        help="no viewer window: subscribe and print the rates only (use it next to the "
+                             "pad, or to check the bridge without opening a second window)")
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(args.model)
@@ -168,21 +184,55 @@ def main():
             if want in names:
                 latest[arm][q] = math.radians(positions[names.index(want)])
 
-    for tname, arm in topics:
+    subs = []                          # keep the Topic objects: roslibpy does not require it, but a
+    for tname, arm in topics:          # subscription you cannot see is one you cannot unsubscribe
         sub = roslibpy.Topic(client, tname, "sensor_msgs/JointState")
         sub.subscribe(lambda msg, arm=arm: on_message(msg, arm))
+        subs.append(sub)
     print("subscribed: " + ", ".join(t[0] for t in topics))
 
+    if args.headless:
+        period = 1.0 / max(args.fps, 1.0)
+        t0, n0 = time.time(), 0
+        print("headless: no viewer, Ctrl+C to stop")
+        try:
+            while True:
+                time.sleep(period)
+                n0 += 1
+                if time.time() - t0 >= 5.0:                      # a heartbeat, so silence means dead
+                    print("  %.1f Hz drawing, %d of %d joints seen"
+                          % (n0 / (time.time() - t0), len(latest[0]) + len(latest[1]),
+                             len(mappings[0]) + len(mappings[1])), flush=True)
+                    t0, n0 = time.time(), 0
+        except KeyboardInterrupt:
+            pass
+        finally:
+            safe_terminate(client)
+        return
+
     handle = viewer.launch_passive(model, data)
+    period = 1.0 / max(args.fps, 1.0)
+    frames = 0
+    t_report = time.time()
     try:
         while handle.is_running():
+            tick = time.time()
             for arm in range(len(mappings)):
                 for i, angle in latest[arm].items():
                     data.qpos[i] = angle
             mujoco.mj_forward(model, data)
             handle.sync()
+            frames += 1
+            if time.time() - t_report >= 5.0:                     # if this line stops, the loop is stuck
+                print("  %.0f fps, %d of %d joints seen"
+                      % (frames / (time.time() - t_report), len(latest[0]) + len(latest[1]),
+                         len(mappings[0]) + len(mappings[1])), flush=True)
+                frames, t_report = 0, time.time()
+            rest = period - (time.time() - tick)                  # the window had no throttle at all:
+            if rest > 0:                                          # a busy loop here starves the pad
+                time.sleep(rest)                                  # on a small PC
     finally:
-        client.terminate()
+        safe_terminate(client)
         handle.close()
 
 

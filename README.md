@@ -1059,6 +1059,27 @@ cd mujoco_menagerie && git sparse-checkout set robotstudio_so101 && cd ..
 .\.venv312\Scripts\python.exe windows\mujoco_twin.py D:\10_Repos\Robotics\mujoco_menagerie\robotstudio_so101\scene_two_arms.xml --both-arms
 ```
 
+**Running the twin and the pad at the same time.** They are independent processes and they both talk to
+rosbridge, which serves both without trouble (measured from a second machine: twin at 42.8 / 47.4 Hz and pad
+at 42.1 / 46.5 Hz on the same two topics, simultaneously). What *did* break them was local to the PC: the
+twin's draw loop had **no throttle at all**, so it pinned a core and every other window stuttered, and the pad
+— which polls the pad at 50 Hz in its own process — looked dead. The loop is now capped:
+
+```
+.venv312\Scripts\python.exe windows\mujoco_twin.py <scene_two_arms.xml> --both-arms --fps 30
+```
+
+and it prints a status line every 5 s (`30 fps, 12 of 12 joints seen`). If that line stops, the twin is stuck;
+if it keeps going while the pad does not move, the problem is the pad or the arm, not the twin. `--headless`
+skips the window and prints the same lines — useful to prove the bridge is alive when the machine is small.
+
+Two things that look like "the twin broke the pad" and are not:
+
+- **Keystrokes need focus.** The pad's X (print the joints) and Q (quit) are keyboard events: with MuJoCo's
+  window in front, they go to MuJoCo. The sticks and buttons are polled from the joystick and keep working.
+- **Two windows, one screen.** Both programs open one; whichever is in front takes the keystrokes. Put the pad
+  in front if you are going to use its keyboard, or leave the pad to the sticks.
+
 ![The twin on the operator PC](docs/twin-two-arms-live.png)
 
 *The twin on the operator PC, with `--both-arms`: one scene, both SO-101s, each following its own robot
