@@ -250,13 +250,26 @@ class OakNode(Node):
         return out
 
     def _publish_static_tfs(self, ns):
+        """The camera's own frames, all in ONE latched message.
+
+        A StaticTransformBroadcaster is latched, so a late subscriber gets the LAST message only:
+        sending three separate transforms meant the optical frames were published and then
+        overwritten, and only the last one (`..._imu_link`) ever reached RViz or any other late
+        joiner — which is why an image in `scene_color_optical_frame` had no transform to show.
+
+        None of these has a parent in the cell's tree: `base -> <ns>_camera_link` is the hand-eye
+        extrinsic, and it is not published because it is not measured yet (README §12.3). That is
+        what RViz reports when it says the frames outside `base` cannot be transformed.
+        """
+        frames = []
         for child in ("color_optical_frame", "right_optical_frame", "imu_link"):
             t = TransformStamped()
             t.header.stamp = self.get_clock().now().to_msg()
             t.header.frame_id = f"{ns}_camera_link"
             t.child_frame_id = f"{ns}_{child}"
             t.transform.rotation.w = 1.0
-            self.tfb.sendTransform(t)
+            frames.append(t)
+        self.tfb.sendTransform(frames)
 
     def tick(self):
         now = self.get_clock().now().nanoseconds / 1e9

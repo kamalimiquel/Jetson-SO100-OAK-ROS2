@@ -888,9 +888,20 @@ frames while the tab is closed. If a panel shows `No Image`, it is either this c
 restarting RViz usually clears it — or an image whose texture width is odd: Ogre's upload fails
 silently at that point, which is why the composer pads its canvas to a multiple of 4.
 
+**Why the GPU does not help.** RViz2 is a Qt5 window whose 3-D view is Ogre, and Ogre needs an
+**OpenGL context** — in practice GLX on whatever X display it was given. Here that display is
+`Xvfb :10`, a *virtual* framebuffer: nothing drives a GPU for it, and its GLX is Mesa's software one.
+The container has no GPU device at all — `/dev/nvhost*`, `/dev/dri` and `/dev/nvidia*` are all absent
+inside `so100-web`, while on the host the board's GPU is reached through the `nvgpu` kernel module and
+`/dev/nvhost-gpu` — so even a hardware-EGL client would have nothing to open. The renderer is
+therefore **llvmpipe**, Mesa's CPU rasteriser, and `LIBGL_ALWAYS_SOFTWARE=1` only makes that explicit
+instead of letting Qt try GLX first, fail, and fall back. A real GPU path would take an Xorg on the
+host driving that display, the device nodes bind-mounted into the container and L4T GL/EGL libraries
+matching the image — a day's work for a window nobody is looking at, on a board whose GPU is better
+spent on perception. Hence software GL.
+
 **RViz only runs while its tab is on screen.** It is the most expensive thing in the cell:
-software GL (`LIBGL_ALWAYS_SOFTWARE=1`, there is no GPU path for Qt here) keeps **~155 % of a
-core** busy just redrawing the arm. So `entry.sh` no longer starts it; the page POSTs
+software GL keeps **~155 % of a core** busy just redrawing the arm. So `entry.sh` no longer starts it; the page POSTs
 `:8099/rviz/start` when the tab is opened, `/rviz/stop` when another tab is chosen, and stops it
 again on `pagehide`. The X display and its VNC front-end stay up, so switching back is a window
 appearing in ~10 s, not a container restart. The web container idles at **2 %** CPU instead of
@@ -1701,9 +1712,23 @@ Logitech on this bench answers 640x480 JPEG whatever you ask for. Both frames ar
 ([§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm)), so each feed is already tied to its own
 moving jaw and can become an eye-in-hand measurement once those numbers are measured.
 
-Separately, `/tf_static` also carries the **scene** camera's own offsets (`scene_camera_link` and
-friends): those come from the device's built-in extrinsics, not from the hand-eye result, which is
-why the cloud is exact in the camera frame and not yet in `base`.
+Separately, `/tf_static` also carries the **scene** camera's own frames — `scene_camera_link` and, under
+it, `scene_color_optical_frame`, `scene_right_optical_frame` and `scene_imu_link`: those come from the
+device's built-in extrinsics, not from the hand-eye result, which is why the cloud is exact in the camera
+frame and not yet in `base`.
+
+**What the TF display's warning means.** RViz fixes the tree on `base`, and `scene_camera_link` **has no
+parent** — `base → scene_camera_link` *is* the hand-eye extrinsic, and it is not published because it is
+not measured yet ([§12.3](#123-hand-eye--where-the-camera-sits-in-the-arms-frame)). So the display lists
+`scene_camera_link` and the three frames under it as frames it cannot place. That is the truth, not a
+fault, and it disappears the day the extrinsic is valid. Do not publish a nominal mount to silence it: the
+cloud would then look right and be wrong, which is the failure this chapter exists to avoid. If you only
+need a screenshot, fix the display's frame to `scene_color_optical_frame` for a minute.
+
+One trap that was live until 2026-11-15: those three frames were sent as **three separate** latched
+messages, and a static broadcaster keeps only the **last** one — so a late subscriber (RViz, any tool) saw
+`scene_imu_link` alone and reported `No transform` for an image in `scene_color_optical_frame`. They now
+travel in one message (`_publish_static_tfs`), which is the only way a static group survives a late join.
 
 Two plain-HTTP viewers run alongside the node in the same container, so the cameras can be
 inspected from any browser without ROS tooling:
