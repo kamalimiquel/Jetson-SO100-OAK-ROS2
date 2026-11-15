@@ -1111,10 +1111,10 @@ skips the window and prints the same lines — useful to prove the bridge is ali
 
 Two things that look like "the twin broke the pad" and are not:
 
-- **Keystrokes need focus.** The pad's X (print the joints) and Q (quit) are keyboard events: with MuJoCo's
-  window in front, they go to MuJoCo. The sticks and buttons are polled from the joystick and keep working.
+- **The only keystroke left is Q (quit), and it needs focus.** With MuJoCo's window in front, Q goes to
+  MuJoCo. Sticks and buttons are polled from the joystick and keep working either way.
 - **Two windows, one screen.** Both programs open one; whichever is in front takes the keystrokes. Put the pad
-  in front if you are going to use its keyboard, or leave the pad to the sticks.
+  in front if you want Q, or leave the pad to the sticks and Ctrl+C in its console.
 
 ![The twin on the operator PC](docs/twin-two-arms-live.png)
 
@@ -1171,15 +1171,17 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
 - **cartesian-feel**: START toggles — left stick = pan/lift, right stick X = elbow, right stick Y = wrist_roll, **LB + right stick Y = wrist_flex**, triggers = gripper.
 - **record / replay**: **pad X** starts/stops recording the targets, **pad Y** replays them (it
   refuses if the arm has no torque, and arming cancels a replay in progress).
-- **keyboard X** prints the six joints as they are right now, with the torque state
-  (`arm 1 [keyboard X] joints now (torque OFF): …`), every press — the free reading that shows where
-  the arm really is before it is armed. Q or Esc quits. The client opens a small window **because SDL
-  delivers no key events without a display surface**; it also shows the active arm, its torque state
-  and whether it is recording.
-- **torque**: hold **B for 5 s** to energise or release the **active** arm — the state is read from the arm before flipping, so it cannot get out of sync. A tap of B does nothing; the replay is on Y.
+- **arm / torque**: hold **A for 5 s** to change arm (1 → 2 → 1), hold **B for 5 s** to energise or
+  release the **active** arm. A tap of either does nothing, and the switch needs a release before it
+  can fire again: a held button is a deliberate act.
+- **Q or Esc** quits. The client opens a small window **because SDL delivers no key events without a
+  display surface**; it also shows the active arm, its torque state and whether it is recording. The
+  keyboard does nothing else — it used to print the joint vectors on X, which is gone
+  (`curl -s 127.0.0.1:8002/read` still answers if you want the pose by hand).
+- **torque**: the state is read from the arm before flipping, so it cannot get out of sync.
   **Arming reads the joints, energises, waits for the first reading with torque on and commands exactly
-  that**, so the servos take hold where the arm stands and never snap to an old command. The log prints
-  the vector read before and after (`drift 0.0°` when all is well).
+  that**, so the servos take hold where the arm stands and never snap to an old command. The log says
+  one line — `arm 1 torque: ARMED at the pose it was standing in` — and does not dump the vectors.
 
   The jump itself was **server-side**, not in the client: a servo keeps its own `Goal_Position`, so
   `enable_torque()` alone made it snap back to the last command it had been given — a pose from before
@@ -1191,19 +1193,18 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
   **Two buzzes, one second apart, mean armed; one means released**; a long buzz means the pose was stale
   and nothing was armed.
 
-  The pad prints the measurement itself **on every change, both ways**, so a doubt is settled from the
-  console instead of by eye:
+  The console is quiet on purpose — one line per state change, no per-joint dumps:
 
   ```
-  arm 1 joints just before torque: [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8]
-  arm 1 torque: ARMED — read before: [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8]
-  arm 1 torque: ARMED — read after:  [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8] (drift 0.0°, commanding that)
-  arm 1 joints 3 s after torque on: [-24.7, -10.0, -76.2, 0.8, -110.9, 8.8] (drift [0.0, ...], worst 0.0deg)
-  arm 1: held its pose (<= 1deg)
-  arm 1 joints just before releasing torque: [-24.7, ...]
+  arm 1 torque: OFF
+  arm 1 torque: ARMED at the pose it was standing in
   arm 1 torque: RELEASED
-  arm 1 joints 3 s after torque off: [-24.7, ...] (drift [0.0, ...], worst 0.0deg)
   ```
+
+  The per-joint measurement (the vector before torque, the one three seconds later and the drift
+  between them) was taken out of the client once the behaviour was proven: the server still prints
+  `goals seeded from present positions` and `armed at … — held it (worst 0.0deg)` in
+  `docker logs so100-arm`, which is where a measurement belongs.
 
   The pose is kept **live**: `on_state()` overwrites the stored vector on every `/joint_states`
   message, not only on the first one. It used to be written once, so the client kept the pose the arm

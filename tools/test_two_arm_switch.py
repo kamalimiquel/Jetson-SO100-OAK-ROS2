@@ -87,7 +87,6 @@ def main():
         t0 = time.time()
         while time.time() - t0 < seconds:
             t.service_buzz()
-            t.service_report()
             t.handle_a()
             t.handle_b()
             time.sleep(0.02)
@@ -143,33 +142,12 @@ def main():
     close("and that target is the read pose", sent[0] if sent else [], real)
     tick_for(1.3)
     check("the second buzz fires after 1 s", buzzes, [("short", 1), ("short", 1)])
-    check("prints the joints just before torque",
-          any("joints just before torque" in x for x in said), True)
-    check("prints ARMED read before",
-          any("ARMED — read before:" in x for x in said), True)
-    check("prints ARMED read after",
-          any("ARMED — read after:" in x for x in said), True)
-    check("the 3 s report is scheduled",
-          0.5 < (t.report_at or 0) - time.time() < 3.1, True)
-
-    # three seconds later, with the arm sagging 5 deg on its own: it must be reported and undone.
-    # The live topic would overwrite the fake drift on the next message, so it is paused here.
-    real_on_state, real_fresh = t.on_state, t.fresh_pose
-    t.on_state = lambda *a, **k: None
-    t.fresh_pose = lambda arm: True
-    t.arm_targets[t.active][2] += 5.0
-    ref = list(t.report_ref)
-    sent.clear()
-    tick_for(3.3)
-    check("prints the joints 3 s after torque",
-          any("joints 3 s after torque" in x for x in said), True)
-    check("calls out the drift", any("DRIFTED" in x for x in said), True)
-    check("re-commands the pose it was armed at", len(sent), 1)
-    close("and that pose is the one before torque", sent[0] if sent else [], ref)
-    check("the report does not repeat", t.report_at, None)
-    t.arm_targets[t.active][2] -= 5.0
-    t.on_state, t.fresh_pose = real_on_state, real_fresh
-    check("and is not left pending", t.buzz_at, None)
+    check("says it armed, without dumping the pose",
+          any("torque: ARMED" in x for x in said)
+          and not any("read before" in x or "read after" in x for x in said), True)
+    check("and does not report a pose later",
+          any("3 s after" in x for x in said), False)
+    check("no report is left pending", getattr(t, "report_at", None), None)
     tick_for(4.0)
     check("does not fire again while B stays down", len(buzzes), 2)
 
@@ -181,11 +159,9 @@ def main():
     check("5 s again releases it", fake["on"], False)
     check("one buzz when releasing", buzzes, [("short", 1)])
 
-    check("the release prints the joints before it",
-          any("just before releasing torque" in x for x in said), True)
-    tick_for(3.3)
-    check("and again three seconds after releasing",
-          any("3 s after torque off" in x for x in said), True)
+    check("the release says so, and prints no pose",
+          any("torque: RELEASED" in x for x in said)
+          and not any("just before releasing" in x for x in said), True)
 
     buttons["b"] = False
     t.handle_b()
@@ -206,14 +182,10 @@ def main():
     check("refuses to arm without a fresh pose", fake["on"], False)
     check("long buzz when refusing", buzzes, [("long", 1)])
 
-    print("== keyboard X prints, pad X records, pad Y replays")
+    print("== pad X records, pad Y replays (the keyboard no longer prints anything)")
     fake["on"] = True
     t.torque_on[t.active] = True
-    t.arm_state_t[t.active] = time.time()     # a fresh reading, or print_pose says so instead
-    said.clear()
-    t.print_pose("keyboard X")
-    check("keyboard X prints the joints with the torque state",
-          any("joints now (torque ON)" in x and "keyboard X" in x for x in said), True)
+    check("print_pose is gone", hasattr(t, "print_pose"), False)
     said.clear()
     t._button = lambda b: b == 2          # pad X
     t.prev.clear(); t.tick()
