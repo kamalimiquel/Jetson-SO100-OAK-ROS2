@@ -1021,7 +1021,10 @@ MuJoCo is already installed on the Windows PC. To verify the SO-101 model chain 
 
 1. Install MuJoCo for Python (if not already):
    pip install mujoco
-2. Get the SO-ARM100 model from MuJoCo Menagerie (clone or download zip):
+2. Get the SO-ARM100 model from MuJoCo Menagerie (clone or download zip). The model this cell
+   needs is the **SO-101** inside it, `robotstudio_so101` — direct link:
+   https://github.com/google-deepmind/mujoco_menagerie/tree/main/robotstudio_so101
+   (`trs_so_arm100` is the SO-100 and maps the joints to the wrong frames):
    git clone https://github.com/google-deepmind/mujoco_menagerie
 3. Run the repo's check script against the model:
    python windows\mujoco_check.py C:\path\to\mujoco_menagerie\robotstudio_so101\scene.xml
@@ -1048,7 +1051,7 @@ The Xavier's `so100-rosbridge` container serves a WebSocket at ws://192.168.1.50
    ```
    pip install roslibpy "mujoco>=3,<4"
    ```
-2. Run the twin — this arm is the **SO-101**, so load `robotstudio_so101` (`trs_so_arm100` is the SO-100 and will map joints to the wrong frames):
+2. Run the twin — this arm is the **SO-101**, so load `robotstudio_so101` (`trs_so_arm100` is the SO-100 and will map joints to the wrong frames), https://github.com/google-deepmind/mujoco_menagerie/tree/main/robotstudio_so101 :
    ```
    python windows\mujoco_twin.py C:\path\to\mujoco_menagerie\robotstudio_so101\scene.xml
    ```
