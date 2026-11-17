@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hand-eye capture: drive the arm through poses, save image + gripper pose.
+"""Hand-eye capture: three ways to collect the poses, one dataset format.
 
 Eye-to-hand setup: the camera is fixed, the ChArUco board is mounted on the
 gripper (ADR-0011 amended 2026-11-09). For every pose we store
@@ -9,7 +9,22 @@ gripper (ADR-0011 amended 2026-11-09). For every pose we store
 
 so the solve step can be re-run from the stored data without touching the arm.
 
-    python3 handeye_capture.py --host 192.168.1.185 --out ~/calib/scene
+The three modes, and what each one needs:
+
+  (default)   drives the arm through DEFAULT_POSES via /joint_targets — needs
+              TORQUE ON, and the poses are a guess about where the board is.
+  --adaptive  small offsets around the pose where the board was last seen; a pose
+              that loses the board is reverted. Same torque requirement.
+  --watch     the OPERATOR moves the arm (by hand with torque off, or with the
+              pad) and every pose that is still, sees the board and is new enough
+              is saved. Publishes nothing, so it needs no torque: this is the mode
+              that matches "move the arm by hand and take a shot".
+
+Joint 6 is never commanded unless --gripper is given, and a 5-value target leaves
+the gripper servo untouched.
+
+    python3 handeye_capture.py --host <jetson-ip> --out ~/calib/scene_YYYYMMDD
+    python3 handeye_capture.py --host <jetson-ip> --out ~/calib/scene_YYYYMMDD --watch --want 14
 """
 
 import argparse
@@ -155,6 +170,124 @@ ADAPTIVE_STEPS = [
 
 LIMITS = [(-80, 80), (-70, 15), (-5, 75), (-45, 45), (-180, 180), (0, 100)]
 
+# Board geometry, in millimetres: what the printed board MEASURES, not what the PDF
+# claims. It goes into poses.json and from there into the solver's object points, so a
+# print that came out at 13.5 mm squares with 18 mm assumed poisons the whole solve
+# (measured on this bench, 2026-11-17: 48 px rms with 18 mm, 235 px with 13.5 mm).
+BOARD_SQUARES = 5
+BOARD_SQUARE_MM = 18.0
+BOARD_MARKER_MM = 13.5
+MIN_CORNERS = 12
+
+
+def board_spec(square_mm, marker_mm):
+    return {"squares": BOARD_SQUARES, "square_m": square_mm / 1000.0,
+            "marker_m": marker_mm / 1000.0, "dict": "DICT_4X4_50"}
+
+
+def steady(q1, q2, tol=0.3):
+    """True if the arm did not move between two joint readings (max difference < tol deg)."""
+    return max(abs(a - b) for a, b in zip(q1, q2)) < tol
+
+
+def novel(q, accepted, min_novelty):
+    """True if q differs from EVERY pose already kept by at least min_novelty degrees."""
+    return all(max(abs(a - b) for a, b in zip(q, p["joints_deg"])) >= min_novelty
+               for p in accepted)
+
+
+def watch_step(now, q, c, ref, records, min_novelty, hold=1.2, tol=0.3, px_tol=2.0,
+               corners_min=MIN_CORNERS):
+    """One decision of --watch, kept pure so it can be tested without an arm or a camera.
+
+    `ref` is (time, joints, corners) of the last look that could become a sample, or None.
+    `c` is the detected corner array of this frame. Returns (action, new_ref):
+    wait (nothing to decide yet) / settle (arm or stream still moving: restart the hold)
+    / save / duplicate.
+    """
+    if c is None or len(c) < corners_min:
+        return "wait", None                     # board not (fully) in view: forget the hold
+    if ref is None or len(ref[2]) != len(c) or not steady(ref[1], q, tol):
+        return "settle", (now, q, c)
+    if float(max(abs(a - b) for ra, rb in zip(ref[2], c) for a, b in zip(ra, rb))) > px_tol:
+        return "settle", (now, q, c)            # the stream is still catching up with the arm
+    if now - ref[0] < hold:
+        return "wait", ref                      # still counting the hold
+    if not novel(q, records, min_novelty):
+        return "duplicate", ref
+    return "save", ref
+
+
+def corners_of(jpg, det, cv2, np):
+    """ChArUco corners of one JPEG frame, or None. Detects a duplicated board."""
+    img = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        return None
+    c, _, markers, mids = det.detectBoard(img)
+    if mids is not None and len(mids):
+        flat = [int(v) for v in np.array(mids).ravel()]
+        if len(flat) != len(set(flat)):
+            raise SystemExit("rejected: the board appears TWICE in the image (same marker ids at "
+                             "different places) — is the PDF open on a monitor? Hide it.")
+    return None if c is None else c.reshape(-1, 2).astype(np.float32)
+
+
+def watch(args, state, client, det, out_dir, cv2, np):
+    """--watch: the operator moves the arm; keep every pose that is still, sees the board
+    and is new. NOTHING is published, so no torque is needed and the pad may be in use."""
+    url = "http://%s:%d/snapshot" % (args.host, args.view)
+    records = []
+    ref = None
+    deadline = time.time() + args.watch_minutes * 60.0
+    last_line = 0.0
+    last_action = ""
+    print("watch: move the arm (torque off, by hand). A pose is kept when it holds still for "
+          "%.1f s, the board shows >= %d corners and it differs by >= %.0f deg from the kept "
+          "ones; %d poses or %.0f minutes, whichever comes first."
+          % (1.2, MIN_CORNERS, args.min_novelty, args.want, args.watch_minutes))
+    while len(records) < args.want and time.time() < deadline:
+        q = list(state["p"])
+        try:
+            jpg = urllib.request.urlopen(url, timeout=5).read()
+        except Exception as exc:                 # noqa: BLE001
+            print("watch: no frame from %s (%s) — retrying" % (url, exc))
+            time.sleep(1.0)
+            continue
+        c = corners_of(jpg, det, cv2, np)
+        action, ref = watch_step(time.time(), q, c, ref, records, args.min_novelty)
+        if action == "save":
+            name = "pose_%02d.jpg" % len(records)
+            with open(os.path.join(out_dir, name), "wb") as fh:
+                fh.write(jpg)
+            records.append({"image": name, "joints_deg": q, "fk_base_jaw": fk(q),
+                            "corners": int(len(c))})
+            print("pose %02d/%d  joints=%s  corners=%d  (kept)"
+                  % (len(records), args.want, [round(v, 1) for v in q], len(c)))
+            ref = None
+            with open(os.path.join(out_dir, "poses.json"), "w") as fh:
+                json.dump({"board": board_spec(args.square_mm, args.marker_mm),
+                           "poses": records}, fh, indent=1)
+            continue
+        # a slow, honest status line: what the operator needs to know while posing
+        now = time.time()
+        if action != last_action or now - last_line > 5.0:
+            last_line, last_action = now, action
+            have = 0 if c is None else len(c)
+            why = {"wait": "board %d/%d corners" % (have, MIN_CORNERS),
+                   "settle": "hold still (arm or stream still moving)",
+                   "duplicate": "too close to a pose already kept",
+                   }.get(action, action)
+            print("watching %d/%d — %s" % (len(records), args.want, why), flush=True)
+        time.sleep(0.4)
+    if len(records) < args.want:
+        print("watch: gave up after %.0f minutes with %d/%d poses — the solve needs >= 6, "
+              "12 is what this cell aims for" % (args.watch_minutes, len(records), args.want))
+    with open(os.path.join(out_dir, "poses.json"), "w") as fh:
+        json.dump({"board": board_spec(args.square_mm, args.marker_mm), "poses": records},
+                  fh, indent=1)
+    print("saved %d poses to %s" % (len(records), out_dir))
+    client.terminate()
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -177,7 +310,13 @@ def main():
     ap.add_argument("--watch-minutes", type=float, default=10.0, help="give up after this long (--watch)")
     ap.add_argument("--min-novelty", type=float, default=5.0,
                     help="a new pose must differ by at least this many degrees (any joint)")
+    ap.add_argument("--square-mm", type=float, default=BOARD_SQUARE_MM,
+                    help="MEASURED side of a board square in mm — caliper, not the PDF's claim")
+    ap.add_argument("--marker-mm", type=float, default=BOARD_MARKER_MM,
+                    help="MEASURED side of an ArUco marker in mm (0.75 x square-mm on this board)")
     args = ap.parse_args()
+    square_m = args.square_mm / 1000.0
+    marker_m = args.marker_mm / 1000.0
 
     # live board check: a sweep that only sees the board in a few poses is useless,
     # and finding out at solve time costs another full sweep (arm + operator time).
@@ -185,7 +324,7 @@ def main():
     if not args.no_check:
         try:
             import cv2
-            board = cv2.aruco.CharucoBoard((5, 5), 0.018, 0.0135,
+            board = cv2.aruco.CharucoBoard((BOARD_SQUARES, BOARD_SQUARES), square_m, marker_m,
                                            cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
             det = cv2.aruco.CharucoDetector(board)
         except ImportError:
@@ -197,13 +336,25 @@ def main():
     state = {}
     roslibpy.Topic(client, "/joint_states", "sensor_msgs/JointState").subscribe(
         lambda m: state.update(p=[float(x) for x in m["position"][:6]]))
-    pub = roslibpy.Topic(client, "/joint_targets", "std_msgs/Float64MultiArray")
-    pub.advertise()
     t0 = time.time()
     while "p" not in state and time.time() - t0 < 15:
         time.sleep(0.2)
     if "p" not in state:
         raise SystemExit("no /joint_states — is the arm container up?")
+
+    if args.watch:
+        # Nothing is commanded in this mode, so neither /joint_targets nor torque is needed.
+        import cv2          # noqa: F811 — the board check already imported it, --no-check may not
+        import numpy as np
+        if det is None:
+            board = cv2.aruco.CharucoBoard((BOARD_SQUARES, BOARD_SQUARES), square_m, marker_m,
+                                           cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
+            det = cv2.aruco.CharucoDetector(board)
+        watch(args, state, client, det, args.out, cv2, np)
+        return
+
+    pub = roslibpy.Topic(client, "/joint_targets", "std_msgs/Float64MultiArray")
+    pub.advertise()
 
     records = []
     aborted = False
@@ -246,7 +397,7 @@ def main():
             img = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_GRAYSCALE)
             c, _, _, _ = det.detectBoard(img)
             seen = 0 if c is None else len(c)
-        good = seen is None or seen >= 12
+        good = seen is None or seen >= MIN_CORNERS
         if adaptive and not good:
             # lost the board: come back to the last pose that saw it, drop the frame
             print("pose %02d/%d  joints=%s  corners=%s  <-- board lost, reverting"
@@ -277,8 +428,8 @@ def main():
             break
 
     with open(os.path.join(args.out, "poses.json"), "w") as f:
-        json.dump({"board": {"squares": 5, "square_m": 0.018, "marker_m": 0.0135,
-                             "dict": "DICT_4X4_50"}, "poses": records}, f, indent=1)
+        json.dump({"board": board_spec(args.square_mm, args.marker_mm), "poses": records},
+                  f, indent=1)
     print("saved", len(records), "poses to", args.out)
     pub.unadvertise()
     client.terminate()

@@ -31,6 +31,11 @@ BOARD = {"squares": 5, "square_m": 0.018, "marker_m": 0.0135, "dict": "DICT_4X4_
 MIN_CORNERS = 12
 
 
+def board_spec(square_mm, marker_mm):
+    return {"squares": 5, "square_m": square_mm / 1000.0,
+            "marker_m": marker_mm / 1000.0, "dict": "DICT_4X4_50"}
+
+
 def load(path):
     return json.load(open(path)) if os.path.exists(path) else {"board": BOARD, "poses": []}
 
@@ -42,11 +47,21 @@ def main():
     ap.add_argument("--port", type=int, default=9090)
     ap.add_argument("--view", type=int, default=8090)
     ap.add_argument("--status", action="store_true")
+    ap.add_argument("--square-mm", type=float, default=18.0,
+                    help="MEASURED side of a board square in mm — caliper, not the PDF's claim")
+    ap.add_argument("--marker-mm", type=float, default=13.5,
+                    help="MEASURED side of an ArUco marker in mm (0.75 x square-mm on this board)")
     args = ap.parse_args()
+    spec = board_spec(args.square_mm, args.marker_mm)
 
     os.makedirs(args.out, exist_ok=True)
     pj = os.path.join(args.out, "poses.json")
     data = load(pj)
+    if data.get("board") and data["board"] != spec:
+        raise SystemExit("this dataset was captured with board %s, you passed %s — a mixed "
+                         "dataset cannot be solved; use a new --out or the same board numbers"
+                         % (data["board"], spec))
+    data["board"] = spec
 
     if args.status:
         print("%d samples in %s" % (len(data["poses"]), args.out))
@@ -58,7 +73,8 @@ def main():
     import cv2
     import numpy as np
     import re
-    board = cv2.aruco.CharucoBoard((5, 5), 0.018, 0.0135,
+    board = cv2.aruco.CharucoBoard((spec["squares"], spec["squares"]),
+                                   spec["square_m"], spec["marker_m"],
                                    cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
     det = cv2.aruco.CharucoDetector(board)
     # camera matrix for the obliqueness/size checks (factory and charuco agree within 2 %)

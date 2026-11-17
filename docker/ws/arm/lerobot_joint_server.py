@@ -7,7 +7,12 @@ rclpy is built for py3.8 and LeRobot needs >=3.10.
 
     GET  /status  -> {"connected": true, "calibrated": true}
     GET  /read    -> {"angles": [6 floats, degrees], "names": [...]}
-    POST /write   -> body {"angles": [6 floats, degrees]}  (auto-enables torque)
+    GET  /torque  -> {"torque": false}
+    POST /torque  -> body {"on": true|false}  flips the servos' torque; enabling seeds the
+                     goals from the PRESENT positions, so the arm holds where it stands
+    POST /write   -> body {"angles": [5 or 6 floats, degrees]}  drives the joints, but only
+                     with torque ON: with torque off it answers 409 and moves nothing
+                     (the web page's torque button and pad-B are the only ways in)
 
 Env: SO100_PORT (default /dev/ttyACM0), SO100_ID (default so100_cell),
      PORT (default 8002, bound to 127.0.0.1).
