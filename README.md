@@ -2093,7 +2093,10 @@ one small, well-tested compatibility bridge as a new moving part.
 
 *As built:* the churn was 20 files edited and 3 added; the bridge is `docker/ws/arm/compat_bridge.py`
 (89 lines, started by arm 1's `entry.sh`) and it forwards each message **verbatim** — same header
-stamp, no re-stamp — at whatever rate its input arrives (50 Hz on the cell). It deliberately does **not** alias frames: `base` stays gone, and a 1.0-era consumer
+stamp, no re-stamp. Measured on the Xavier (2026-11-18): it **tracks its input** (`/arm1/joint_states`
+24.2 Hz → `/joint_states` 24.0 Hz) but loses about a fifth under load (`27.0 → 22.0` with RViz
+running at 155 % of a core) — it republishes synchronously, so a busy board costs it. Arm 1 itself
+publishes at 24–27 Hz while arm 2 does 37–50, which is the joint server's read loop, not this change. It deliberately does **not** alias frames: `base` stays gone, and a 1.0-era consumer
 that pinned `base` in RViz or `tf2_echo` must say `arm1_base`. The bridge is now the one place that can
 lose the 1.0 surface while the cell itself keeps working; `tools/test_compat_bridge.py` pins its wiring
 and `tools/check_namespaces.py` pins that no other file starts using a bare name again.

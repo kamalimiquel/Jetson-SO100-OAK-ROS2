@@ -78,6 +78,19 @@ which is the kind of rule that survives right up to the day someone adds a stati
   simulated arms): 40 of 41 checks — the pad finds `/arm1/joint_states`, switches with A, arms with B
   on the pose it reads, records with X and replays with Y. The single failure is the check that reads
   the real torque proxy over the LAN, which needs the cell.
-- **Not verified: anything on the Xavier.** The cell is not reachable from the machine this was built
-  on (10.213.58.97 vs the cell's 192.168.1.x), so `docker compose up`, `ros2 topic list`, the RViz
-  tree and the bridge's real rate are still to be confirmed on the bench.
+- **On the Xavier, 2026-11-18** (deployed and recreated): `ros2 topic list` shows `/arm1/*`, `/arm2/*`,
+  `/cell/*` and the four bare names, nothing else arm-related; `ros2 node list` shows
+  `/arm1_arm_bridge`, `/arm1_deg2rad`, `/arm1_ik`, `/arm2_*`, `/compat_bridge`, `/joint_merge`;
+  `tf_frames.py` reports **8 static + 12 moving frames, every one prefixed**, `arm2_base ← arm1_base
+  (+0.000, +0.300, +0.000)`, and **no `base` frame** (the only orphan is `scene_camera_link`, the
+  unmeasured hand-eye island); `/arm1/joint_states` and `/joint_states` carry the same six numbers at
+  the same instant; a bare `/joint_targets` publish arrives on `/arm1/joint_targets` unchanged with
+  torque off; `/arm1/gripper` streams with frame `arm1_gripper_color_optical_frame`; RViz renders
+  from Xvfb `:10` with Fixed Frame `arm1_base` and no fixed-frame error in its log.
+- **Rate**: the bridge keeps up when the board is calm (24.2 → 24.0 Hz) and loses ~20 % when it is
+  loaded (27.0 → 22.0 Hz with RViz running) — it republishes synchronously. Arm 1's own 24–27 Hz
+  against arm 2's 37–50 Hz is the joint server's read loop, unrelated to this change.
+- **Found only on the bench**: `deg2rad.py` and `ik_node.py` named their nodes `arm2_*` for *any*
+  namespace (arm 1 introduced itself as arm 2, and `ros2 node list` showed two `/arm2_ik`), and the
+  cams container had no `/dev/arm1_wrist` mount so arm 1's wrist camera published nothing. Both fixed
+  and re-verified; they are why "it passed headless" is not "it works".
