@@ -1,7 +1,7 @@
 """Generate the SO-101 joint-naming reference diagram (SVG -> PNG).
 
 One picture that answers "what is this joint called in each layer we use":
-LeRobot bus -> joint server (:8002) -> arm_bridge -> /joint_states ->
+LeRobot bus -> joint server (:8002) -> arm_bridge -> /arm1/joint_states ->
 deg2rad -> RViz/TF, plus the MuJoCo twin and the F710 teleop.
 """
 
@@ -88,9 +88,9 @@ def build():
     # the useful headline inside the panel
     s.append(f'<rect x="{px+22}" y="{py+54}" width="{pw-44}" height="86" rx="8" fill="{PANEL2}" stroke="{EDGE}"/>')
     s.append(text(px + 36, py + 78, "the same string everywhere", 11.5, GREEN, "700"))
-    s.append(text(px + 36, py + 100, "LeRobot · joint server · arm_bridge · /joint_states ·", 9.8, DIM))
+    s.append(text(px + 36, py + 100, "LeRobot · joint server · arm_bridge · /arm1/joint_states ·", 9.8, DIM))
     s.append(text(px + 36, py + 114, "URDF · MJCF · RViz · MuJoCo twin · F710", 9.8, DIM))
-    s.append(text(px + 36, py + 132, "motor N in the bus  →  index N-1 in /joint_states", 9.8, AMBER))
+    s.append(text(px + 36, py + 132, "motor N in the bus  →  index N-1 in /arm1/joint_states", 9.8, AMBER))
 
     # plinth + riser
     s.append(f'<rect x="{base[0]-64}" y="{base[1]+14}" width="128" height="24" rx="6" fill="#16233a" stroke="{EDGE}"/>')
@@ -167,10 +167,10 @@ def build():
     tx, ty, tw = 730, 130, 1050
     s.append(f'<rect x="{tx}" y="{ty}" width="{tw}" height="440" rx="12" fill="{PANEL}" stroke="{EDGE}"/>')
     s.append(text(tx + 24, ty + 36, "the same names in every layer", 13, ACCENT, "700"))
-    s.append(text(tx + 24, ty + 58, "LeRobot bus · joint server :8002 · arm_bridge · /joint_states · URDF · MJCF · RViz · MuJoCo twin · F710",
+    s.append(text(tx + 24, ty + 58, "LeRobot bus · joint server :8002 · arm_bridge · /arm1/joint_states · URDF · MJCF · RViz · MuJoCo twin · F710",
                   10.5, DIM))
 
-    cols = [("motor", tx + 24, 60), ("joint name", tx + 92, 190), ("/joint_states", tx + 292, 130),
+    cols = [("motor", tx + 24, 60), ("joint name", tx + 92, 190), ("/arm1/joint_states", tx + 292, 130),
             ("model range (rad)", tx + 430, 210), ("model range (deg)", tx + 648, 190), ("driver limit", tx + 848, 150)]
     hy = ty + 96
     for label, x, _ in cols:
@@ -203,7 +203,7 @@ def build():
     hops = [
         ("LeRobot SDK", "SO100Follower · Present_Position", "degrees", GREEN),
         ("joint server", "HTTP :8002 · /read · /write", "degrees", GREEN),
-        ("arm_bridge", "/joint_states · 50 Hz", "degrees", ACCENT),
+        ("arm_bridge", "/arm1/joint_states · 50 Hz", "degrees", ACCENT),
         ("deg2rad node", "converts, nothing else", "radians", VIOLET),
         ("RViz / TF", "so101.urdf · robot_state_publisher", "radians", VIOLET),
         ("MuJoCo twin", "robotstudio_so101 · Windows", "radians", AMBER),

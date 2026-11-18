@@ -32,7 +32,7 @@ STREAMS = {
     # stereo confidence, straight from the device (8-bit, per-pixel depth certainty)
     "confidence": "/oak/scene/confidence/compressed",
     # wrist camera (ADR-0022), a plain UVC webcam on the gripper
-    "gripper": "/gripper/image/compressed",
+    "gripper": "/arm1/gripper/image/compressed",
 }
 DEFAULT = "color"
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Merge both arms' joint states into the single topic the cell URDF needs.
 
-Arm 1 publishes /joint_states_rad and arm 2 /arm2/joint_states_rad, with arm 2's joint names
-prefixed `arm2_` (deg2rad.py does that when ARM_NS is set). One robot_state_publisher reads the
-merged topic and drives the whole two-arm tree (`so101_cell.urdf`), because RViz on this board only
-draws the first RobotModel display — two separate models cannot both appear.
+Arm 1 publishes /arm1/joint_states_rad and arm 2 /arm2/joint_states_rad, with the joint names
+prefixed `arm1_` / `arm2_` (deg2rad.py does that when ARM_NS is set — both arms run with one since
+ADR-0023). One robot_state_publisher reads the merged topic and drives the whole two-arm tree
+(`so101_cell.urdf`), because RViz on this board only draws the first RobotModel display — two
+separate models cannot both appear.
 """
 
 import rclpy
@@ -12,7 +13,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
 TOPIC = "/cell/joint_states_rad"
-SOURCES = ["/joint_states_rad", "/arm2/joint_states_rad"]
+SOURCES = ["/arm1/joint_states_rad", "/arm2/joint_states_rad"]
 
 
 class JointMerge(Node):

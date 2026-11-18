@@ -4,8 +4,8 @@ ADR-0022 replaced the OAK-D Lite on the wrist with a UVC webcam, because the jaw
 10-15 cm and that is a *focus* problem, not a stereo one. This node is the whole driver: open
 the device with V4L2, read MJPG frames, publish them compressed.
 
-    /gripper/image/compressed   CompressedImage (jpeg), 10 Hz by default
-    /gripper/camera_info        CameraInfo — only when intrinsics are known (see below)
+    /arm1/gripper/image/compressed   CompressedImage (jpeg), 10 Hz by default (ADR-0023)
+    /arm1/gripper/camera_info        CameraInfo — only when intrinsics are known (see below)
 
 Env:
     WRIST_DEVICE   default /dev/so100_wrist (a udev symlink, so re-enumeration does not matter)
@@ -15,7 +15,8 @@ Env:
     WRIST_CALIB    optional YAML with fx, fy, cx, cy — until it exists no camera_info is
                    published, because a made-up K is worse than none
 
-The frame is `gripper_color_optical_frame` (x right, y down, z forward, REP-103). There is no
+The frame is `arm1_gripper_color_optical_frame` (x right, y down, z forward, REP-103; arm 2 uses
+`arm2_gripper_color_optical_frame` — ADR-0023 leaves no bare frame name). There is no
 static transform to the arm yet: that needs the mount geometry, and it is the piece that turns
 this feed into an eye-in-hand measurement. Until then it is a view of the jaws, which is what
 ADR-0022 asked for.
@@ -44,9 +45,9 @@ CALIB = os.environ.get("WRIST_CALIB", "")
 # Two-arm (Phase 2): WRIST_TOPIC_NS renames the topics, WRIST_FRAME the frame id,
 # WRIST_NODE_NAME the node, so a second instance can run in the same container
 # (e.g. /dev/arm2_wrist -> /arm2/gripper/image/compressed, arm2_gripper_color_optical_frame).
-NS = os.environ.get("WRIST_TOPIC_NS", "/gripper").rstrip("/")
-FRAME = os.environ.get("WRIST_FRAME", "gripper_color_optical_frame")
-NODE_NAME = os.environ.get("WRIST_NODE_NAME", "wrist_cam")
+NS = os.environ.get("WRIST_TOPIC_NS", "/arm1/gripper").rstrip("/")
+FRAME = os.environ.get("WRIST_FRAME", "arm1_gripper_color_optical_frame")
+NODE_NAME = os.environ.get("WRIST_NODE_NAME", "arm1_wrist_cam")
 JPEG_QUALITY = 80
 
 

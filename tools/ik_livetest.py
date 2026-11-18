@@ -42,7 +42,7 @@ class LiveTest(Node):
         self.chain = Chain()
         self.q = None
         self.status = None
-        self.create_subscription(JointState, "/joint_states", self.on_joints, 10)
+        self.create_subscription(JointState, "/arm1/joint_states", self.on_joints, 10)
         self.create_subscription(String, "/ik/status", self.on_status, 10)
         self.pub = self.create_publisher(PoseStamped, "/ik/target", 10)
         self.sent = False

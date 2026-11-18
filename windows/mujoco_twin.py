@@ -1,14 +1,14 @@
 """MuJoCo digital twin of the SO-100 (ADR-0016) via rosbridge WebSocket.
 
-The Xavier's web container runs rosbridge (port 9090) which streams the arm's
-/joint_states as JSON over WebSocket. This script subscribes, converts the
+The Xavier's rosbridge container (port 9090) streams the arm's
+/arm1/joint_states as JSON over WebSocket (ADR-0023: both arms are namespaced). This script subscribes, converts the
 angles (degrees, as published) into the MuJoCo model's qpos (radians), and
 mirrors the arm in the MuJoCo viewer. Physics is NOT stepped — it is a
 kinematic mirror, so the sim cannot fight the real arm.
 
 Two-arm (Plan Phase 6): pass the generated scene_two_arms.xml and --both-arms.
-It then subscribes to both /joint_states (arm 1) and /arm2/joint_states
-(arm 2), maps each into its own (arm2_-prefixed) qpos tree, and draws both
+It then subscribes to both /arm1/joint_states and /arm2/joint_states, maps each
+into its own (arm2_-prefixed) qpos tree, and draws both
 arms 0.30 m apart — the same number as the base -> arm2_base transform.
 
 Usage (on the Windows PC):
@@ -136,7 +136,7 @@ def main():
     parser.add_argument("--host", default="192.168.1.185")
     parser.add_argument("--port", type=int, default=9090)
     parser.add_argument("--both-arms", action="store_true",
-                        help="the scene holds two arms: subscribe to /joint_states and /arm2/joint_states")
+                        help="the scene holds two arms: subscribe to /arm1/joint_states and /arm2/joint_states")
     parser.add_argument("--cell-geometry", default=os.path.join(
                             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "docker", "ws", "cell_geometry.json"),
@@ -172,7 +172,7 @@ def main():
 
     client = roslibpy.Ros(host=args.host, port=args.port)
     client.run()
-    topics = [("/joint_states", 0)]
+    topics = [("/arm1/joint_states", 0)]
     if args.both_arms:
         topics.append(("/arm2/joint_states", 1))
     latest = [{}, {}]                  # [arm][qpos_idx] = radians

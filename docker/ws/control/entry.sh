@@ -4,6 +4,7 @@
 # Two-arm (Plan Phase 7): a second instance with ARM_NS=arm2 solves for arm 2 from its own
 # arm2_base frame (topics /arm2/ik/*, /arm2/joint_targets when IK_APPLY=1).
 set -e
-python3 /opt/ws/control/ik_node.py &
+# ADR-0023: both IK instances are namespaced, like the arms they solve for.
+ARM_NS=arm1 python3 /opt/ws/control/ik_node.py &
 ARM_NS=arm2 python3 /opt/ws/control/ik_node.py &
 wait

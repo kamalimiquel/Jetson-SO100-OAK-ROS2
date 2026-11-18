@@ -6,9 +6,11 @@
 #  4. robot_state_publisher            -> TF for RViz from the URDF + joint states
 #  5. wrist camera static transform
 #
-# Two-arm (Phase 1): ARM_NS non-empty (e.g. "arm2") renames the topics via the
-# bridge/deg2rad (they read it themselves) and prefixes this container's TF with
-# ${NS}_ (frame_prefix + the wrist frames), so the two trees coexist in one graph.
+# Two-arm (Phase 1): ARM_NS renames the topics via the bridge/deg2rad (they read it
+# themselves) and prefixes this container's TF with ${NS}_ (frame_prefix + the wrist
+# frames), so the two trees coexist in one graph. Since ADR-0023 BOTH arms run with a
+# namespace — arm1 for this one — and no bare topic or frame is left; the 1.0 surface is
+# republished from /arm1/* by compat_bridge.py.
 set -e
 
 # lerobot looks for its calibration under $HOME/.cache/huggingface — the
@@ -35,10 +37,12 @@ python3 /opt/ws/arm/deg2rad.py &
 # FIRST display of a class, so a second RobotModel is never drawn — both arms must be one model. It
 # loads so101_cell.urdf (arm 1 plain + arm 2 prefixed arm2_ + a fixed base->arm2_base at 0,0.30,0) and
 # reads the merged joint states from joint_merge.py. The second arm's container publishes no model of
-# its own; its static wrist transform and the base->arm2_base offset stay, so its tree remains valid
-# while this container restarts.
-if [ -z "$NS" ]; then
+# its own and — since ADR-0023 — no base offset either: the fixed joint arm1_base -> arm2_base of
+# this URDF is the only writer of that transform. Only the wrist transforms stay per container.
+if [ -z "$NS" ] || [ "$NS" = "arm1" ]; then
   python3 /opt/ws/arm/joint_merge.py &
+  # The released 1.0 surface, served from /arm1/* by one small node (ADR-0023).
+  python3 /opt/ws/arm/compat_bridge.py &
   (
     while true; do
       URDF=$(cat /opt/ws/arm/urdf/so101_cell.urdf 2>/dev/null) || { echo "rsp: no urdf, retry in 2s"; sleep 2; continue; }
@@ -67,28 +71,10 @@ ros2 run tf2_ros static_transform_publisher \
 
 # (the second arm no longer publishes a model description of its own — see the block above)
 
-# Where the second arm stands relative to arm 1's base (Phase 1) — the 30 cm of README §15 R3.
-# The number is NOT in this script: it lives in docker/ws/cell_geometry.json (mounted at
-# /opt/ws/cell_geometry.json), which is also what the URDF generator, the MuJoCo scene generator and
-# the twin's own check read. ARM2_OFFSET_* in the environment is an escape hatch for testing only.
-if [ -n "$NS" ]; then
-  GEOMETRY_FILE="${GEOMETRY_FILE:-/opt/ws/cell_geometry.json}"
-  OFFSET=$(python3 -c "import json,sys; o=json.load(open(sys.argv[1]))['arm2_offset_m']; print(o['x'], o['y'], o['z'])" "$GEOMETRY_FILE" 2>/dev/null)
-  if [ -n "$OFFSET" ]; then
-    # shellcheck disable=SC2086
-    set -- $OFFSET
-    OFF_X=${1} OFF_Y=${2} OFF_Z=${3}
-    SOURCE="$GEOMETRY_FILE"
-  else
-    OFF_X=0.0 OFF_Y=0.30 OFF_Z=0.0
-    SOURCE="the built-in fallback — $GEOMETRY_FILE could not be read"
-    echo "[$NS] warning: cell geometry unreadable, using (0.0, 0.30, 0.0)" >&2
-  fi
-  echo "[$NS] base -> ${NS}_base at (${ARM2_OFFSET_X:-$OFF_X}, ${ARM2_OFFSET_Y:-$OFF_Y}, ${ARM2_OFFSET_Z:-$OFF_Z}) from $SOURCE"
-  ros2 run tf2_ros static_transform_publisher \
-    --x "${ARM2_OFFSET_X:-$OFF_X}" --y "${ARM2_OFFSET_Y:-$OFF_Y}" --z "${ARM2_OFFSET_Z:-$OFF_Z}" \
-    --frame-id base --child-frame-id "${NS}_base" &
-fi
+# Where the second arm stands relative to arm 1 is NOT published here any more (ADR-0023): the
+# cell URDF carries the fixed joint arm1_base -> arm2_base at the offset in
+# docker/ws/cell_geometry.json, and the single robot_state_publisher in arm 1's container emits
+# it. One writer, no bare `base` frame, nothing to disagree with the MuJoCo scene.
 
 # Supervise the joint server. It is the one process whose death used to leave the container "Up"
 # with a silent arm (the other nodes keep running and `wait` never returns): now its exit takes the

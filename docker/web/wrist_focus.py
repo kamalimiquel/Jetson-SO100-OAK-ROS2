@@ -6,7 +6,7 @@ POST /start when it is shown and POST /stop when it is left (plus a sendBeacon o
 pagehide), and an idle watchdog stops the work if the browser disappears without saying
 goodbye — a forgotten tab must not keep the Xavier busy.
 
-What runs while it is on: a subscriber to `/gripper/image/compressed`. It does NOT open
+What runs while it is on: a subscriber to `/arm1/gripper/image/compressed` (or `/arm2/gripper/...`). It does NOT open
 `/dev/so100_wrist`: the wrist node in `so100-cams` owns the device, and a second opener
 would fight it. Reading the published topic also means the number measured here is the
 sharpness of exactly what ROS and RViz see.
@@ -48,7 +48,7 @@ try:
 except Exception:                                    # noqa: BLE001 — reported in /status
     HAVE_SCORER = False
 
-ARMS = {1: "/gripper/image/compressed", 2: "/arm2/gripper/image/compressed"}
+ARMS = {1: "/arm1/gripper/image/compressed", 2: "/arm2/gripper/image/compressed"}
 CSV_HEADER = ["time", "arm", "distance_cm", "sharpness", "brightness", "frames", "source"]
 TOPIC = ARMS[1]  # default; the live one is state["topic"]/state["arm"]
 MIN_SCORE_INTERVAL = 0.30            # score at ~3 Hz: 10 Hz of JPEG decode buys nothing

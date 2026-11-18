@@ -81,10 +81,12 @@ LIM_HI = [170.0, 170.0, 170.0, 170.0, 170.0, 100.0]
 
 JOINT_NAMES = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
 
-# The two arms share domain 42; namespaces + the torque proxy keep them apart.
+# The two arms share domain 42; namespaces + the torque proxy keep them apart. Since ADR-0023 both
+# arms are namespaced — there is no bare /joint_states to publish to any more (compat_bridge.py
+# republishes arm 1's onto the 1.0 names for old clients).
 ARMS = [
-    {"name": "arm 1", "targets": "/joint_targets",   "states": "/joint_states",          "torque": 8092},
-    {"name": "arm 2", "targets": "/arm2/joint_targets", "states": "/arm2/joint_states",  "torque": 8095},
+    {"name": "arm 1", "targets": "/arm1/joint_targets", "states": "/arm1/joint_states", "torque": 8092},
+    {"name": "arm 2", "targets": "/arm2/joint_targets", "states": "/arm2/joint_states", "torque": 8095},
 ]
 
 

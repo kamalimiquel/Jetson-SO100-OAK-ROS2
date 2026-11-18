@@ -6,11 +6,11 @@ third one sits on "No Image" for ever. With two arms there are three camera view
 jaw cameras are composed into a single 2-up frame here and RViz keeps two panels: the scene colour
 camera and this pair.
 
-Publishes `/gripper/pair/compressed` (sensor_msgs/CompressedImage, jpeg) at up to 8 Hz. It is started
+Publishes `/cell/gripper/cameras/compressed` (sensor_msgs/CompressedImage, jpeg) at up to 8 Hz. It is started
 and stopped together with RViz by the shutdown server on :8099 — nothing decodes anything while the
 RViz tab is closed.
 
-    python3 wrist_pair.py [--out /gripper/pair/compressed] [--hz 8]
+    python3 wrist_pair.py [--out /cell/gripper/cameras/compressed] [--hz 8]
 """
 
 import argparse
@@ -24,10 +24,10 @@ from PIL import Image, ImageDraw
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 
-LEFT = "/gripper/image/compressed"          # arm 1 (Labtec)
+LEFT = "/arm1/gripper/image/compressed"     # arm 1 (Labtec)
 RIGHT = "/arm2/gripper/image/compressed"    # arm 2 (Creative VF0770)
 SCENE = "/oak/scene/color/compressed"       # the OAK, for context
-OUT = "/gripper/cameras/compressed"
+OUT = "/cell/gripper/cameras/compressed"
 TILE_W = 426                                # slot per wrist camera, see tile()
 TILE_H = 320
 SCENE_W = 852                               # scene spans both wrist slots

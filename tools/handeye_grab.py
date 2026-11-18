@@ -46,6 +46,8 @@ def main():
     ap.add_argument("--host", default="192.168.1.185")
     ap.add_argument("--port", type=int, default=9090)
     ap.add_argument("--view", type=int, default=8090)
+    ap.add_argument("--arm-ns", default="arm1",
+                    help="arm namespace to read (ADR-0023: arm1 or arm2)")
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--square-mm", type=float, default=18.0,
                     help="MEASURED side of a board square in mm — caliper, not the PDF's claim")
@@ -89,13 +91,15 @@ def main():
     client = roslibpy.Ros(host=args.host, port=args.port)
     client.run()
     st = {"p": None}
-    roslibpy.Topic(client, "/joint_states", "sensor_msgs/JointState").subscribe(
+    ns = args.arm_ns.strip("/")
+    states_topic = f"/{ns}/joint_states"
+    roslibpy.Topic(client, states_topic, "sensor_msgs/JointState").subscribe(
         lambda m: st.update(p=[float(x) for x in m["position"][:6]]))
     t0 = time.time()
     while st["p"] is None and time.time() - t0 < 10:
         time.sleep(0.2)
     if st["p"] is None:
-        raise SystemExit("no /joint_states")
+        raise SystemExit(f"no {states_topic}")
 
     def corners_in(jpg):
         img = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_GRAYSCALE)

@@ -11,7 +11,7 @@ so the solve step can be re-run from the stored data without touching the arm.
 
 The three modes, and what each one needs:
 
-  (default)   drives the arm through DEFAULT_POSES via /joint_targets — needs
+  (default)   drives the arm through DEFAULT_POSES via /armN/joint_targets — needs
               TORQUE ON, and the poses are a guess about where the board is.
   --adaptive  small offsets around the pose where the board was last seen; a pose
               that loses the board is reverted. Same torque requirement.
@@ -294,6 +294,8 @@ def main():
     ap.add_argument("--host", default="192.168.1.185")
     ap.add_argument("--port", type=int, default=9090)
     ap.add_argument("--view", type=int, default=8090, help="MJPEG view port (/snapshot)")
+    ap.add_argument("--arm-ns", default="arm1",
+                    help="arm namespace to read and drive (ADR-0023: arm1 or arm2)")
     ap.add_argument("--out", default=os.path.expanduser("~/calib/scene"))
     ap.add_argument("--settle", type=float, default=1.5)
     ap.add_argument("--gripper", type=float, default=None,
@@ -334,16 +336,19 @@ def main():
     client = roslibpy.Ros(host=args.host, port=args.port)
     client.run()
     state = {}
-    roslibpy.Topic(client, "/joint_states", "sensor_msgs/JointState").subscribe(
+    ns = args.arm_ns.strip("/")
+    states_topic = f"/{ns}/joint_states"
+    targets_topic = f"/{ns}/joint_targets"
+    roslibpy.Topic(client, states_topic, "sensor_msgs/JointState").subscribe(
         lambda m: state.update(p=[float(x) for x in m["position"][:6]]))
     t0 = time.time()
     while "p" not in state and time.time() - t0 < 15:
         time.sleep(0.2)
     if "p" not in state:
-        raise SystemExit("no /joint_states — is the arm container up?")
+        raise SystemExit(f"no {states_topic} — is the arm container up?")
 
     if args.watch:
-        # Nothing is commanded in this mode, so neither /joint_targets nor torque is needed.
+        # Nothing is commanded in this mode, so neither the targets topic nor torque is needed.
         import cv2          # noqa: F811 — the board check already imported it, --no-check may not
         import numpy as np
         if det is None:
@@ -353,7 +358,7 @@ def main():
         watch(args, state, client, det, args.out, cv2, np)
         return
 
-    pub = roslibpy.Topic(client, "/joint_targets", "std_msgs/Float64MultiArray")
+    pub = roslibpy.Topic(client, targets_topic, "std_msgs/Float64MultiArray")
     pub.advertise()
 
     records = []

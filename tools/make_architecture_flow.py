@@ -125,7 +125,7 @@ card(430, 306, 350, 168, "so100-cams", [
     "oak_cams: colour/left/right (JPEG), depth, confidence,",
     "/oak/scene/points — x,y,z,rgb in the colour frame",
     "oak_stream_views: 5 Hz colourised depth + confidence",
-    "wrist_cam ×2: /gripper/image/compressed and",
+    "wrist_cam ×2: /arm1/gripper/image/compressed and",
     "  /arm2/gripper/image/compressed at 10 Hz (Cams tab picks one)",
     "viewers: :8090 stereo+confidence, :8091 cloud"], "green")
 

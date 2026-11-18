@@ -6,7 +6,10 @@ python3 /opt/ws/cams/oak_views.py &
 python3 /opt/ws/cams/cloud_view.py &
 python3 /opt/ws/cams/mjpeg_view.py &
 # wrist camera (ADR-0022): a plain UVC webcam. Waits politely if the device is absent, so the
-# rest of the container is unaffected on a bench without it.
+# rest of the container is unaffected on a bench without it. ADR-0023: arm 1 is namespaced too, so
+# both cameras are /armN/gripper/* and both frames are armN_gripper_color_optical_frame.
+WRIST_DEVICE=/dev/arm1_wrist WRIST_TOPIC_NS=/arm1/gripper \
+WRIST_FRAME=arm1_gripper_color_optical_frame WRIST_NODE_NAME=arm1_wrist_cam \
 python3 /opt/ws/cams/wrist_cam_node.py &
 # Second wrist camera (two-arm plan, Phase 2): /dev/arm2_wrist -> /arm2/gripper/... .
 # Same node, different env; the static transform to its jaw lives in the arm2 container.

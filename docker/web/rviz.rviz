@@ -4,7 +4,7 @@ Panels:
 Visualization Manager:
   Class: ""
   Global Options:
-    Fixed Frame: base
+    Fixed Frame: arm1_base
     Frame Rate: 30
     Background Color: 48; 48; 48
   Tools:
@@ -52,7 +52,7 @@ Visualization Manager:
       Name: Cameras (scene | arm 1 | arm 2)
       Enabled: true
       Topic:
-        Value: /gripper/cameras/compressed
+        Value: /cell/gripper/cameras/compressed
         Depth: 5
         History Policy: Keep Last
         Reliability Policy: Reliable
