@@ -112,6 +112,9 @@ services:
       # Wrist camera (ADR-0022): a udev symlink, so re-enumeration to another /dev/videoN does
       # not need a compose edit. scripts/provision-jetson.sh writes the rule. arm2's webcam on
       # its own symlink (two-arm plan, Phase 2).
+      # ADR-0023: arm 1's camera is /dev/arm1_wrist like arm 2's is /dev/arm2_wrist; the legacy
+      # so100_wrist alias stays mounted so nothing that still names it breaks.
+      - /dev/arm1_wrist:/dev/arm1_wrist
       - /dev/so100_wrist:/dev/so100_wrist
       - /dev/arm2_wrist:/dev/arm2_wrist
       - ./ws:/opt/ws

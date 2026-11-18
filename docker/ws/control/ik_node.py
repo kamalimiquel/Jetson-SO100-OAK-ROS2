@@ -233,7 +233,9 @@ def solve(chain, T_t, seed_deg, jaw=0.0):
 
 class IkNode(Node):
     def __init__(self):
-        super().__init__(("arm2_ik" if NS else "ik"))
+        # Same trap as deg2rad.py: a hardcoded "arm2_ik" made arm 1's instance introduce itself as
+        # arm 2's, so `ros2 node list` showed two /arm2_ik (bench, 2026-11-18, ADR-0023).
+        super().__init__(f"{NS}_ik" if NS else "ik")
         self.chain = Chain()
         self.pub_sol = self.create_publisher(Float64MultiArray, topic("ik/solution"), 10)
         self.pub_status = self.create_publisher(String, topic("ik/status"), 10)

@@ -8,7 +8,8 @@ the device with V4L2, read MJPG frames, publish them compressed.
     /arm1/gripper/camera_info        CameraInfo — only when intrinsics are known (see below)
 
 Env:
-    WRIST_DEVICE   default /dev/so100_wrist (a udev symlink, so re-enumeration does not matter)
+    WRIST_DEVICE   default /dev/arm1_wrist (a udev symlink, so re-enumeration does not matter;
+                   the legacy /dev/so100_wrist alias points at the same device)
     WRIST_W/H      default 1280x720 (the VF0770's MJPG maximum; the 5M WebCam offers 1920x1080)
     WRIST_FPS      camera-side frame rate, default 15
     WRIST_HZ       publish rate, default 10
@@ -36,7 +37,7 @@ except ImportError:            # the image may not ship PyYAML; the intrinsics a
     yaml = None
 from sensor_msgs.msg import CameraInfo, CompressedImage
 
-DEVICE = os.environ.get("WRIST_DEVICE", "/dev/so100_wrist")
+DEVICE = os.environ.get("WRIST_DEVICE", "/dev/arm1_wrist")
 W = int(os.environ.get("WRIST_W", "1280"))
 H = int(os.environ.get("WRIST_H", "720"))
 FPS = int(os.environ.get("WRIST_FPS", "15"))

@@ -32,7 +32,9 @@ def topic(name: str) -> str:
 
 class DegToRad(Node):
     def __init__(self):
-        super().__init__("arm2_deg2rad" if NS else "deg2rad")
+        # The node name follows the namespace: hardcoding "arm2_deg2rad" made arm 1's instance
+        # introduce itself as arm 2's (caught on the bench 2026-11-18, ADR-0023).
+        super().__init__(f"{NS}_deg2rad" if NS else "deg2rad")
         self.pub = self.create_publisher(JointState, topic("joint_states_rad"), 10)
         self.sub = self.create_subscription(JointState, topic("joint_states"), self.on_msg, 10)
         self.get_logger().info(

@@ -7,7 +7,7 @@ pagehide), and an idle watchdog stops the work if the browser disappears without
 goodbye — a forgotten tab must not keep the Xavier busy.
 
 What runs while it is on: a subscriber to `/arm1/gripper/image/compressed` (or `/arm2/gripper/...`). It does NOT open
-`/dev/so100_wrist`: the wrist node in `so100-cams` owns the device, and a second opener
+`/dev/arm1_wrist` (alias `/dev/so100_wrist`): the wrist node in `so100-cams` owns the device, and a second opener
 would fight it. Reading the published topic also means the number measured here is the
 sharpness of exactly what ROS and RViz see.
 
@@ -190,7 +190,7 @@ def demo_worker():
         img = Image.new("L", (640, 480), 40)
         d = ImageDraw.Draw(img)
         for i, line in enumerate(["SO-101  12.5 cm  focus", "sharpness target",
-                                  "0123456789  abcdef", "/dev/so100_wrist"]):
+                                  "0123456789  abcdef", "/dev/arm1_wrist"]):
             d.text((40, 90 + i * 60), line, fill=220)
         if n % 37 == 0:                               # an occasional blurred frame, as a real
             img = img.filter(ImageFilter.GaussianBlur(3.5))   # camera would give
