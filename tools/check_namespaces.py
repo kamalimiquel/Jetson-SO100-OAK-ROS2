@@ -36,7 +36,10 @@ HTTP_SERVERS = {
     "docker/ws/arm/arm_bridge.py", "tools/camfocus.py",
 }
 # The invariant's own fixtures, and the figure that draws the chain for the docs.
-SELF = {"tools/check_namespaces.py", "tools/test_compat_bridge.py"}
+SELF = {"tools/check_namespaces.py", "tools/test_compat_bridge.py",
+        # the fake rosbridge matches topic SUFFIXES ("/joint_states") for any namespace by design,
+        # so it must contain those strings while never being a cell publisher itself
+        "tools/fake_rosbridge.py"}
 # Not topics: device nodes, mounts, URLs, namespaces of the host filesystem.
 NOT_A_TOPIC = re.compile(r"^/(dev|tmp|opt|srv|home|usr|etc|var|proc|sys|run|root)\b|^//|^/cell$")
 SCAN_EXT = (".py", ".sh", ".html", ".rviz", ".yaml")
