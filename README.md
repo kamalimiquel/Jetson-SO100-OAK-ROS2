@@ -1,6 +1,6 @@
 # Jetson-SO100-OAK-ROS2
 
-Robotic manipulation cell: **two SO-100 arms** (six Feetech servos each, 7.5 V supply) + an **OAK-D POE camera (USB-C)** + **one USB RGB webcam per wrist** (ADR-0022) — arm 1's is manually focused at 10-15 cm and measured; arm 2's is **not** in that band yet ([§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm)), governed by a **Jetson Xavier NX 16 GB** (Ubuntu 20.04, JetPack 5.1.5) running **ROS2 Humble in Docker containers**. Arm 1 keeps the topics it always had (`/joint_states`, `/joint_targets`, `/gripper/…`, frames `base…gripper`); **arm 2 lives under `/arm2/…` with the TF prefix `arm2_`, 30 cm from arm 1** (the plans and risks are in [§2.5](#25-a-second-arm--what-usb-can-and-cannot-take) and [§16](#16-two-arm-integration--the-risks-explained)).
+Robotic manipulation cell: **two SO-100 arms** (six Feetech servos each, 7.5 V supply) + an **OAK-D POE camera (USB-C)** + **one USB RGB webcam per wrist** (ADR-0022) — arm 1's is manually focused at 10-15 cm and measured; arm 2's is **not** in that band yet ([§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm)), governed by a **Jetson Xavier NX 16 GB** (Ubuntu 20.04, JetPack 5.1.5) running **ROS2 Humble in Docker containers**. **Both arms carry a namespace and a frame prefix — `/arm1/*` with `arm1_*`, `/arm2/*` with `arm2_*`, 30 cm apart** — so no bare topic or frame exists for the two to collide on (ADR-0023); the bare `/joint_states`, `/joint_targets`, `/joint_states_rad` and `/robot_description` of the 1.0 surface are republished from arm 1 by one small bridge (the plans and risks are in [§2.5](#25-a-second-arm--what-usb-can-and-cannot-take) and [§16](#16-two-arm-integration--the-risks-explained)).
 
 A Windows 11 Home PC on the same LAN provides visualization (noVNC in Chromium), GraspGen inference, policy training (MuJoCo / Isaac Sim) and teleoperation with a Logitech F710.
 
@@ -120,7 +120,7 @@ it worked; the chapter it points to has the commands, the reasons and the traps.
 | 3 | **Calibrate arm 2 and bring the cell model up** — [§5](#5-second-arm-live--calibration-and-the-one-model-rviz) | `curl 127.0.0.1:8003/status` says `calibrated: true`; `tf2_echo base arm2_base` gives `[0.000, 0.300, 0.000]` |
 | 4 | **Bring up the cameras** — [§6](#6-camera-bring-up--depthai-on-the-xavier) | `lsusb -t` shows the OAK at **5000M** and `/oak/scene/color/compressed` publishes |
 | 5 | **Deploy and start the containers** — [§7](#7-container-stack--how-the-xavier-runs-the-robot) | `docker ps` lists the **seven** `so100-*` containers, none of them restarting |
-| 6 | **Verify the data flow** — [§8](#8-verifying-the-data-flow) | `/joint_states`, `/arm2/joint_states`, `/cell/joint_states_rad` and the camera topics all move; RViz draws both arms |
+| 6 | **Verify the data flow** — [§8](#8-verifying-the-data-flow) | `/arm1/joint_states`, `/arm2/joint_states`, `/cell/joint_states_rad` and the camera topics all move; RViz draws both arms |
 | 7 | **Open the web interface** — [§9](#9-web-interface--terminal--stereo--depth--cloud--graph--rviz) | `http://<xavier>/` shows the seven tabs and **two** torque buttons |
 | 8 | **Set up the operator PC** — [§10](#10-operator-pc--teleop--visualization) | the twin mirrors both arms and the pad moves the one it has selected |
 | 9 | **Learn the daily routine** — [§11](#11-day-to-day-from-cold-to-moving-the-arms) | you can go from cold to a moving arm without reading anything else |
@@ -151,7 +151,7 @@ the later chapters assume it, and the failure they produce points somewhere else
 | USB hub | powered 2.0 hub (Terminus `1a40:0101`, `480M`, self-powered) | carries **both arms and both wrist cameras** at once — measured 12.77 + 9.42 fps with both cameras running ([§2.5](#25-a-second-arm--what-usb-can-and-cannot-take)) |
 | Host | Jetson Xavier NX 16 GB, JetPack 5.1.5 (Ubuntu 20.04) | the seven containers |
 | Operator PC | Windows 11, or anything with Chromium, on the same LAN | the **browser tabs** of [§8](#8-verifying-the-data-flow) (Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Gripper Cams, Temp Xavier NX, Graph, RViz), the MuJoCo twin and the F710 pad |
-| Pad | Logitech F710, back switch in **X** mode | `/joint_targets` over rosbridge |
+| Pad | Logitech F710, back switch in **X** mode | `/arm1/joint_targets` over rosbridge |
 | Board | ChArUco `(5,5)`, 0.018 m squares, 0.0135 m markers, `DICT_4X4_50`, printed at a 100 mm side — a ready-to-print page is [docs/charuco-board.pdf](docs/charuco-board.pdf) | hand-eye and depth-scale runs ([§12](#12-perception--what-the-cloud-sees-and-its-calibration)) |
 
 **Power — what each supply has to deliver.** Four supplies, four different jobs, and only the first one
@@ -342,11 +342,11 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{seria
 ## 3. The joints — one name for every layer
 
 All six joints keep **the same name in every layer** — LeRobot bus, joint server, `arm_bridge`,
-`/joint_states`, URDF, MJCF, RViz, the MuJoCo twin and the F710 client. The **name** is the only thing
+`/arm1/joint_states`, URDF, MJCF, RViz, the MuJoCo twin and the F710 client. The **name** is the only thing
 that never changes; four other things do, each for its own reason, and getting any of them wrong has
 its own symptom:
 
-| Joint | Motor ID on the bus | Index in `/joint_states` | Driver unit | Model unit | Driver clamp | Model limit (URDF, rad → deg) |
+| Joint | Motor ID on the bus | Index in `/arm1/joint_states` | Driver unit | Model unit | Driver clamp | Model limit (URDF, rad → deg) |
 |---|---|---|---|---|---|---|
 | `shoulder_pan` | 1 | 0 | degrees | radians | ±170° | ±1.9199 → **±110.0°** |
 | `shoulder_lift` | 2 | 1 | degrees | radians | ±170° | ±1.7453 → **±100.0°** |
@@ -366,7 +366,7 @@ its own symptom:
   index: assumption of order is the classic way to drive the wrong joint. This cell keeps the order
   `shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper` everywhere, and the merged
   cell message adds the second arm's six after them.
-- **Unit** — LeRobot (and therefore `/joint_states`, the pad and the twin) works in **degrees**;
+- **Unit** — LeRobot (and therefore `/arm1/joint_states`, the pad and the twin) works in **degrees**;
   REP-103, URDF, MJCF, `robot_state_publisher`, `tf2` and RViz require **radians**. Feeding degrees to a
   radians consumer multiplies every angle by 57.3 and the arm renders twisted with no error anywhere,
   which is why `deg2rad.py` sits in the chain and why the merges are done in radians.
@@ -387,7 +387,7 @@ rule that keeps the two apart is positional, not clever:
 | | Arm 1 | Arm 2 |
 |---|---|---|
 | Joint names in the driver | `shoulder_pan … gripper` | the same six |
-| Topics | `/joint_states`, `/joint_targets` | `/arm2/joint_states`, `/arm2/joint_targets` |
+| Topics | `/arm1/joint_states`, `/arm1/joint_targets` | `/arm2/joint_states`, `/arm2/joint_targets` |
 | Joint server / torque proxy | `:8002` / `:8092` | `:8003` / `:8095` |
 | Container | `so100-arm` | `so100-arm2` |
 | Calibration id | `so100_cell` | `so100_cell_b` |
@@ -498,7 +498,7 @@ The result is written to `~/.cache/huggingface/lerobot/calibration/robots/so_fol
 </table>
 
 4. **Step 2 — sweep each joint** slowly through its full range, one joint at a time, returning to mid before the next (panels B1–B6 show the direction for each). A hard stop is a mechanical limit — stop pushing.
-5. **Bring the arm back**: `docker start so100-arm`. The joint server reads the new JSON on start; `/joint_states`, TF and the RViz model follow immediately.
+5. **Bring the arm back**: `docker start so100-arm`. The joint server reads the new JSON on start; `/arm1/joint_states`, TF and the RViz model follow immediately.
 6. **Archive the result — do not skip this.** LeRobot overwrites `~/.cache/huggingface/lerobot/calibration/robots/so_follower/so100_cell.json` **in place, on the Xavier, inside a cache that no `git` sees**: one re-calibration and the previous numbers are gone for good. So **every calibration leaves a dated copy in `docs/calibration/arms/`**, committed with the change it belongs to (`2026-11-09-so100_cell.json`, `2026-11-14-so100_cell_b.json`). One command does stop → calibrate → start → archive:
 
    ```
@@ -555,7 +555,7 @@ new SD card. Then the container comes up on that profile and answers on its own 
     curl -s http://127.0.0.1:8003/read        # six angles in degrees
 
 **What is verified on the cell.** `/arm2/joint_states` 50.2 Hz, `/arm2/joint_states_rad` 49.6 Hz,
-`/joint_states` (arm 1) 32–44 Hz, both wrist cameras 6–9 Hz, and the static `base -> arm2_base` at
+`/arm1/joint_states` (arm 1) 32–44 Hz, both wrist cameras 6–9 Hz, and the static `base -> arm2_base` at
 `[0.000, 0.300, 0.000]` — the 30 cm of [R3](#16-two-arm-integration--the-risks-explained).
 
 **One number, one file.** The 30 cm is not written here, nor in the container script, nor in the
@@ -770,7 +770,7 @@ Open a shell in any of them with `docker exec -it so100-arm2 bash`: `docker/bash
 **Which container is a node running in, and what is each node doing?** The commands that answer this —
 and the reason no ROS 2 command can answer the first half — are in
 [§14](#14-useful-ros-2-commands).
-Verified 2026-11-15: seven containers up with **both arms** `connected + calibrated` (`:8002`, `:8003`), torque proxies `:8092`/`:8095` answering, `/joint_states` 34.6 Hz, `/arm2/joint_states` 43.4 Hz, `/cell/joint_states_rad` 78.6 Hz, both wrist cameras streaming, web 200, and an interactive bash in **all seven** containers with ROS sourced.
+Verified 2026-11-15: seven containers up with **both arms** `connected + calibrated` (`:8002`, `:8003`), torque proxies `:8092`/`:8095` answering, `/arm1/joint_states` 34.6 Hz, `/arm2/joint_states` 43.4 Hz, `/cell/joint_states_rad` 78.6 Hz, both wrist cameras streaming, web 200, and an interactive bash in **all seven** containers with ROS sourced.
 
 Notes (traps we hit — read before changing the stack):
 - Compose v2 is required — v1 rejects `device_cgroup_rules` with a misleading error.
@@ -797,12 +797,12 @@ until it passes.
 4. **Both arms publish**, and the merged cell message exists — `:8002/status` and `:8003/status` must
    both answer `{"connected": true, "calibrated": true}`, and `/cell/joint_states_rad` must carry the
    **twelve** joints (`arm2_*` renamed):
-   `docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 topic hz /joint_states /arm2/joint_states /cell/joint_states_rad'`
+   `docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 topic hz /arm1/joint_states /arm2/joint_states /cell/joint_states_rad'`
    The arms publish six joints in **degrees** at 50 Hz; `/cell/joint_states_rad` is radians and twelve.
 5. **The transform chain reaches the gripper** — root link `base`, tip link
    `moving_jaw_so101_v1`:
    `docker exec so100-web bash -c 'source /opt/ros/humble/install/setup.bash && ros2 run tf2_ros tf2_echo base moving_jaw_so101_v1'`
-   A missing transform is an arm-side problem (calibration, `/joint_states`), not an RViz one.
+   A missing transform is an arm-side problem (calibration, `/arm1/joint_states`), not an RViz one.
 6. **The cameras publish**: `/oak/scene/color/compressed` (~10 fps),
    `/oak/scene/depth` (5 Hz), `/oak/scene/points` (2-3 Hz). Barely one frame per second means the
    USB link fell back to High Speed — check `lsusb -t` for a 5000M hub ([§6](#6-camera-bring-up--depthai-on-the-xavier), step 6).
@@ -812,7 +812,7 @@ If 6 answers, the perception half is alive and [§12](#12-perception--what-the-c
 
 ### 8.2 The arm in RViz — model, URDF and the QoS/view config
 
-The pose comes from the arm side: `arm_bridge` publishes `/joint_states` at 50 Hz → `robot_state_publisher` publishes `/tf` and the latched `/robot_description` → RViz draws the model at those transforms.
+The pose comes from the arm side: `arm_bridge` publishes `/arm1/joint_states` at 50 Hz → `robot_state_publisher` publishes `/tf` and the latched `/arm1/robot_description` → RViz draws the model at those transforms.
 
 **RViz draws both arms as one robot.** The file below is `so101.urdf`, the model of a single arm; the
 cell publishes `so101_cell.urdf` instead — arm 1 as it is plus arm 2 renamed `arm2_*` under a fixed joint
@@ -832,19 +832,19 @@ twin to the millimetre:
 |---|---|---|
 | URDF | `docker/ws/arm/urdf/so101.urdf` | generated from the MJCF; meshes at `file:///srv/web/so101/meshes/*.obj`; joint names are LeRobot's |
 | Meshes | `docker/web/so101/meshes/*.obj` | 17 STL converted to OBJ (RViz's STL loader fails silently on these files; OBJ loads fine) |
-| Config | `docker/web/rviz.rviz` | Fixed Frame **base** (the URDF root link), Grid + TF + RobotModel + Image (compressed) displays, explicit Orbit view |
+| Config | `docker/web/rviz.rviz` | Fixed Frame **arm1_base** (the cell URDF's root link — `base` no longer exists, ADR-0023), Grid + TF + RobotModel + Image (compressed) displays, explicit Orbit view |
 
 Three config details that are easy to get wrong:
 
-- **RobotModel must subscribe with `Durability Policy: Transient Local`** — `/robot_description` is latched; a default (volatile) subscription created after the publisher never receives it.
+- **RobotModel must subscribe with `Durability Policy: Transient Local`** — `/arm1/robot_description` is latched; a default (volatile) subscription created after the publisher never receives it.
 - **The view must live under `Views → Current:`**. A `Current View:` key is silently ignored and RViz falls back to its defaults.
-- **Degrees → radians is the trap that looks like a broken model.** `/joint_states` carries
+- **Degrees → radians is the trap that looks like a broken model.** `/arm1/joint_states` carries
   **degrees** (LeRobot's convention, and what the teleop and the twin use), while every ROS
   consumer (`robot_state_publisher`, RViz, `tf2`) interprets joint positions in **radians**
   (REP-103). Feeding degrees straight in multiplies every angle by 57.3: the arm renders
   twisted, with meshes cutting through each other, and no error is printed anywhere. The arm
-  container runs `deg2rad.py`, which republishes `/joint_states` as `/joint_states_rad`, and
-  `robot_state_publisher` is launched with `-r joint_states:=/joint_states_rad`. The MuJoCo
+  container runs `deg2rad.py`, which republishes `/arm1/joint_states` as `/arm1/joint_states_rad`, and
+  `robot_state_publisher` is launched with `-r joint_states:=/arm1/joint_states_rad`. The MuJoCo
   twin always looked right because it converts degrees to radians explicitly.
 - **Mesh paths must be explicit `file://` URIs.** Bare or relative paths (`assets/Base.stl`) are handed to the URL loader and fail with the misleading *"Could not resolve host: assets"*.
 
@@ -1044,9 +1044,9 @@ the arm — the base for imitation-learning sessions later (Isaac Sim deferred f
 ![MuJoCo twin](docs/mujoco-twin.png)
 
 *The twin on the Windows PC: the same `robotstudio_so101` MJCF that generates the URDF, driven by
-`/joint_states` over rosbridge — the pose you see here is the pose the real arm is in.*
+`/arm1/joint_states` over rosbridge — the pose you see here is the pose the real arm is in.*
 
-The Xavier's `so100-rosbridge` container serves a WebSocket at ws://192.168.1.50:9090 that forwards any ROS2 topic as JSON. The Windows PC mirrors the arm's /joint_states into MuJoCo:
+The Xavier's `so100-rosbridge` container serves a WebSocket at ws://192.168.1.50:9090 that forwards any ROS2 topic as JSON. The Windows PC mirrors the arm's /arm1/joint_states into MuJoCo:
 
 1. Install the two Python libraries — **mind the versions** (MuJoCo 4.x moved the classic viewer into MuJoCo Studio; the twin uses the 3.x viewer):
    ```
@@ -1060,13 +1060,13 @@ The Xavier's `so100-rosbridge` container serves a WebSocket at ws://192.168.1.50
 A MuJoCo window opens and the simulated arm follows the real one live. Internals, each of which cost debugging time on 2026-11-08:
 
 - **Kinematic mirror**: the script uses `viewer.launch_passive` (NOT `viewer.launch`, which blocks the main thread and steps its own physics — the model's position servos then hold the arm frozen at the initial pose). Each frame the script writes qpos from the latest message, runs `mj_forward` (kinematics only) and `sync`s the viewer. No physics, no fighting the real arm.
-- **Degrees → radians**: /joint_states publishes degrees (LeRobot convention); MuJoCo qpos is radians.
+- **Degrees → radians**: /arm1/joint_states publishes degrees (LeRobot convention); MuJoCo qpos is radians.
 - **Joint-name mapping**: Menagerie names its joints Rotation, Pitch, Elbow, Wrist_Pitch, Wrist_Roll, Jaw — not the LeRobot names. The script has an alias table plus a positional fallback, and prints the mapping (`qpos[0] <- shoulder_pan ...`) and the first received message so problems are visible in the console.
 - **Viewer import**: `from mujoco import viewer` must be explicit — in the 3.x line `import mujoco` alone does not expose it.
 
-The rosbridge server itself: rosbridge_suite humble needs Python >=3.9, which the focal cell images don't have — hence its own Ubuntu 22.04 container (docker/rosbridge.Dockerfile, official binary packages). It starts with `docker compose up -d rosbridge` and its health check is `ros2 topic echo /joint_states --once` inside the container. It needs `ipc: host` like the rest of the stack: FastDDS shared-memory transport carries the data over /dev/shm, and without the host IPC namespace the container discovers topics but receives nothing.
+The rosbridge server itself: rosbridge_suite humble needs Python >=3.9, which the focal cell images don't have — hence its own Ubuntu 22.04 container (docker/rosbridge.Dockerfile, official binary packages). It starts with `docker compose up -d rosbridge` and its health check is `ros2 topic echo /arm1/joint_states --once` inside the container. It needs `ipc: host` like the rest of the stack: FastDDS shared-memory transport carries the data over /dev/shm, and without the host IPC namespace the container discovers topics but receives nothing.
 
-Verified 2026-11-08 from a LAN PC: 398 /joint_states messages in 8 s (~50 Hz) through the WebSocket.
+Verified 2026-11-08 from a LAN PC: 398 /arm1/joint_states messages in 8 s (~50 Hz) through the WebSocket.
 
 Twin troubleshooting:
 
@@ -1135,7 +1135,7 @@ with `mujoco not importable` or `mujoco ... has no viewer module`). Run both com
 Measured on the cell (2026-11-14): the scene compiles to `nq=12 njnt=12 nbody=17 nu=12` with the two
 gripper bodies at `[0.2932, -0.0002, 0.2344]` and `[0.2932, 0.2998, 0.2344]` — **0.3000 m apart**;
 the twin's own `build_map()` reports **6/6 joints for each arm** (qpos 0–5 and 6–11); and through
-rosbridge both topics answer with their own poses (`/joint_states` and `/arm2/joint_states`, six
+rosbridge both topics answer with their own poses (`/arm1/joint_states` and `/arm2/joint_states`, six
 angles each).
 
 Four things about the generator, each of which breaks it if ignored:
@@ -1161,7 +1161,7 @@ pip install pygame roslibpy
 python windows\f710_teleop_ws.py --host 192.168.1.50
 ```
 
-The pad must be in **X mode** (switch on its back). It waits for `/joint_states`, seeds the targets at the arm's real pose and then starts publishing `/joint_targets` (degrees, 6 values).
+The pad must be in **X mode** (switch on its back). It waits for `/arm1/joint_states`, seeds the targets at the arm's real pose and then starts publishing `/arm1/joint_targets` (degrees, 6 values).
 
 **Arm the arm from the pad: hold B for 5 s** (two buzzes = live, one = released), or press that arm's torque button in the web page first. The arm boots with torque off and `/write` refuses until the servos are energised, so the pad looks dead otherwise. Publishing stops whenever the pad is idle, so a lost controller cannot drive the arm.
 
@@ -1210,7 +1210,7 @@ The pad must be in **X mode** (switch on its back). It waits for `/joint_states`
   `goals seeded from present positions` and `armed at … — held it (worst 0.0deg)` in
   `docker logs so100-arm`, which is where a measurement belongs.
 
-  The pose is kept **live**: `on_state()` overwrites the stored vector on every `/joint_states`
+  The pose is kept **live**: `on_state()` overwrites the stored vector on every `/arm1/joint_states`
   message, not only on the first one. It used to be written once, so the client kept the pose the arm
   had **when the program started** and armed the arm back to it — which is exactly the "it goes to an
   old position" that survived three attempts at fixing the server. Verified: client starts at elbow
@@ -1261,7 +1261,7 @@ workspace — you see exactly which axis responds and by how much, with no coupl
 mode to record in: the targets stay clean and replay identically. Use joint-step to learn the arm
 and to capture episodes, cartesian-feel to work quickly by eye.
 
-**Safety**: `/joint_targets` is only sent after feedback arrives; per-tick deltas and the joint ranges are clamped, and the Jetson bridge enforces the real limits regardless.
+**Safety**: `/arm1/joint_targets` is only sent after feedback arrives; per-tick deltas and the joint ranges are clamped, and the Jetson bridge enforces the real limits regardless.
 
 **Holding A 5 s switches arms** (Plan Phase 5). The switch is **seeded from the far arm's real pose**, so the first
 command after it is "stay", and it is **refused** — with one long buzz — if that arm has not published within the
@@ -1292,7 +1292,7 @@ rules above, and on the torque side two buzzes when arming, one when releasing, 
 the arm's real pose even when the buffer held an old command**, and a stale pose refusing to arm. Measured
 2026-11-14: all eighteen pass. Over WiFi the same test is flaky because the stream stalls — see §10.4.
 
-**If rosbridge stops delivering**: it logs `Client connected` and `Subscribed to /joint_states` and then sends
+**If rosbridge stops delivering**: it logs `Client connected` and `Subscribed to /arm1/joint_states` and then sends
 nothing, while `ros2 topic hz` inside the arm container still shows 25 Hz. That is stale DDS shared memory after
 the arm container was recreated; `docker restart so100-rosbridge` fixes it (measured: 0 → 43 msg/s).
 
@@ -1314,7 +1314,7 @@ So there is **no ROS2 install on Windows and no DDS firewall rule**: FastDDS nev
 Xavier, and nothing on the LAN speaks it. The C++ teleop client that used to justify the stack
 (rclcpp + SDL2 over DDS, hence the VS Build Tools and the UDP 7400-7450 rule) has been **dropped**
 — it was never compiled, and the Python client already reaches the arm's full rate: 398
-`/joint_states` messages in 8 s (~50 Hz) through the WebSocket.
+`/arm1/joint_states` messages in 8 s (~50 Hz) through the WebSocket.
 
 The one thing that would bring the stack back is GraspGen (ADR-0013), which runs on the PC. Over
 HTTP it stays ROS-free; as a ROS node on domain 42 it would need the whole install. That gets
@@ -1328,7 +1328,7 @@ The cell is meant to be switched on and used, not rebuilt. In order:
    about two minutes after the sockets are up. Nothing has to be typed on the host.
 2. **Open http://<xavier-ip>/.** The Terminal tab loads first — it is the cheap one, and if it
    answers, ttyd and the page are alive.
-3. **Check the cell from that terminal**: `ros2 topic hz /joint_states /arm2/joint_states`
+3. **Check the cell from that terminal**: `ros2 topic hz /arm1/joint_states /arm2/joint_states`
    (both ~50 Hz), `ros2 topic hz /cell/joint_states_rad` and `/oak/scene/color/compressed` (~10 fps).
    The ROS environment is already sourced. If only one arm answers, `curl -s 127.0.0.1:8002/status`
    and `:8003/status` say which server is down ([§8.1](#81-containers-ports-topics-transforms)).
@@ -1694,13 +1694,13 @@ Topics of this container, by node:
 
 | Topic | Node | Direction | What it carries |
 |---|---|---|---|
-| /joint_states | /arm_bridge | out, 50 Hz | the arm's real position: 6 joint names + angles in degrees |
-| /joint_targets | /arm_bridge | in | desired position: 6 angles — publishing here moves the arm |
-| /robot_description | /arm_bridge | out, latched | the arm's URDF (geometry description) |
+| /arm1/joint_states | arm1_arm_bridge | out, 50 Hz | the arm's real position: 6 joint names + angles in degrees |
+| /arm1/joint_targets | arm1_arm_bridge | in | desired position: 6 angles — publishing here moves the arm |
+| /arm1/robot_description | arm1_arm_bridge | out, latched | the arm's URDF (geometry description) |
 | /tf | /robot_state_publisher | out, ~17 Hz | the 3D transform of every moving link |
 | /tf_static | /robot_state_publisher | out | fixed transforms (offsets that never move) |
 
-**Utility:** this container alone turns the arm into a standard ROS2 device — anyone on domain 42 can see where it is (/joint_states), command it (/joint_targets) and render it in 3D (URDF + /tf), without ever knowing a serial port exists.
+**Utility:** this container alone turns the arm into a standard ROS2 device — anyone on domain 42 can see where it is (/arm1/joint_states), command it (/arm1/joint_targets) and render it in 3D (URDF + /tf), without ever knowing a serial port exists.
 
 ### 13.1b so100-arm2 and the cell topics
 
@@ -1714,7 +1714,7 @@ They are the *join* of the two arms into one robot, built by arm 1's container, 
 reasons: TF must be **one tree with one root** (two `robot_state_publisher`s would each publish
 `base → …` and fight), and RViz on this board renders only the **first** `RobotModel` display, so two
 separate models can never both appear. So `joint_merge` (a 30-line node, `docker/ws/arm/joint_merge.py`)
-concatenates `/joint_states_rad` and `/arm2/joint_states_rad` — already prefixed `arm2_` by
+concatenates `/arm1/joint_states_rad` and `/arm2/joint_states_rad` — already prefixed `arm1_`/`arm2_` by
 `deg2rad` — into `/cell/joint_states_rad`, one `robot_state_publisher` loads `so101_cell.urdf`
 (arm 1 plain, arm 2 prefixed, a fixed `base → arm2_base`), and `model_description_pub` latches that
 same URDF on `/cell/robot_description` because the file source does not load on this build. The
@@ -1815,7 +1815,7 @@ composer `wrist_pair` and the shutdown/RViz control on `:8099` also live here.
 
 | Node | What it does |
 |---|---|
-| /rosbridge_websocket | the WebSocket server at ws://:9090 — subscribes to any topic on request (e.g. /joint_states) and forwards it as JSON to LAN clients |
+| /rosbridge_websocket | the WebSocket server at ws://:9090 — subscribes to any topic on request (e.g. /arm1/joint_states) and forwards it as JSON to LAN clients |
 | /rosapi | ROS introspection over the same socket (list topics/services) |
 
 Its topics (/client_count, /connected_clients) are bookkeeping only. Any client on the LAN (roslibpy on Windows, a browser, another robot) can now consume the whole cell over one WebSocket.
@@ -1825,7 +1825,7 @@ so100-control runs the **IK node** described next.
 
 ### 13.5 so100-control — the IK node (ADR-0009)
 
-The arm speaks joint space (`/joint_targets`, degrees); anything that wants to say "put the
+The arm speaks joint space (`/arm1/joint_targets`, degrees); anything that wants to say "put the
 gripper *there*" needs the inverse of FK, and this is it. Nothing else: it does not plan, it does
 not touch torque, and it publishes no motion command unless `IK_APPLY=1`.
 
@@ -1834,7 +1834,7 @@ not touch torque, and it publishes no motion command unless `IK_APPLY=1`.
 | /ik/target | in | `PoseStamped` of the tool tip, `frame_id: base` (anything else is refused — no extrinsics are applied here) |
 | /ik/solution | out | `Float64MultiArray`, the 5 solved joint angles in degrees, always |
 | /ik/status | out | `String`: `ok=… pos_err=… ori_err=… iters=… q_deg=[…]` |
-| /joint_targets | out | 6 values — only with `IK_APPLY=1`, and only when the solve is within tolerance |
+| /arm1/joint_targets | out | 6 values — only with `IK_APPLY=1`, and only when the solve is within tolerance |
 
 **Method**: damped least squares (Levenberg-style damping, raised when a joint limit eats the
 step) on the URDF chain, using the **geometric Jacobian** computed in the same pass as the FK.
@@ -1887,14 +1887,14 @@ There is no `-t` on `ros2 node list` (that flag belongs to `ros2 topic list -t`,
 
 | What you want | Command |
 |---|---|
-| is the arm publishing? | `ros2 topic hz /joint_states` — 32–44 Hz for arm 1, 43–50 Hz for arm 2 |
-| both arms and the merged cell at once | `ros2 topic hz /joint_states /arm2/joint_states /cell/joint_states_rad` |
+| is the arm publishing? | `ros2 topic hz /arm1/joint_states` — 32–44 Hz for arm 1, 43–50 Hz for arm 2 |
+| both arms and the merged cell at once | `ros2 topic hz /arm1/joint_states /arm2/joint_states /cell/joint_states_rad` |
 | see the numbers | `ros2 topic echo /arm2/joint_states` · `--once` for a single message |
 | just one joint | `ros2 topic echo /arm2/joint_states_rad --field position` |
 | the gripper cameras | `ros2 topic hz /gripper/image/compressed /arm2/gripper/image/compressed` (6–9 Hz) |
 | the scene camera and its depth | `ros2 topic hz /oak/scene/color/compressed /oak/scene/depth` |
 | bandwidth of a topic | `ros2 topic bw /oak/scene/depth` — bytes/s, useful on WiFi |
-| who publishes, who listens, with which QoS | `ros2 topic info -v /joint_states` — one `GID` per endpoint |
+| who publishes, who listens, with which QoS | `ros2 topic info -v /arm1/joint_states` — one `GID` per endpoint |
 | the message layout | `ros2 interface show sensor_msgs/msg/JointState` |
 
 `ros2 topic hz` takes several topics at once (Humble and newer, which this is) and prints one block per topic.
@@ -1906,7 +1906,7 @@ If `hz` prints nothing while `topic list` shows the topic, you are watching a **
 The joint servers take **five** values and never touch the gripper ([§3](#3-the-joints--one-name-for-every-layer)):
 
 ```
-ros2 topic pub --once /joint_targets std_msgs/msg/Float64MultiArray \
+ros2 topic pub --once /arm1/joint_targets std_msgs/msg/Float64MultiArray \
   "{data: [0.0, -0.4, 0.6, 0.2, 0.0]}"
 ```
 
@@ -1988,13 +1988,13 @@ Traps this project has actually hit, with their fixes — in one place:
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| arm bridge: `joint server unreachable (HTTP Error 500)`, `/read` answers `I/O error`, `/joint_states` stops | the CH9102 adapter re-enumerated — plugging anything else on the USB tree moved it from `ttyACM0` to `ttyACM1` — and the container keeps the dead node | recreate `so100-arm` against the udev symlink: `devices: /dev/so100_arm:/dev/ttyACM0` (the provision script writes the rule) |
-| `/joint_states` fresh but `ping`/SSH to the Xavier time out | the board is on **WiFi** (`wlan0`); when the AP drops the whole cell disappears while it keeps running | cable `eth0`; the journal shows `CTRL-EVENT-BEACON-LOSS` and `CTRL-EVENT-DISCONNECTED … reason=4` |
-| rosbridge connects and logs `Subscribed to /joint_states`, then sends nothing, while `ros2 topic hz` inside the arm container still shows 25 Hz | stale DDS shared memory after `arm`/`arm2` was recreated — discovery survives, data does not | `docker restart so100-rosbridge` (0 → 43 msg/s, measured) |
+| arm bridge: `joint server unreachable (HTTP Error 500)`, `/read` answers `I/O error`, `/arm1/joint_states` stops | the CH9102 adapter re-enumerated — plugging anything else on the USB tree moved it from `ttyACM0` to `ttyACM1` — and the container keeps the dead node | recreate `so100-arm` against the udev symlink: `devices: /dev/so100_arm:/dev/ttyACM0` (the provision script writes the rule) |
+| `/arm1/joint_states` fresh but `ping`/SSH to the Xavier time out | the board is on **WiFi** (`wlan0`); when the AP drops the whole cell disappears while it keeps running | cable `eth0`; the journal shows `CTRL-EVENT-BEACON-LOSS` and `CTRL-EVENT-DISCONNECTED … reason=4` |
+| rosbridge connects and logs `Subscribed to /arm1/joint_states`, then sends nothing, while `ros2 topic hz` inside the arm container still shows 25 Hz | stale DDS shared memory after `arm`/`arm2` was recreated — discovery survives, data does not | `docker restart so100-rosbridge` (0 → 43 msg/s, measured) |
 | one arm answers `connected: false` and `curl :800x/status` returns nothing, while `docker ps` shows the container **Up** | the joint server died and the other nodes in the container kept running | `docker logs so100-arm2 \| tail -20` says why. Two causes are fixed now: the connect is retried (**30 × 2 s**) dropping the half-open object between attempts, and `entry.sh` **waits on the joint server**, so if it ever exits the container exits too and `restart: unless-stopped` starts a clean one |
 | `connect failed (attempt 2/30): SOFollower is already connected.` in a loop, then a traceback | LeRobot marks the robot connected *before* `configure()` talks to the servos: a timeout at power-up (`Failed to enable torque … Operation timed out` on `elbow_flex` is the usual one) leaves it half-open, and every retry then fails instantly | fixed in `connect_with_retry()`: it calls `disconnect()` before retrying. If you see this on an older image, `docker compose up -d --force-recreate <svc>` and update the deploy |
 | during `lerobot-calibrate`, every joint reads **2047** | that is the half-turn homing: step 1 re-zeroes the encoders at the pose you are holding, so nothing has moved yet | it is correct — move the joints and the numbers change; confirm the bus separately with `tools/lerobot_bus_probe.py /dev/arm2_tty` |
-| the F710 client arms the arm and it jumps to a pose from minutes ago | the client stored the pose **once**, on the first `/joint_states` message, and kept commanding that startup pose | keep the pose live (one sample per message); `tools/test_two_arm_switch.py` covers it |
+| the F710 client arms the arm and it jumps to a pose from minutes ago | the client stored the pose **once**, on the first `/arm1/joint_states` message, and kept commanding that startup pose | keep the pose live (one sample per message); `tools/test_two_arm_switch.py` covers it |
 | the F710 client says `torque: cannot read state` with both proxies healthy | `roslibpy` 2.x has no `Ros.host`, and the URL was built from it inside a bare `except` | the client keeps the address itself and bypasses system proxies; never swallow an exception in a health read without printing it once |
 | ROS container: `apt-get update` fails with EXPKEYSIG | dusty images ship an expired ROS key | `rm /etc/apt/sources.list.d/*ros*` before `apt-get update` in new Dockerfiles |
 | compose rejects `device_cgroup_rules` with a misleading error | compose v1 | install the compose v2 plugin (user-level, no sudo — the provision script does it) |
@@ -2011,7 +2011,7 @@ Traps this project has actually hit, with their fixes — in one place:
 | `pip install depthai` on the cell image | no cp38 wheels above 2.30.0.0 | pin `depthai==2.30.0.0` in the cams container |
 | RViz arm malformed, links crossing through each other | joint positions fed in **degrees** into a radians consumer | run the `deg2rad.py` bridge and remap `joint_states` for `robot_state_publisher` |
 | RViz: display "Ok" but nothing renders | URDF rejected by urdfdom, or the meshes failed to load (STL fails silently here) | regenerate with `tools/mjcf_so101_to_urdf.py` and keep the OBJ meshes; check `Global Status` |
-| RViz draws the arm as floating pieces | `/robot_description` comes from a *stale* publisher — the arm bridge used to serve its own copy from an old URDF | one URDF path everywhere: `so101.urdf`, in both the bridge and `robot_state_publisher` |
+| RViz draws the arm as floating pieces | `/arm1/robot_description` comes from a *stale* publisher — the arm bridge used to serve its own copy from an old URDF | one URDF path everywhere: `so101.urdf`, in both the bridge and `robot_state_publisher` |
 | RViz: "Orbit could not be loaded" popup | missing `libignition-math6` at runtime | install `libignition-math6-dev` in the image |
 | RViz: "Could not resolve host: assets" | bare/relative mesh paths are treated as URLs | use `file:///srv/web/...` URIs (encode spaces as %20) |
 | RViz: view properties ignored | wrong key — humble expects `Views → Current` | fix the config key (a `Current View` key is silently dropped) |
@@ -2032,11 +2032,13 @@ motor*: the wrong arm answers the wrong bus, reads time out, and the log says "m
 when the real fault is identity. That is the failure that burns the most debug time, which is why
 Phase 0 exists to make the names stable and is gated by a reboot test — not "it looks fine".
 
-**R2 — TF collisions.** The two arms share one TF graph and one RViz. A single frame without the
-`arm2_` prefix (or a namespace applied to topics but not to frames) *silently merges the two trees*:
-RViz draws one arm's shoulder attached to the other arm's base, and neither `tf2_echo` nor RViz
-reports an error — it just looks wrong in a way that is hard to state precisely. The prefix has to be
-applied at the second `robot_state_publisher` (`frame_prefix: arm2_`), not hoped to hold in each URDF.
+**R2 — TF collisions.** *Resolved by ADR-0023 on 2026-11-17: both arms are prefixed, so there is no
+bare name left to collide.* The failure it described was real while arm 1 kept `base`: the two arms
+share one TF graph and one RViz, and a single frame without the `arm2_` prefix (or a namespace applied
+to topics but not to frames) *silently merges the two trees* — RViz draws one arm's shoulder attached
+to the other arm's base, and neither `tf2_echo` nor RViz reports an error. Hoping each URDF held the
+prefix was the wrong place to enforce it; the cell URDF is now generated with `arm1_*` and `arm2_*` and
+`tools/check_namespaces.py` refuses a bare name in the model, in a static transform or in a topic.
 
 **R3 — The 30 cm separation.** Where the two arms sit is **one number**, published once as the static
 transform `base → arm2_base = (0, 0.30, 0)`. If that number and the MuJoCo twin's placement drift
@@ -2078,7 +2080,8 @@ short tap (which already means "replay") can never switch by accident.
 
 #### Two alternative ways the cell could be built
 
-**Alt 1 — symmetric namespaces for both arms (`/arm1` and `/arm2`) + a thin compatibility bridge.**
+**Alt 1 — symmetric namespaces for both arms (`/arm1` and `/arm2`) + a thin compatibility bridge —
+CHOSEN AND IMPLEMENTED (ADR-0023).**
 Instead of arm 1 keeping the bare topics and arm 2 living under `/arm2`, rename *both* arms so every
 frame and topic is prefixed (`arm1_`/`arm2_`, `/arm1/*`/`/arm2/*`), and add a small re-publisher that
 copies arm 1's messages onto the bare topics (`/joint_states`, `/joint_targets`) the released 1.0
@@ -2087,6 +2090,13 @@ collide — and makes the two arms symmetric in code, docs and the Graph tab. It
 churn (a new prefix for the existing arm plus the bridge) that touches the web page, the twin and the
 pad exactly once. Risk trade-off: Alt 1 replaces the whole class of "bare frame collides" bugs with
 one small, well-tested compatibility bridge as a new moving part.
+
+*As built:* the churn was 20 files edited and 3 added; the bridge is `docker/ws/arm/compat_bridge.py`
+(89 lines, started by arm 1's `entry.sh`) and it forwards each message **verbatim** — same header
+stamp, no re-stamp — at whatever rate its input arrives (50 Hz on the cell). It deliberately does **not** alias frames: `base` stays gone, and a 1.0-era consumer
+that pinned `base` in RViz or `tf2_echo` must say `arm1_base`. The bridge is now the one place that can
+lose the 1.0 surface while the cell itself keeps working; `tools/test_compat_bridge.py` pins its wiring
+and `tools/check_namespaces.py` pins that no other file starts using a bare name again.
 
 **Alt 2 — physical-port naming (udev `KERNELS=`) and one generated geometry file.** Key the udev
 rules for the two arms on the physical hub port (`KERNELS=="1-…"`) instead of the serial, and generate
@@ -2133,7 +2143,7 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
 - [x] The arm is physically an **SO-100** (Feetech servos, 7.5 V supply) and the **models in use are the SO-101**: the URDF is generated from `robotstudio_so101/so101.xml`, RViz draws that robot and FK matches the MuJoCo twin to the millimetre (ADR-0021). Regenerating both models from the SO-100 MJCF is still open ([§17.3](#173-next))
 - [x] depthai-core from source on the NX (ADR-0007) — core v2.33.0 + bindings installed on the Xavier
 - [x] Compose file + provisioning script for the **seven** services (six cell domains + rosbridge)
-- [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); the Windows twin mirrors `/joint_states` at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC), and with **both arms** since 2026-11-14
+- [x] MuJoCo twin live: rosbridge container on ws://:9090 (jammy image, ADR-0019); the Windows twin mirrors `/arm1/joint_states` at 50 Hz — verified end-to-end 2026-11-08 (398 msgs / 8 s from a LAN PC), and with **both arms** since 2026-11-14
 - [x] Web interface: **seven tabs live** — Terminal Xavier NX, Stereo Cams & Depth OAK-D, Point Cloud OAK-D, Gripper Cams, Temp Xavier NX, Graph, RViz — plus **one torque switch per arm** in the bar (ADR-0014/0015/0018)
 - [x] Point cloud: unprojected with the depth camera's own intrinsics, extended disparity (range from ~0.65 m down to ~0.33 m), left/right check; scale measured at 0.315 m against PnP geometry — depth reads **+3.0%**, spread ±1% over 100k board pixels
 - [x] Colour ↔ depth **registration**: homography from the board, 48 correspondences, 0.69 px rms — `docs/calibration/color_to_depth.yaml`
@@ -2157,12 +2167,18 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
 - [x] **F710 teleop over rosbridge (ADR-0020)** — all six joints and the gripper; **hold A 5 s switches
   arms** (silent), **hold B 5 s arms/releases the active arm** with two buzzes one second apart when it
   arms and one when it releases. Arming reads the joints while the arm is still loose, energises, and
-  commands exactly those — and the client keeps the pose **live**, one sample per `/joint_states`
+  commands exactly those — and the client keeps the pose **live**, one sample per `/arm1/joint_states`
   message, which is what stopped the arm walking back to the pose it had when the program started
+- [x] **Symmetric namespaces (ADR-0023)** — both arms are namespaced and prefixed (`/arm1/*` +
+  `arm1_*`, `/arm2/*` + `arm2_*`), the cell URDF is generated with all 31 links+joints prefixed and
+  rooted at `arm1_base`, the `base → arm2_base` static is gone (the URDF's fixed joint is the only
+  writer), and `docker/ws/arm/compat_bridge.py` republishes the 1.0 surface verbatim. The invariant is
+  executable: `tools/check_namespaces.py` fails on any bare name, and `tools/test_compat_bridge.py`
+  pins the bridge. Not yet confirmed on the Xavier (out of reach when it was built)
 - [x] **Headless test for the pad logic** — `tools/test_two_arm_switch.py` fakes the buttons and the two
   torque HTTP calls (nothing is energised) and checks the switch, the torque rules, the buzzes and the
   measurements: **41 checks**
-- [x] **IK node (ADR-0009)** — `so100-control` runs `ik`: a pose on `/ik/target` (in `base`) becomes joint angles on `/ik/solution`, and on `/joint_targets` only when `IK_APPLY=1`. Damped least squares with the geometric Jacobian and the URDF limits, ~30 ms per solve. Verified 2026-11-11: round trip over 200 random poses — median **0.00 mm**, p95 **0.46 mm**, worst 0.49 mm; a 2 m target is correctly refused; live test returns the arm's own pose in 1 iteration. The jaw is held, never solved
+- [x] **IK node (ADR-0009)** — `so100-control` runs `ik`: a pose on `/ik/target` (in `base`) becomes joint angles on `/ik/solution`, and on `/arm1/joint_targets` only when `IK_APPLY=1`. Damped least squares with the geometric Jacobian and the URDF limits, ~30 ms per solve. Verified 2026-11-11: round trip over 200 random poses — median **0.00 mm**, p95 **0.46 mm**, worst 0.49 mm; a 2 m target is correctly refused; live test returns the arm's own pose in 1 iteration. The jaw is held, never solved
 
 ### 17.3 Next
 

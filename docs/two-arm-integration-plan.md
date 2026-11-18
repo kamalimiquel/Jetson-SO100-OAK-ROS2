@@ -1,5 +1,9 @@
 # Integrating a second arm and a second wrist camera — steps and tests
 
+> **Names superseded 2026-11-17 (ADR-0023):** both arms are namespaced now — arm 1 is `/arm1/*` and
+> `arm1_*` too, `base` is `arm1_base`, and `compat_bridge.py` serves the bare 1.0 names. Where this
+> plan says `/joint_states` or `base` for arm 1, read the prefixed name.
+
 Plan for going from the 1.0 cell (one arm, one OAK, one wrist webcam) to a two-arm cell, without
 breaking what already works. Every phase ends with tests that say pass or fail; nothing advances on
 "it looks fine".

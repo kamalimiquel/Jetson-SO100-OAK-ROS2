@@ -61,6 +61,7 @@ One-page view of the cell. Every decision below is tracked as an ADR in `docs/ad
 | 0020 | F710 teleop over the same rosbridge (Python client) — the only client since 2026-11-11 |
 | 0021 | SO-101 model: URDF generated from the MJCF, not the SO-100 one |
 | 0022 | Gripper camera: USB RGB webcam focused at 10-15 cm (supersedes 0008) |
+| 0023 | Symmetric namespaces for both arms (`/arm1/*` + `arm1_*`) + a thin compatibility bridge for the 1.0 surface — removes the TF-collision risk (R2) by construction |
 
 ## Open items before implementation (v0.1)
 

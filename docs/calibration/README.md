@@ -26,7 +26,7 @@ which is what lands in `poses.json` and in the solver's object points. The opera
 hand, `tools/handeye_grab.py` (one shot per pose) or `tools/handeye_capture.py --watch` (keeps every
 stable pose) captures pose + frame, `tools/handeye_bundle.py` solves with a hold-out test.
 
-Nothing ever commands joint 6: `/joint_targets` may carry **5 values**, and the joint
+Nothing ever commands joint 6: `/arm1/joint_targets` may carry **5 values**, and the joint
 server then leaves the gripper servo untouched.
 
 ## What has been ruled out (with data, not opinion)
