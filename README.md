@@ -1726,8 +1726,10 @@ consequence worth knowing: restarting arm 1's container takes the **cell** topic
 arm 2 keeps publishing, and a cell topic is only ever as fresh as its slower arm. That is now said in
 two ways instead of hidden: the merged message carries the **oldest** live arm's stamp (so an age
 computed from it is honest), and an arm silent for more than `MERGE_STALE_S` (0.5 s, ~12 samples at
-arm 1's 24-27 Hz) is dropped from the message with one log line — robot_state_publisher and RViz lose
-that arm instead of drawing a frozen pose under a fresh stamp. `tools/test_joint_merge.py` pins both
+arm 1's 24-27 Hz) is dropped from the message with one log line, so nothing downstream is told a
+frozen pose is current. Measured: tf2 keeps returning the last transform and RViz keeps drawing it
+until its own buffer expires, so the visible change is the **stamp** stopping — check that, not the
+picture. `tools/test_joint_merge.py` pins both
 rules headless.
 
 | Topic | Node | What it carries |

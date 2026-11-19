@@ -83,8 +83,11 @@ artifact with a per-arm age in it.
 - **Enforcing mode changes who may move the arm.** With `ARBITER_ENFORCE=1` the pad's direct publishes
   are refused until the pad (or a supervisor) goes through the arbiter; that is deliberate and is why
   the switch defaults to observe.
-- **A dead arm is visible.** RViz loses it after 0.5 s instead of holding it; the merged topic's stamp
-  is now the oldest member's, so any age computed from it is honest rather than flattering.
+- **A dead arm is no longer claimed.** Its joints leave the message after 0.5 s and the merged stamp is
+  the oldest live arm's, so any age computed from it is honest. What is *not* true, measured on the
+  board: RViz does not lose the model — tf2 answers `lookup_transform(..., Time())` with the last pose
+  indefinitely (it only prunes when new data arrives) and the display keeps drawing it. The change is
+  visible in the stamp and in the message, not in the picture.
 - **Episodes are files, not bags.** Two JSONL files and a manifest, with the pixels the policy would
   see. A bag remains the tool for graph-level inspection; the episode is the record of the decision.
 - The jaw in TF is still a drawing: `deg2rad.JAW_RAD_PER_PERCENT` is an explicit uncalibrated proxy,
@@ -122,8 +125,10 @@ restarted), torque off on both arms:
   header → **423** (`test holds this arm (19.8s left)`), `/release` → `{"owner": null}`.
 - `/cell/arbiter` publishes the JSON status; the arbiter logs `observing only (ARBITER_ENFORCE=0)`.
 - **Dropout proven on the bench**: `docker stop so100-arm2` → `/cell/joint_states_rad` goes from 12
-  names to arm 1's 6 and logs `arm2/joint_states_rad silent for more than 0.5s — dropping its joints
-  (RViz will lose that arm, on purpose)`; `docker start` → back to 12 and `publishing again`.
+  names to arm 1's 6 and logs `arm2/joint_states_rad silent for more than 0.5s — dropping its joints`;
+  `docker start` → back to 12 and `publishing again`. A TF probe on `arm2_wrist` stayed "visible" for
+  17 s after the stop and RViz still drew both arms: the message is honest, the display is not obliged
+  to follow — the visible signal is the stamp stopping.
 - Merged stamp age measured with a probe: min 0.016 s, **median 0.03 s**, max 0.183 s (arm 1 at
   ~22 Hz, arm 2 at ~45 Hz). Arm 1 was dropped once for 0.9 s while `ros2 topic echo` and Python probes
   shared the board — the threshold is `MERGE_STALE_S`, raise it to 1.0 if RViz blinks under load.

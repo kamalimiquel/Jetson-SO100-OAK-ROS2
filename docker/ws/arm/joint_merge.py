@@ -15,8 +15,11 @@ Two things this file used to get wrong, both of the kind that has no error anywh
     carries the **oldest** live arm's stamp — it is only ever as fresh as its slowest member, and
     an age computed from it is honest.
   * **Nothing was dropped.** An arm that stops publishing now loses its joints after MERGE_STALE_S
-    (0.5 s default) and is named once in the log, so robot_state_publisher and RViz visibly lose
-    that arm instead of holding a lie. When it comes back it is named again.
+    (0.5 s default) and is named once in the log, so nothing downstream is told a frozen pose is
+    current. Measured on the board: tf2 keeps answering `lookup_transform(..., Time())` with the last
+    pose indefinitely (it only prunes when new data arrives) and RViz keeps drawing it, so the visible
+    change is the *stamp* stopping, not the model vanishing — say that, do not promise a disappearing
+    arm. When the arm comes back it is named again.
 
 `merge()` is a pure function of (latest messages, monotonic arrival times, now) so the rule is
 pinned headless by `tools/test_joint_merge.py` — no ROS, no arms.
@@ -91,8 +94,11 @@ class JointMerge(Node):
             self.order, self.latest, self.arrivals, self.now())
         for src_gone in dropped:
             if src_gone not in self.dropped:
-                self.get_logger().warn("%s silent for more than %.1fs — dropping its joints from "
-                                       "%s (RViz will lose that arm, on purpose)" % (src_gone, STALE_S, TOPIC))
+                self.get_logger().warn(
+                    "%s silent for more than %.1fs — dropping its joints from %s. The merged state no "
+                    "longer claims that arm; a TF/RViz consumer keeps its last drawn pose until its own "
+                    "buffer expires, so check the stamp, not the picture"
+                    % (src_gone, STALE_S, TOPIC))
         for src_back in self.dropped:
             if src_back not in dropped:
                 self.get_logger().info("%s is publishing again — back in %s" % (src_back, TOPIC))
