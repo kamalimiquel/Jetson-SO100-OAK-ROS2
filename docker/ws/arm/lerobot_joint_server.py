@@ -181,9 +181,14 @@ def main() -> None:
                     self._json({"error": "%s holds this arm (%.1fs left)" % (
                         lease["owner"], lease_left())}, 423)
                     return
+                changed = lease["owner"] != who
                 lease["owner"], lease["until"] = who, time.time() + ttl
                 fault = None
-                print(f"[joint_server] write path claimed by {who} for {ttl:.1f}s", flush=True)
+                if changed:
+                    # A renewal every 0.5 s must not write a log line every time: it buries the
+                    # fault and rejection lines this log exists for.
+                    print(f"[joint_server] write path claimed by {who} (lease {ttl:.1f}s, renewals are "
+                          f"silent)", flush=True)
                 self._json({"owner": who, "seconds_left": round(lease_left(), 1)})
                 return
             if self.path == "/release":

@@ -141,5 +141,16 @@ restarted), torque off on both arms:
   it is jammed against the table, not the contract. The lesson is the spec's own §1: a command that
   reaches the driver is not a pose that was reached, and only the encoders say which happened.
 
-Not yet verified: enforcing mode with the pad in hand (it is off by default), and any joint under
-gravity in mid-air — the arm was resting on the bench throughout.
+- **Enforcing mode, with the pad in hand**: `ARBITER_ENFORCE=1` + `ARM_WRITE_MODE=arbiter` (no bridge
+  subscribing to targets). A direct `curl` to `:8002/write` answers **423**, `/torque` without a token
+  answers 200 (the operator's switch stays his), one published `/arm1/joint_targets` moved
+  `shoulder_pan` and was written by the arbiter (`sent 1`), and a full teleop session through the pad
+  ended with **sent 535, superseded 219, rejected 0, stale 0, faults 0** and no rejection line in the
+  joint server's log. The superseded count is the design working: the pad publishes at ~50 Hz, one
+  write is in flight, and the older command loses instead of queueing a backlog. The arm went from
+  `shoulder_pan −28.0 / elbow 96.0` to `−2.5 / 70.8` and did so with the **elbow moving**, which is the
+  confirmation that its earlier refusal was the resting pose and not the servo. Renewals of the lease
+  are silent (1 claim line for 90 s of teleop, not 2 per second).
+
+Not yet verified: a joint under gravity in mid-air with a commanded pose held (the arm was resting on
+the bench throughout), and the hand-eye sweep with six values.

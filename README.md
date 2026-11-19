@@ -2251,7 +2251,8 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
   on a loopback port against a fake bus, so the 400/409/423/502 answers are exercised, not described).
   **On the bench, 2026-11-19**: one `sync_write` moved four joints of arm 1 in a single packet
   (`shoulder_pan` +4°, `shoulder_lift` +4° against gravity, `wrist_roll` +12°, jaw 0→10 %) with a 1.0 s
-  settle and ≤0.4 units of error; enforcing mode and a joint under gravity in mid-air are still open
+  settle and ≤0.4 units of error; a teleop session with the arbiter enforcing ended with **sent 535,
+  superseded 219, rejected 0, faults 0** while a direct `curl` to `/write` got 423
 - [x] **Headless test for the pad logic** — `tools/test_two_arm_switch.py` fakes the buttons and the two
   torque HTTP calls (nothing is energised) and checks the switch, the torque rules, the buzzes and the
   measurements: **41 checks**
