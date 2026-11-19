@@ -127,5 +127,16 @@ restarted), torque off on both arms:
 - A real episode: 12 s, 47 + 46 arm samples, 51 wrist frames, 24 scene frames, max age 0.36 s, no
   stale sample, manifest carrying the two caveats (jaw proxy, scene without metric pose).
 
-Not yet verified: enforcing mode with the pad in hand (it is off by default) and `sync_write` on the
-bus with torque on — the arms were loose and nothing was moved.
+- **`sync_write` on the real bus, torque on** (arm 1 resting on the bench, small steps): one command
+  moved four joints at once — `shoulder_pan` +4°, `shoulder_lift` +4° **against gravity**, `wrist_roll`
+  +12° and the jaw 0→10 % — with a settle of **1.0 s** and errors of **−0.22 / −0.40 / −0.22 / −0.26**
+  units; the two joints not commanded stayed put (wrist_flex −0.35, the jaw moved and came back). The
+  return command put everything back inside 0.2 units.
+- **What a stalled joint looks like, and why it is not the server**: the folded elbow refused both
+  directions (asked 91.8, sat at 94.8; asked 106.8, sat at 96.0) while `shoulder_pan` in the same
+  packet tracked to 0.16°. With the arm lying on the bench, the elbow has no free travel in that pose —
+  it is jammed against the table, not the contract. The lesson is the spec's own §1: a command that
+  reaches the driver is not a pose that was reached, and only the encoders say which happened.
+
+Not yet verified: enforcing mode with the pad in hand (it is off by default), and any joint under
+gravity in mid-air — the arm was resting on the bench throughout.

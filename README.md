@@ -2249,8 +2249,9 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
   (`tools/test_command_contract.py`, `test_joint_merge.py`, `test_arbiter.py`,
   `test_episode_recorder.py`, and `test_joint_server.py` — the last one runs the **real HTTP handler**
   on a loopback port against a fake bus, so the 400/409/423/502 answers are exercised, not described).
-  **Not yet run on the Xavier**: enforcing mode re-points the pad through the arbiter and has to be
-  proven with the arm on the bench first
+  **On the bench, 2026-11-19**: one `sync_write` moved four joints of arm 1 in a single packet
+  (`shoulder_pan` +4°, `shoulder_lift` +4° against gravity, `wrist_roll` +12°, jaw 0→10 %) with a 1.0 s
+  settle and ≤0.4 units of error; enforcing mode and a joint under gravity in mid-air are still open
 - [x] **Headless test for the pad logic** — `tools/test_two_arm_switch.py` fakes the buttons and the two
   torque HTTP calls (nothing is energised) and checks the switch, the torque rules, the buzzes and the
   measurements: **41 checks**
