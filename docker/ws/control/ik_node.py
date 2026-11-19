@@ -4,7 +4,7 @@ The arm is driven in joint space (`/joint_targets`, degrees), so anything that w
 "put the gripper *there*" needs the inverse of FK. This node is that, and nothing else: it does
 not plan, it does not touch torque, and it refuses to publish targets unless asked to.
 
-    in   /ik/target     geometry_msgs/PoseStamped — pose of the tool tip in `base`
+    in   /{ns}/ik/target geometry_msgs/PoseStamped — pose of the tool tip in `{ns}_base`
     out  /ik/solution   Float64MultiArray — 5 joint angles (degrees), always
     out  /ik/status     String — ok, iterations, position and orientation residual
     out  /joint_targets Float64MultiArray — 6 values, only when IK_APPLY=1
@@ -38,7 +38,25 @@ APPLY = os.environ.get("IK_APPLY", "") == "1"
 # Two-arm (Plan Phase 7): ARM_NS moves the topics to /arm2/ik/* and the base to
 # arm2_base, so a second instance can solve for arm 2 from its own frame.
 NS = os.environ.get("ARM_NS", "").strip("/")
-BASE_FRAME = "arm2_base" if NS else "base"
+
+
+def base_frame_for(ns):
+    """The base each arm's IK measures in.
+
+    This said `arm2_base if NS else base`, so ANY namespaced instance — arm 1 included — solved in
+    arm 2's frame, and a 30 cm offset silently went into every answer. It was found by reading the
+    code, not by a test, which is why it now has one (tools/test_ik_frame.py).
+    """
+    return f"{ns}_base" if ns else "arm1_base"
+
+
+def accepts_frame(frame_id, expected):
+    """A target must name its base. An empty frame_id is not "the default", it is a missing field:
+    the previous condition (`if msg.header.frame_id and ...`) let it through and solved anyway."""
+    return bool(frame_id) and frame_id == expected
+
+
+BASE_FRAME = base_frame_for(NS)
 
 
 def topic(name):
@@ -267,9 +285,9 @@ class IkNode(Node):
         T_t[:3, :3] = quat_to_mat(msg.pose.orientation.x, msg.pose.orientation.y,
                                   msg.pose.orientation.z, msg.pose.orientation.w)
         T_t[:3, 3] = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
-        if msg.header.frame_id and msg.header.frame_id not in (BASE_FRAME, ""):
-            self._status("rejected: frame_id is %r, expected '%s' (no extrinsics are applied "
-                         "here)" % (msg.header.frame_id, BASE_FRAME), ok=False)
+        if not accepts_frame(msg.header.frame_id, BASE_FRAME):
+            self._status("rejected: frame_id is %r, expected '%s' (no extrinsics are applied here)"
+                         % (msg.header.frame_id, BASE_FRAME), ok=False)
             return
         seed = self.q_deg if self.q_deg is not None else np.zeros(self.chain.dof)
         q_deg, iters, pos_m, ori_deg = solve(self.chain, T_t, seed)

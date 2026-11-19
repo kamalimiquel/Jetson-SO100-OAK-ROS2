@@ -63,7 +63,7 @@ class LiveTest(Node):
         T = self.chain.fk([__import__("math").radians(v) for v in self.q], jaw=0.0)
         qx, qy, qz, qw = mat_to_quat(T[:3, :3])
         msg = PoseStamped()
-        msg.header.frame_id = "base"
+        msg.header.frame_id = "arm1_base"
         msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = [float(v) for v in T[:3, 3]]
         msg.pose.orientation.x, msg.pose.orientation.y = float(qx), float(qy)
         msg.pose.orientation.z, msg.pose.orientation.w = float(qz), float(qw)

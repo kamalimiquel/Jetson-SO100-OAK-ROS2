@@ -18,6 +18,7 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CELL_URDF = os.path.join(ROOT, "docker/ws/arm/urdf/so101_cell.urdf")
@@ -93,6 +94,29 @@ def check_static_frames():
         ok(f"entry.sh static frames: {frames or 'none'}")
 
 
+def check_frame_ids():
+    print("frame ids — no message is stamped in a frame that no longer exists")
+    stale = re.compile(r'frame_id\s*=\s*["\'](base|moving_jaw_so101_v1|gripper)["\']')
+    hits = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames
+                       if d not in (".git", "node_modules", "dist", "__pycache__", "docs")]
+        for fn in filenames:
+            if not fn.endswith((".py", ".sh", ".js")):
+                continue
+            path = os.path.join(dirpath, fn)
+            rel = Path(os.path.relpath(path, ROOT)).as_posix()
+            text = open(path, encoding="utf-8", errors="ignore").read()
+            for line_no, line in enumerate(text.splitlines(), 1):
+                if stale.search(line):
+                    hits.append(f"{rel}:{line_no}: {line.strip()[:70]}")
+    if hits:
+        for h in hits:
+            bad(f"frame id from before ADR-0023 — {h}")
+    else:
+        ok("no message names a deleted frame (arm1_base is the root)")
+
+
 def check_topics():
     print("topics — everything namespaced, the 1.0 names only in the bridge")
     seen, legacy_outside = 0, []
@@ -103,7 +127,10 @@ def check_topics():
             if not fn.endswith(SCAN_EXT):
                 continue
             path = os.path.join(dirpath, fn)
-            rel = os.path.relpath(path, ROOT)
+            # as_posix() because os.path.relpath returns backslashes on the operator's Windows PC,
+            # where these slash-delimited exclusions then match nothing and the checker reported
+            # 48 violations of its own fixtures.
+            rel = Path(os.path.relpath(path, ROOT)).as_posix()
             if rel in HTTP_SERVERS or rel in SELF:
                 continue
             try:
@@ -161,6 +188,7 @@ def main():
     print("namespace invariant (ADR-0023)\n")
     check_urdf()
     check_static_frames()
+    check_frame_ids()
     check_topics()
     check_cameras_and_clients()
     print("\n%s" % ("the invariant holds" if not fails else "%d violation(s)" % len(fails)))

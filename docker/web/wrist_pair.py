@@ -68,9 +68,10 @@ class Pair(Node):
             return
         msg = CompressedImage()
         msg.header.stamp = self.get_clock().now().to_msg()
-        # `base` is a frame that exists in TF: the RViz image panel only draws a message whose
-        # frame it can resolve, and a made-up frame name leaves the panel on "No Image".
-        msg.header.frame_id = "base"
+        # The RViz image panel only draws a message whose frame it can resolve, so this must name a
+        # frame that exists in TF. It said "base", which ADR-0023 deleted: the panel went to
+        # "No Image" and nothing else complained.
+        msg.header.frame_id = "arm1_base"
         msg.format = "jpeg"
         msg.data = pair
         try:

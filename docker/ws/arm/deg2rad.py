@@ -26,6 +26,10 @@ NS = os.environ.get("ARM_NS", "").strip("/")
 JP = os.environ.get("JOINT_PREFIX", (NS + "_") if NS else "")
 
 
+JAW = "gripper"
+JAW_RAD_PER_PERCENT = math.radians(1.0)   # placeholder linear map; fit it from measured aperture
+
+
 def topic(name: str) -> str:
     return f"/{NS}/{name}" if NS else f"/{name}"
 
@@ -40,12 +44,23 @@ class DegToRad(Node):
         self.get_logger().info(
             f"republishing {topic('joint_states')} (deg) as {topic('joint_states_rad')}"
         )
+        self.get_logger().info(
+            f"jaw: percent -> rad with %.4f per percent (uncalibrated proxy for the drawing)"
+            % JAW_RAD_PER_PERCENT
+        )
 
     def on_msg(self, msg: JointState):
         out = JointState()
         out.header = msg.header
         out.name = [(JP + n) if JP else n for n in msg.name]
-        out.position = [math.radians(p) for p in msg.position]
+        # The jaw is NOT an angle: /joint_states carries the LeRobot jaw percentage (0-100). Feeding
+        # it through radians() happens to land inside the cell URDF's jaw limits (-10..100 deg), which
+        # makes it look right, but that is a coincidence of how the model was authored, not a
+        # calibration — re-homing the motor or fitting a different jaw gear moves the real aperture
+        # without moving this number. So the map is written down and one constant can be fitted
+        # later; until it is measured, TF's jaw is a drawing, not a measurement (spec §4).
+        out.position = [JAW_RAD_PER_PERCENT * p if n == JAW else math.radians(p)
+                        for n, p in zip(msg.name, msg.position)]
         out.velocity = [math.radians(v) for v in msg.velocity]
         out.effort = msg.effort
         self.pub.publish(out)
