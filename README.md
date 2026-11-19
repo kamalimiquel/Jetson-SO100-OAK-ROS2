@@ -1891,7 +1891,10 @@ docker exec so100-arm curl -s http://127.0.0.1:8002/owner      # {"owner": null,
 (`/arm1|2/joint_states`, never the merged topic whose stamp belongs to the last arrival), to arm 1's
 wrist camera and the scene colour, at `RECORD_HZ` (5). Every observation keeps the message's own stamp
 and the age against it, so a dead camera is a count of stale samples in the manifest rather than a
-smooth-looking file. It refuses to start with `RECORD_DIR` empty — nothing records by accident.
+smooth-looking file. It refuses to start with `RECORD_DIR` empty — nothing records by accident. The
+files are written by a **separate thread**: on the board, writing from the timer callback starved the
+subscriptions (a 10 s episode lost whole topics and reached 0.93 s of age); with the writer thread the
+same run recorded all four sources with **worst age 0.36 s** and no stale sample.
 
 ```
 RECORD_DIR=/episodes RECORD_INSTRUCTION="put the yellow block in the red tray" \

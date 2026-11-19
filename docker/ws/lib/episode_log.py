@@ -73,13 +73,19 @@ class EpisodeLog:
         if text not in self.manifest["open_questions"]:
             self.manifest["open_questions"].append(text)
 
-    def observe(self, topic, stamp_wall=None, payload=None, frame=None):
-        """Record one sample. `stamp_wall` is the message's own acquisition stamp (None if the
-        message carries none); the receipt time is taken here and the age is theirs to compare."""
+    def observe(self, topic, stamp_wall=None, payload=None, frame=None, received_wall=None):
+        """Record one sample.
+
+        `stamp_wall` is the message's own acquisition stamp (None if it carries none) and
+        `received_wall` is when the node saw it. The age must be measured at **receipt**, not at
+        write: with the files written on another thread, a queued frame written 1 s later is not a
+        frame acquired 1 s late, and mixing the two made a healthy run report 1.27 s of age."""
         now_wall, now_mono = self.clock(), self.mono()
-        age = None if stamp_wall is None else round(now_wall - stamp_wall, 3)
+        ref = received_wall if received_wall is not None else now_wall
+        age = None if stamp_wall is None else round(ref - stamp_wall, 3)
         row = {"topic": topic, "received": round(now_mono, 4), "stamp": stamp_wall,
-               "age_s": age, "mono": round(now_mono, 4)}
+               "age_s": age, "mono": round(now_mono, 4),
+               "queued_s": round(now_wall - ref, 3) if received_wall is not None else 0.0}
         if payload is not None:
             row["data"] = payload
         if frame is not None:
@@ -120,7 +126,11 @@ class EpisodeLog:
     def summary(self):
         """One line for the log: what an operator needs to know the episode is worth keeping."""
         arms = {t: n for t, n in self.manifest["observations"].items() if "joint_states" in t}
-        imgs = {t: n for t, n in self.manifest["observations"].items() if "image" in t}
+        # every camera topic in this cell ends in the same JPEG suffix (the scene one has no "image"
+        # in its name, which is why filtering on that word lost it)
+        imgs = {t.rsplit("/", 1)[0].lstrip("/"): n
+                for t, n in self.manifest["observations"].items()
+                if t.rsplit("/", 1)[-1] == "compressed"}
         worst = max(self.manifest["max_age_s"].values()) if self.manifest["max_age_s"] else 0.0
         return ("%s: %d frames, arms %s, images %s, %d commands, worst age %.2fs%s"
                 % (self.manifest["episode"], self._frames, arms, imgs, self.manifest["commands"],

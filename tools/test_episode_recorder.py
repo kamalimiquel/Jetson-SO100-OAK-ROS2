@@ -164,6 +164,12 @@ def main():
         check("the jpeg is on disk", open(path, "rb").read(), b"jpeg")
         check("named in the observation line", row["file"].startswith("frames/"), True)
 
+        print("the age is receipt - stamp, and the queue delay is its own number")
+        row = log.observe("/arm1/joint_states", stamp_wall=clock["wall"] - 0.1,
+                          payload={}, received_wall=clock["wall"] - 0.02)
+        check("age measured at receipt, not at write", row["age_s"], 0.08)
+        check("and the time spent in the queue is recorded separately", row["queued_s"], 0.02)
+
         print("a message with no stamp has no age, and says so")
         row = log.observe("/oak/scene/color/compressed", stamp_wall=None, frame=b"x")
         check("age stays None rather than invented", row["age_s"], None)
@@ -180,13 +186,13 @@ def main():
         manifest = json.load(open(os.path.join(episode_dir, "manifest.json")))
         obs = [json.loads(line) for line in open(os.path.join(episode_dir, "observations.jsonl"))]
         cmds = [json.loads(line) for line in open(os.path.join(episode_dir, "commands.jsonl"))]
-        check("one line per observation", len(obs), 4)
+        check("one line per observation", len(obs), 5)
         check("one line per command, refused ones included", len(cmds), 2)
         check("the instruction is verbatim", manifest["instruction"],
               "Put the yellow block in the red tray")
         check("the jaw is declared uncalibrated in the manifest", manifest["jaw"]["calibrated"], False)
         check("duration is on the monotonic clock", manifest["duration_s"], 1.15)
-        check("counts agree with the lines", manifest["observations"]["/arm1/joint_states"], 1)
+        check("counts agree with the lines", manifest["observations"]["/arm1/joint_states"], 2)
         check("the summary mentions the worst age", "worst age 0.90s" in log.summary(), True)
 
         print("two episodes in one second do not share a directory")
@@ -218,16 +224,22 @@ def main():
         img.data = b"\xff\xd8jpeg"
         node.on_msg("/arm1/gripper/image/compressed", img)
         node.tick()
+        node.queue.join()          # the writes happen on the writer thread, not in the callback
         check("the state is recorded by joint name",
               node.log.manifest["observations"].get("/arm1/joint_states"), 1)
         check("a frame is written once and not offered again on the next tick",
               (node.log.manifest["observations"].get("/arm1/gripper/image/compressed"), node.tick() or
+               node.queue.join() or
                node.log.manifest["observations"].get("/arm1/gripper/image/compressed")), (1, 1))
+        check("the state is re-sampled every tick (the newest value, not a queue)",
+              node.log.manifest["observations"]["/arm1/joint_states"], 2)
+        check("but a frame is not duplicated",
+              node.log.manifest["observations"]["/arm1/gripper/image/compressed"], 1)
 
         cmd = rec.Float64MultiArray()
         cmd.data = [1.0, 2.0, 3.0, 4.0, 5.0]
         node.on_command("arm1", cmd)
-        node.log.close()
+        node.finish()              # drains the queue, then closes the episode
         rows = [json.loads(line) for line in
                 open(os.path.join(node.log.dir, "commands.jsonl")).readlines()]
         check("a five-value command is recorded with its refusal, not obeyed",

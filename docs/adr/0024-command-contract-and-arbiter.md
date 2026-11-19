@@ -62,7 +62,9 @@ artifact with a per-arm age in it.
 - `joint_merge.py` — the merged message carries the **oldest** live arm's stamp, and an arm silent for
   more than `MERGE_STALE_S` (0.5 s) loses its joints with one log line, so `robot_state_publisher` and
   RViz lose that arm instead of drawing a lie. The return is logged too.
-- `docker/ws/control/recorder.py` + `docker/ws/lib/episode_log.py` — an episode under `RECORD_DIR`:
+- `docker/ws/control/recorder.py` + `docker/ws/lib/episode_log.py` — an episode under `RECORD_DIR`,
+  written from a **separate thread** (writing inside the executor starved the subscriptions on the
+  board):
   `manifest.json`, `observations.jsonl`, `commands.jsonl`, `frames/*.jpg`. Arm-specific state only
   (`/armN/joint_states`, never the merged topic), each observation with the message's own stamp, the
   receipt clock and the age between them; stale samples are counted, not smoothed. Refuses to start
@@ -109,6 +111,21 @@ Headless, no hardware, all green at this commit:
 - `tools/check_namespaces.py` → `the invariant holds`, including the new command-surface section.
 - `tools/test_compat_bridge.py` → 11 checks (unchanged), `tools/test_ik_frame.py` → 10 (unchanged).
 
-Not verified, and not claimed: nothing here has run on the Xavier yet — no sync_write on a real bus,
-no 423 seen from a real `curl`, no episode captured from the bench, and enforcing mode has not been
-tried with the pad in hand.
+**On the Xavier, 2026-11-19** (rsync + `compose up -d --force-recreate arm arm2 control`, rosbridge
+restarted), torque off on both arms:
+
+- `POST /write` with five values → **400** with the hint; seven → 400; `190°` → 400 naming
+  `shoulder_pan`; six with torque off → **409**; `POST /claim {"owner":"test"}` → `/write` without the
+  header → **423** (`test holds this arm (19.8s left)`), `/release` → `{"owner": null}`.
+- `/cell/arbiter` publishes the JSON status; the arbiter logs `observing only (ARBITER_ENFORCE=0)`.
+- **Dropout proven on the bench**: `docker stop so100-arm2` → `/cell/joint_states_rad` goes from 12
+  names to arm 1's 6 and logs `arm2/joint_states_rad silent for more than 0.5s — dropping its joints
+  (RViz will lose that arm, on purpose)`; `docker start` → back to 12 and `publishing again`.
+- Merged stamp age measured with a probe: min 0.016 s, **median 0.03 s**, max 0.183 s (arm 1 at
+  ~22 Hz, arm 2 at ~45 Hz). Arm 1 was dropped once for 0.9 s while `ros2 topic echo` and Python probes
+  shared the board — the threshold is `MERGE_STALE_S`, raise it to 1.0 if RViz blinks under load.
+- A real episode: 12 s, 47 + 46 arm samples, 51 wrist frames, 24 scene frames, max age 0.36 s, no
+  stale sample, manifest carrying the two caveats (jaw proxy, scene without metric pose).
+
+Not yet verified: enforcing mode with the pad in hand (it is off by default) and `sync_write` on the
+bus with torque on — the arms were loose and nothing was moved.
