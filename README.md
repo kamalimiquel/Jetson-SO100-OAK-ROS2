@@ -95,6 +95,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [13.3 so100-web — the browser](#133-so100-web--the-browser)
   - [13.4 so100-rosbridge — the WebSocket bridge (MuJoCo twin, ADR-0019)](#134-so100-rosbridge--the-websocket-bridge-mujoco-twin-adr-0019)
   - [13.5 so100-control — the IK node (ADR-0009)](#135-so100-control--the-ik-node-adr-0009)
+  - [13.6 so100-control — the arbiter and the episode recorder](#136-so100-control--the-arbiter-and-the-episode-recorder)
 - **[15. Troubleshooting](#15-troubleshooting)**
   - [15.1 The tabs](#151-the-tabs)
   - [15.2 Everything else](#152-everything-else)
@@ -1683,10 +1684,13 @@ what exists and what it carries — read it after [§8](#8-verifying-the-data-fl
 
 Three processes inside the container:
 
-1. **LeRobot joint server** (Python 3.12) — *not* a ROS node. The only process touching the arm's serial port: it reads the 6 motor positions and applies commanded angles, exposed as plain HTTP inside the container (port 8002). It exists because the LeRobot SDK needs Python ≥3.10 while the container's ROS2 libraries are built for Python 3.8 — the two halves talk over HTTP. API: `GET /read` (angles JSON), `GET /status`, `GET`/`POST /torque` (the on/off switch — enabling it seeds the goals from the present positions, so "arm" means "hold where you are"), `POST /write` (body `{"angles": [5 or 6]}`, answered **409** while that arm's torque is off, so nothing moves it behind the operator's back).
+1. **LeRobot joint server** (Python 3.12) — *not* a ROS node. The only process touching the arm's serial port: it reads the 6 motor positions and applies commanded angles, exposed as plain HTTP inside the container (port 8002). It exists because the LeRobot SDK needs Python ≥3.10 while the container's ROS2 libraries are built for Python 3.8 — the two halves talk over HTTP. API: `GET /read` (angles JSON), `GET /status`, `GET`/`POST /torque` (the on/off switch — enabling it seeds the goals from the present positions, so "arm" means "hold where you are"), `GET /owner` and `POST /claim`/`POST /release` (the write-path lease), `POST /write` (body `{"angles": [6 floats]}`, or `{"angles": [5 floats], "hold": ["gripper"]}`; answered **409** while that arm's torque is off, **400** with a sentence when the array is the wrong length or a value is not finite or outside the joint's range, **423** while another `owner` holds the lease, **502** when a packet failed and the measured pose disagrees).
    ```bash
    docker exec so100-arm curl -s http://127.0.0.1:8002/read
+   docker exec so100-arm curl -s -X POST http://127.0.0.1:8002/write \
+     -d '{"angles": [0, -20, 30, 0, 0], "hold": ["gripper"]}'
    ```
+   **The command array is the interface that fails without an exception**: `Float64MultiArray` carries no names, no stamp and no owner, so five values used to leave the jaw at its previous goal and seven dropped the last, both silently. The contract is one module, `docker/ws/lib/command_contract.py`, used by this server and by the arbiter, and pinned by `tools/test_command_contract.py` (36 checks, no hardware).
 2. **arm_bridge** (Python 3.8 + rclpy) — the ROS2 translator around that server.
 3. **robot_state_publisher** — computes the arm's 3D skeleton (TF) from the URDF and the joint angles. Humble reads the URDF from the `robot_description` **parameter** (passed at launch), not from the topic.
 
@@ -1719,7 +1723,12 @@ concatenates `/arm1/joint_states_rad` and `/arm2/joint_states_rad` — already p
 (arm 1 plain, arm 2 prefixed, a fixed `base → arm2_base`), and `model_description_pub` latches that
 same URDF on `/cell/robot_description` because the file source does not load on this build. The
 consequence worth knowing: restarting arm 1's container takes the **cell** topics down with it while
-arm 2 keeps publishing, and a cell topic is only ever as fresh as its slower arm.
+arm 2 keeps publishing, and a cell topic is only ever as fresh as its slower arm. That is now said in
+two ways instead of hidden: the merged message carries the **oldest** live arm's stamp (so an age
+computed from it is honest), and an arm silent for more than `MERGE_STALE_S` (0.5 s, ~12 samples at
+arm 1's 24-27 Hz) is dropped from the message with one log line — robot_state_publisher and RViz lose
+that arm instead of drawing a frozen pose under a fresh stamp. `tools/test_joint_merge.py` pins both
+rules headless.
 
 | Topic | Node | What it carries |
 |---|---|---|
@@ -1849,7 +1858,48 @@ metres-per-radian (`ORI_WEIGHT = 0.12`) and the residuals are *reported* rather 
 **The jaw is never commanded**: the URDF's last revolute joint is held at its current value and the
 solution covers the other five — the same rule the calibration tools follow.
 
-Two tests ship with it, both runnable without hardware:
+### 13.6 so100-control — the arbiter and the episode recorder
+
+Both come from the same command-surface work (`docs/adr/0024-command-contract-and-arbiter.md`), and
+neither is a step of the IK pipeline.
+
+**The arbiter** (`arbiter.py`) is the single writer between a command topic and each arm's `/write`
+port. Three clients publish `/armN/joint_targets` — the pad, an applying IK node, any policy adapter
+under test — and each of them used to reach the same serial bus. The arbiter validates every command
+against the same contract as the server (six values, finite, inside range, NaN only in the jaw slot),
+keeps **one** write in flight per arm so a newer command supersedes an older one instead of queueing a
+backlog, and records the receipt time because the array carries none. `ARBITER_ENFORCE=0` is the
+default and the deployed arrangement: it validates and reports on `/cell/arbiter` while `arm_bridge`
+keeps writing. `ARBITER_ENFORCE=1` makes it the only writer — it claims each arm's lease
+(`POST /claim`, renewed every 0.5 s, 2 s ttl) and every other writer, including a `curl` from the web
+page's terminal, gets **423**; the arm containers must then run `ARM_WRITE_MODE=arbiter` so the bridge
+stops forwarding. A failed packet re-reads the arm, compares it with what was asked, and holds the path
+until torque is cycled or the lease re-claimed.
+
+| Topic | Direction | What it carries |
+|---|---|---|
+| /arm1/joint_targets, /arm2/joint_targets | in | the command array, one per arm — the arbiter is the only process that writes it to the bus in enforce mode |
+| /cell/arbiter | out, 1 Hz | `String` JSON: `enforce`, per-arm `sent`/`observed`/`superseded`/`rejected`/`stale`/`faults`, the sentence while `held`, and the age of the last write |
+
+```
+ros2 topic echo /cell/arbiter --once
+docker exec so100-arm curl -s http://127.0.0.1:8002/owner      # {"owner": null, "seconds_left": 0.0}
+```
+
+**The recorder** (`recorder.py`) writes an episode under `$RECORD_DIR`: `manifest.json`,
+`observations.jsonl`, `commands.jsonl` and `frames/*.jpg`. It subscribes to arm-specific state
+(`/arm1|2/joint_states`, never the merged topic whose stamp belongs to the last arrival), to arm 1's
+wrist camera and the scene colour, at `RECORD_HZ` (5). Every observation keeps the message's own stamp
+and the age against it, so a dead camera is a count of stale samples in the manifest rather than a
+smooth-looking file. It refuses to start with `RECORD_DIR` empty — nothing records by accident.
+
+```
+RECORD_DIR=/episodes RECORD_INSTRUCTION="put the yellow block in the red tray" \
+  docker compose up -d --force-recreate control
+ls docker/episodes/*/ && cat docker/episodes/*/manifest.json
+```
+
+Two IK tests ship with it, both runnable without hardware:
 
 ```
 docker exec so100-control bash -c "source /opt/ros/humble/install/setup.bash &&     python3 /opt/tools/ik_selftest.py"      # FK parity, 200-pose round trip, unreachable target
@@ -1951,6 +2001,10 @@ there is none on `/arm2/ik/status` — watch that last one while you try a pose.
 | a node you know is running does not appear | it is in another container **and** the daemon cached an earlier list | same: `ros2 daemon stop` |
 | `ros2: command not found` inside a container | ROS not sourced — with the mounted `.bashrc` this only happens in a non-interactive `bash -c` | `source /opt/ros/humble/install/setup.bash` first |
 | `ros2 node list -t` → unknown argument | there is no `-t` there; that flag is `ros2 topic list -t` | drop it, or use it on `topic list` |
+| the pad (or `curl :8002/write`) answers **423** | `ARBITER_ENFORCE=1` and the arbiter holds that arm's lease — the intended behaviour, not a fault | one writer at a time: publish `/armN/joint_targets` and let the arbiter forward, or release the lease with `curl -X POST :8002/release -H 'X-Owner: arbiter'` |
+| a write answers **400** naming a joint | the array is the wrong length, a value is not finite, or it is outside that joint's range — clamping is opt-in (`"clamp": true`) | send six values (five + `"hold": ["gripper"]` to leave the jaw alone) |
+| a write answers **502** and then **409** with `fault` | a packet failed and the measured pose disagrees with the command; the path is held so the next command cannot drive from an unknown pose | read `curl :8002/read`, then cycle torque (web button or pad B) or re-claim the arm |
+| the merged model in RViz loses one arm | `joint_merge` dropped an arm silent for >0.5 s (`MERGE_STALE_S`) — that is the honest display of a dead arm | check that arm's `joint_states` rate and its container |
 
 
 ## 15. Troubleshooting
@@ -2178,6 +2232,22 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
   writer), and `docker/ws/arm/compat_bridge.py` republishes the 1.0 surface verbatim. The invariant is
   executable: `tools/check_namespaces.py` fails on any bare name, and `tools/test_compat_bridge.py`
   pins the bridge. Not yet confirmed on the Xavier (out of reach when it was built)
+- [x] **Command contract, arbiter and episode recorder (ADR-0024)** — `docker/ws/lib/command_contract.py`
+  is the one place a command becomes valid: exactly six values (five plus `"hold": ["gripper"]` to leave
+  the jaw alone), finite, inside the joint's range, with `clamp: true` as the only way to mean "as far
+  as it goes"; the joint server applies all driven joints in **one** `sync_write` packet, answers 400
+  with a sentence instead of 500, and holds its write path (409 + the measured pose) after a failed
+  packet until torque is cycled. `arbiter.py` validates every `/armN/joint_targets` message, keeps one
+  write in flight so a newer command supersedes a queue, and can become the sole writer
+  (`ARBITER_ENFORCE=1` + the arm's lease, 423 for everyone else). `recorder.py` writes an episode
+  (`manifest.json`, `observations.jsonl`, `commands.jsonl`, `frames/`) from arm-specific state with each
+  message's own stamp. `joint_merge` now stamps the merged state with its **oldest** live arm and drops
+  an arm silent for 0.5 s. Headless, no hardware: **36 + 21 + 29 + 27 + 29** checks
+  (`tools/test_command_contract.py`, `test_joint_merge.py`, `test_arbiter.py`,
+  `test_episode_recorder.py`, and `test_joint_server.py` — the last one runs the **real HTTP handler**
+  on a loopback port against a fake bus, so the 400/409/423/502 answers are exercised, not described).
+  **Not yet run on the Xavier**: enforcing mode re-points the pad through the arbiter and has to be
+  proven with the arm on the bench first
 - [x] **Headless test for the pad logic** — `tools/test_two_arm_switch.py` fakes the buttons and the two
   torque HTTP calls (nothing is energised) and checks the switch, the torque rules, the buzzes and the
   measurements: **41 checks**
@@ -2186,7 +2256,7 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
 ### 17.3 Next
 
 - [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
-- [ ] **Episode recording + LeRobot export (ADR-0012)** — rosbag2 of the synchronised topics and an offline converter to the dataset format
+- [ ] **Episode recording + LeRobot export (ADR-0012)** — the recorder writes the episode (see §13.6); what is still missing is the offline converter to the LeRobot dataset format, and its first run on the bench
 - [ ] **Hand-eye extrinsic — needs a new capture** — the 2026-11-09 dataset does not close: the board lands 694 mm from the jaw with a 300 mm spread, so the poses and the frames are not from the same instants ([§12.3](#123-hand-eye--where-the-camera-sits-in-the-arms-frame)). The board's own size is ruled out as the cause (13.5 / 18 / 20 mm squares → 235 / 48 / 47 px, 2026-11-17) and the PDF is now generated and measured by `tools/gen_charuco.py --check`. Bolt the board to the jaw, read the pose at the shot, and run `tools/handeye_bundle.py`, which reports the leave-one-out error instead of a spread that looks small on bad data. Until then no node consumes an extrinsic, which is the safe state
 - [ ] **Gripper camera focus (ADR-0022)** — the USB RGB webcam is **mounted on the moving jaw** and streams at 10 Hz; what is still missing is the *measured* focus at 10-15 cm, with the procedure and the CSV in [§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm) (`tools/camfocus.py`)
 - [ ] **SO-100 models** — the arm on the bench is an **SO-100** and both models (URDF and MJCF) are the SO-101 (ADR-0021). Regenerate them from the SO-100 description and re-check FK against the arm and against the twin: until then RViz and MuJoCo show the right *shape* with SO-101 link geometry

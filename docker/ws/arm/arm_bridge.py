@@ -10,6 +10,11 @@ Env (see two-arm plan, Phase 1):
   ARM_NS     topic namespace — empty (default): /joint_states etc.; "arm2":
              /arm2/joint_states, /arm2/robot_description, /arm2/joint_targets
   JOINT_PORT  joint-server port (default 8002; arm 2 uses 8003)
+  ARM_WRITE_MODE  "direct" (default) — this bridge forwards /joint_targets to the server;
+             "arbiter" — it subscribes to nothing but its own state topic and the arbiter
+             (control container) becomes the only writer. Two writers on one bus, each with its
+             own idea of the current command, is exactly the interleaving the arbiter exists to
+             remove, so the mode is one switch for both processes.
 """
 
 import json
@@ -25,6 +30,7 @@ from std_msgs.msg import Float64MultiArray, String
 JOINT_NAMES = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
 NS = os.environ.get("ARM_NS", "").strip("/")
 JOINT_PORT = os.environ.get("JOINT_PORT", "8002")
+WRITE_MODE = os.environ.get("ARM_WRITE_MODE", "direct").strip().lower()
 SERVER = f"http://127.0.0.1:{JOINT_PORT}"
 URDF_PATH = "/opt/ws/arm/urdf/so101.urdf"
 
@@ -41,7 +47,12 @@ class ArmBridge(Node):
             String, topic("robot_description"),
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
-        self.create_subscription(Float64MultiArray, topic("joint_targets"), self.on_targets, 10)
+        if WRITE_MODE == "arbiter":
+            # The arbiter owns the write path (and the lease on the port). This bridge stays a
+            # publisher of measured state; subscribing here would put a second writer back.
+            self.get_logger().info("write path: the arbiter writes, this bridge only publishes state")
+        else:
+            self.create_subscription(Float64MultiArray, topic("joint_targets"), self.on_targets, 10)
         self.create_timer(0.02, self.tick)
         self._warned = False
 

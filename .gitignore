@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 docker/prebuilt/*.tar.gz
+# Episode files written by docker/ws/control/recorder.py (RECORD_DIR=/episodes)
+docker/episodes/
+episodes/

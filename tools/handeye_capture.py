@@ -378,10 +378,13 @@ def main():
     last_good = list(state["p"])
     for i, (pose, _) in enumerate(targets):
         base = list(state["p"])
-        # joint 6 (gripper) is left out of the message on purpose: the joint server
-        # accepts 5 values and then never writes that servo. NaN over rosbridge is a
-        # trap — JSON has no NaN, the whole message gets dropped and nothing moves.
-        goal = list(pose[:5]) if args.gripper is None else list(pose[:5]) + [args.gripper]
+        # Six values, always: the command contract rejects a five-long array now (see
+        # docker/ws/lib/command_contract.py) because "leave the jaw alone" has to be declared
+        # instead of inferred — and over rosbridge the in-band sentinel, NaN, is not expressible
+        # in JSON (the whole message gets dropped). So the jaw is commanded to where it already
+        # is: with torque on that holds it still, which is what a capture sweep wants.
+        jaw = float(state["p"][5]) if args.gripper is None else float(args.gripper)
+        goal = list(pose[:5]) + [jaw]
         # gentle ramp: biggest joint delta decides how long the move takes
         delta = max(abs(g - b) for g, b in zip(goal[:5], base[:5]))
         ramp = max(0.8, min(4.0, delta / max(1.0, args.deg_per_s)))

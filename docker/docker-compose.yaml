@@ -19,6 +19,9 @@ services:
       # so no bare topic or frame exists to collide with arm 2. The released 1.0 surface
       # (/joint_states, /joint_targets, ...) is served by compat_bridge.py, not by this arm.
       - ARM_NS=arm1
+      # Who writes to the bus: "direct" (this bridge, the deployed arrangement) or "arbiter"
+      # (docker/ws/control/arbiter.py is the only writer; pair with ARBITER_ENFORCE=1).
+      - ARM_WRITE_MODE=${ARM_WRITE_MODE:-direct}
       # Static transform of the wrist webcam (ADR-0022): metres from the moving-jaw link to the
       # lens, then rpy to the optical convention. Nominal bracket values — measure and override,
       # README §12.5. Set here (not in the entrypoint) so the numbers live beside the hardware.
@@ -58,6 +61,7 @@ services:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ARM_NS=arm2
+      - ARM_WRITE_MODE=${ARM_WRITE_MODE:-direct}
       - JOINT_PORT=8003
       - TORQUE_PORT=8095
       # lerobot_joint_server reads these itself (Phase 1):
@@ -149,11 +153,22 @@ services:
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - IK_APPLY=0
+      # The single writer (docker/ws/control/arbiter.py). 0 = observe and validate only, the
+      # deployed arrangement where arm_bridge writes; 1 = the arbiter claims each arm's lease and
+      # is the only writer, which needs ARM_WRITE_MODE=arbiter on the arm containers too.
+      - ARBITER_ENFORCE=${ARBITER_ENFORCE:-0}
+      - COMMAND_TTL_S=0.5
+      # Episodes (recorder.py). Empty RECORD_DIR = the recorder does not start.
+      - RECORD_DIR=${RECORD_DIR:-}
+      - RECORD_INSTRUCTION=${RECORD_INSTRUCTION:-}
+      - RECORD_HZ=5
     volumes:
       # Interactive bash that already knows where ROS is (see docker/bashrc-cell).
       - ./bashrc-cell:/root/.bashrc:ro
       - ./ws:/opt/ws
       - ../tools:/opt/tools:ro
+      # Episode files land here; a host directory so they survive the container.
+      - ${EPISODES_DIR:-./episodes}:/episodes
     command: ["bash", "/opt/ws/control/entry.sh"]
 
   web:

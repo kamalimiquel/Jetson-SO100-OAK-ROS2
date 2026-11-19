@@ -8,11 +8,21 @@ rclpy is built for py3.8 and LeRobot needs >=3.10.
     GET  /status  -> {"connected": true, "calibrated": true}
     GET  /read    -> {"angles": [6 floats, degrees], "names": [...]}
     GET  /torque  -> {"torque": false}
+    GET  /owner   -> {"owner": "policy" | null, "seconds_left": 3.2}
+    POST /claim   -> body {"owner": "policy", "ttl_s": 5.0}  takes exclusive ownership of this
+                     arm's write path for ttl_s seconds (0 releases). While a lease is held,
+                     /write and /torque need the header `X-Owner: <owner>` and answer 423
+                     otherwise — the loopback port is the boundary a topic-level guard cannot
+                     reach (ttyd on :7681 can curl it from inside the container).
     POST /torque  -> body {"on": true|false}  flips the servos' torque; enabling seeds the
                      goals from the PRESENT positions, so the arm holds where it stands
-    POST /write   -> body {"angles": [5 or 6 floats, degrees]}  drives the joints, but only
-                     with torque ON: with torque off it answers 409 and moves nothing
-                     (the web page's torque button and pad-B are the only ways in)
+    POST /write   -> body {"angles": [6 floats, degrees]}  or
+                          {"angles": [5 floats, degrees], "hold": ["gripper"]}
+                     exact length, finite, inside the joint's range (add "clamp": true to mean
+                     "as far as it goes"), one sync_write packet for every driven joint, and a
+                     400 naming the joint when any of that fails. Torque must be ON: with
+                     torque off it answers 409 and moves nothing (the web page's torque button
+                     and pad-B are the two ways in).
 
 Env: SO100_PORT (default /dev/ttyACM0), SO100_ID (default so100_cell),
      PORT (default 8002, bound to 127.0.0.1).
@@ -26,15 +36,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from lerobot.robots.so_follower import SO100Follower, SO100FollowerConfig
 
+# The command contract lives in the shared lib so the arbiter and this server reject the same
+# things for the same reasons (/opt/ws/lib in the container, docker/ws/lib in the repo).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
+import command_contract as cc  # noqa: E402
+
 PORT = int(os.environ.get("PORT", "8002"))
 SERIAL = os.environ.get("SO100_PORT", "/dev/ttyACM0")
 ARM_ID = os.environ.get("SO100_ID", "so100_cell")
 
-# Hard joint limits (degrees) — the F710 client clamps too; these are the
-# server-side backstop. Order: shoulder_pan, shoulder_lift, elbow_flex,
-# wrist_flex, wrist_roll, gripper.
-LO = [-170.0, -170.0, -170.0, -170.0, -170.0, 0.0]
-HI = [170.0, 170.0, 170.0, 170.0, 170.0, 100.0]
+# The joint table and its limits live in the shared command contract (docker/ws/lib), so the
+# arbiter, the tests and this server cannot drift apart: order is shoulder_pan, shoulder_lift,
+# elbow_flex, wrist_flex, wrist_roll, gripper.
 
 
 def connect_with_retry(arm, tries=30, delay=2.0):
@@ -85,6 +98,35 @@ def main() -> None:
           flush=True)
     torque_on = False
 
+    # Exclusive ownership of this arm's write path. Unclaimed (owner None) keeps the 1.0
+    # behaviour — the web torque button and the pad work with no token — because a bench that
+    # suddenly needs a token would break the two controls the operator actually uses. The moment
+    # a supervisor (the arbiter) or a policy claims the arm, every other writer on loopback or
+    # on the topic is refused with 423, which is the one boundary a topic-level arbiter cannot
+    # reach: ttyd on :7681 can `curl 127.0.0.1:8002/write` from inside this container.
+    lease = {"owner": None, "until": 0.0}
+    # Set when a write packet failed and the measured pose is not what was asked: the write path
+    # stays closed until the arm is released/re-claimed or torque is cycled (which re-seeds every
+    # goal from Present_Position). Never let the next command drive from an unknown pose.
+    fault = None
+
+    def lease_left():
+        if lease["owner"] is None:
+            return 0.0
+        left = lease["until"] - time.time()
+        if left <= 0.0:
+            print(f"[joint_server] owner {lease['owner']} lease expired", flush=True)
+            lease["owner"], lease["until"] = None, 0.0
+            return 0.0
+        return left
+
+    def owner_refused(handler):
+        """423 when a lease is held by someone else; None when the caller may write."""
+        if lease_left() and handler.headers.get("X-Owner") != lease["owner"]:
+            return "%s holds this arm (%.1fs left) — X-Owner must match" % (
+                lease["owner"], lease_left())
+        return None
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):  # quiet
             pass
@@ -106,17 +148,61 @@ def main() -> None:
                     self._json({"error": str(exc)}, 500)
             elif self.path == "/torque":
                 self._json({"torque": bool(torque_on)})
+            elif self.path == "/owner":
+                self._json({"owner": lease["owner"], "seconds_left": round(lease_left(), 1)})
             elif self.path == "/status":
                 self._json({"connected": True, "calibrated": arm.is_calibrated})
             else:
                 self._json({"error": "not found"}, 404)
 
         def do_POST(self):
-            nonlocal torque_on
+            nonlocal torque_on, fault
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) or b"{}"
+            try:
+                body = json.loads(raw)
+            except ValueError as exc:
+                self._json({"error": f"body is not JSON: {exc}"}, 400)
+                return
+
+            if self.path == "/claim":
+                # Ownership of the write path, taken and given back explicitly. ttl_s = 0 (or a
+                # dead supervisor's timeout) returns the arm to unclaimed, where the web button
+                # and the pad work as before.
+                who = str(body.get("owner") or "").strip()
+                ttl = float(body.get("ttl_s") or 0.0)
+                if not who or ttl <= 0.0:
+                    lease["owner"], lease["until"] = None, 0.0
+                    fault = None
+                    print("[joint_server] write path released (unclaimed)", flush=True)
+                    self._json({"owner": None, "seconds_left": 0.0})
+                    return
+                if lease_left() and who != lease["owner"]:
+                    self._json({"error": "%s holds this arm (%.1fs left)" % (
+                        lease["owner"], lease_left())}, 423)
+                    return
+                lease["owner"], lease["until"] = who, time.time() + ttl
+                fault = None
+                print(f"[joint_server] write path claimed by {who} for {ttl:.1f}s", flush=True)
+                self._json({"owner": who, "seconds_left": round(lease_left(), 1)})
+                return
+            if self.path == "/release":
+                if lease_left() and self.headers.get("X-Owner") != lease["owner"]:
+                    self._json({"error": "%s holds this arm" % lease["owner"]}, 423)
+                    return
+                lease["owner"], lease["until"], fault = None, 0.0, None
+                print("[joint_server] write path released", flush=True)
+                self._json({"owner": None, "seconds_left": 0.0})
+                return
+
+            refused = owner_refused(self)
+            if refused:
+                self._json({"error": refused}, 423)
+                return
+
             if self.path == "/torque":
                 try:
-                    length = int(self.headers.get("Content-Length", 0))
-                    on = bool(json.loads(self.rfile.read(length) or b"{}").get("on"))
+                    on = bool(body.get("on"))
                     if on:
                         # Freeze the arm where it IS. A servo keeps its own Goal_Position, so
                         # `enable_torque()` alone makes it snap back to the last command it was
@@ -149,6 +235,9 @@ def main() -> None:
                     else:
                         bus.disable_torque()
                     torque_on = on
+                    # Cycling torque re-seeds every goal from the measured position, so it is
+                    # also the physical way out of a held write path.
+                    fault = None
                     print(f"[joint_server] torque {'ENABLED' if on else 'DISABLED'}", flush=True)
                     self._json({"torque": bool(torque_on)})
                 except Exception as exc:  # noqa: BLE001
@@ -158,29 +247,56 @@ def main() -> None:
                 self._json({"error": "not found"}, 404)
                 return
             try:
-                length = int(self.headers.get("Content-Length", 0))
-                angles = json.loads(self.rfile.read(length) or b"{}")["angles"]
-                # 6 values = drive every joint; 5 = drive the first five and leave the
-                # gripper completely alone (hand-eye sweeps and any caller that must not
-                # move joint 6). More than 6 is always an error.
-                if len(angles) not in (5, len(names)) or len(angles) > len(names):
-                    raise ValueError(f"expected 5 or {len(names)} angles, got {len(angles)}")
-                if not torque_on:
-                    # do not energise the servos behind the operator's back: the web
-                    # button is the gate, and the boot state is torque off
-                    self._json({"error": "torque is off — press this arm's torque button in the web page "
-                                 "(or hold B for 5 s on the pad)"}, 409)
-                    return
-                for name, value in zip(names, angles):
-                    i = names.index(name)
-                    value = float(value)
-                    if value != value:      # NaN = caller does not want this joint driven
-                        continue            # (leaves Goal_Position where the servo holds it)
-                    value = max(LO[i], min(HI[i], value))
-                    bus.write("Goal_Position", name, value)
-                self._json({"status": "ok"})
+                driven, held, notes = cc.validate_body(body)
+            except cc.CommandError as exc:
+                # 400, not the old 500: the caller can fix this, and the sentence says how.
+                print(f"[joint_server] write rejected: {exc}", flush=True)
+                self._json({"error": str(exc)}, 400)
+                return
+            if not torque_on:
+                # do not energise the servos behind the operator's back: the web
+                # button is the gate, and the boot state is torque off
+                self._json({"error": "torque is off — press this arm's torque button in the web page "
+                             "(or hold B for 5 s on the pad)"}, 409)
+                return
+            if fault:
+                # A previous packet failed and the arm is not where it was asked to be. Letting
+                # the next command through would drive the remaining joints from an unknown
+                # pose, so the path stays closed until the operator releases/re-claims the arm
+                # or cycles torque (which re-seeds every goal from the measured position).
+                self._json({"error": "write path held after a failed packet — release or re-claim the "
+                                     "arm, or cycle torque", "fault": fault}, 409)
+                return
+            try:
+                # ONE packet for every driven joint. The old loop wrote motor by motor, so an
+                # exception on the fourth left three moved and three not: a pose nobody asked
+                # for, at full torque.
+                bus.sync_write("Goal_Position", driven)
             except Exception as exc:  # noqa: BLE001
-                self._json({"error": str(exc)}, 500)
+                # Did it actually fail? The packet may have reached some servos and not others,
+                # and the bus's own answer is not the truth — the encoders are. Compare.
+                try:
+                    now = {n: float(bus.read("Present_Position", n)) for n in names}
+                except Exception as read_exc:  # noqa: BLE001
+                    fault = f"write failed ({exc}) and the arm could not be read ({read_exc})"
+                    print(f"[joint_server] FAULT {fault}", flush=True)
+                    self._json({"error": fault}, 502)
+                    return
+                off = {n: round(now[n] - v, 2) for n, v in driven.items() if abs(now[n] - v) > 2.0}
+                if not off:
+                    print(f"[joint_server] write reported {exc} but the arm is where it was told "
+                          f"it should be — treating the packet as delivered", flush=True)
+                    self._json({"status": "ok", "note": f"bus error ignored: {exc}",
+                                "driven": driven, "held": sorted(held)})
+                    return
+                fault = "write failed (%s); measured differs from the command on %s" % (exc, off)
+                print(f"[joint_server] FAULT {fault}", flush=True)
+                self._json({"error": fault, "measured": now}, 502)
+                return
+            if notes:
+                print("[joint_server] " + "; ".join(notes), flush=True)
+            self._json({"status": "ok", "driven": {n: round(v, 2) for n, v in driven.items()},
+                        "held": sorted(held)})
 
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
 

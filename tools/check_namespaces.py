@@ -35,9 +35,17 @@ HTTP_SERVERS = {
     "docker/web/wrist_focus.py", "docker/web/shutdown_server.py",
     "docker/web/wrist_pair.py", "docker/web/xavier_temp.py",
     "docker/ws/arm/arm_bridge.py", "tools/camfocus.py",
+    # The arbiter's literals are HTTP routes on the loopback ports (/write, /claim, /owner); its
+    # ROS topics are asserted explicitly in check_command_surface() below, the same way the
+    # bridge's are.
+    "docker/ws/control/arbiter.py",
 }
 # The invariant's own fixtures, and the figure that draws the chain for the docs.
 SELF = {"tools/check_namespaces.py", "tools/test_compat_bridge.py",
+        # fake topics and fake HTTP answers on purpose: no cell publisher lives here
+        "tools/test_arbiter.py", "tools/test_joint_merge.py",
+        "tools/test_command_contract.py", "tools/test_episode_recorder.py",
+        "tools/test_joint_server.py",
         # the fake rosbridge matches topic SUFFIXES ("/joint_states") for any namespace by design,
         # so it must contain those strings while never being a cell publisher itself
         "tools/fake_rosbridge.py"}
@@ -184,6 +192,42 @@ def check_cameras_and_clients():
     (ok if "Fixed Frame: arm1_base" in rviz else lambda m: bad(m))("RViz fixes on arm1_base")
 
 
+def check_command_surface():
+    """The command path's wiring and its two silent-failure guards, asserted by name."""
+    print("command surface — one writer, six values, honest stamps")
+    arb = open(os.path.join(ROOT, "docker/ws/control/arbiter.py"), encoding="utf-8").read()
+    for needle, why in (
+        ('"/%s/joint_targets" % ns', "the arbiter reads each arm's own targets"),
+        ('"/cell/arbiter"', "and reports on /cell"),
+        ("def decide(", "the command policy is a pure function"),
+        ("ARBITER_ENFORCE", "and enforcement is a switch, off by default"),
+    ):
+        (ok if needle in arb else lambda m: bad(m))(why)
+    rec = open(os.path.join(ROOT, "docker/ws/control/recorder.py"), encoding="utf-8").read()
+    for needle, why, want in (
+        ('"/arm1/joint_states"', "the recorder reads arm 1's own state", True),
+        ('"/arm2/joint_states"', "and arm 2's", True),
+        ('"/cell/joint_states_rad"', "never the merged state (its stamp is the last arrival's)", False),
+    ):
+        got = needle in rec
+        (ok if got == want else lambda m: bad(m))(why)
+    server = open(os.path.join(ROOT, "docker/ws/arm/lerobot_joint_server.py"), encoding="utf-8").read()
+    for needle, why, want in (
+        ('bus.sync_write("Goal_Position", driven)', "one packet for all six motors", True),
+        ("for name, value in zip(names, angles)", "not one write per motor (partial poses)", False),
+        ("cc.validate_body(body)", "the command contract is enforced at the port", True),
+        ('"/claim"', "and ownership is taken at the port, not on the topic", True),
+    ):
+        got = needle in server
+        (ok if got == want else lambda m: bad(m))(why)
+    bridge = open(os.path.join(ROOT, "docker/ws/arm/arm_bridge.py"), encoding="utf-8").read()
+    (ok if "ARM_WRITE_MODE" in bridge else lambda m: bad(m))(
+        "the bridge can yield the write path to the arbiter")
+    merge = open(os.path.join(ROOT, "docker/ws/arm/joint_merge.py"), encoding="utf-8").read()
+    (ok if "MERGE_STALE_S" in merge and '"/cell/joint_states_rad"' in merge else lambda m: bad(m))(
+        "joint_merge drops a silent arm instead of disguising it")
+
+
 def main():
     print("namespace invariant (ADR-0023)\n")
     check_urdf()
@@ -191,6 +235,7 @@ def main():
     check_frame_ids()
     check_topics()
     check_cameras_and_clients()
+    check_command_surface()
     print("\n%s" % ("the invariant holds" if not fails else "%d violation(s)" % len(fails)))
     return 1 if fails else 0
 
