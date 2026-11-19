@@ -1684,7 +1684,7 @@ what exists and what it carries — read it after [§8](#8-verifying-the-data-fl
 
 Three processes inside the container:
 
-1. **LeRobot joint server** (Python 3.12) — *not* a ROS node. The only process touching the arm's serial port: it reads the 6 motor positions and applies commanded angles, exposed as plain HTTP inside the container (port 8002). It exists because the LeRobot SDK needs Python ≥3.10 while the container's ROS2 libraries are built for Python 3.8 — the two halves talk over HTTP. API: `GET /read` (angles JSON), `GET /status`, `GET`/`POST /torque` (the on/off switch — enabling it seeds the goals from the present positions, so "arm" means "hold where you are"), `GET /owner` and `POST /claim`/`POST /release` (the write-path lease), `POST /write` (body `{"angles": [6 floats]}`, or `{"angles": [5 floats], "hold": ["gripper"]}`; answered **409** while that arm's torque is off, **400** with a sentence when the array is the wrong length or a value is not finite or outside the joint's range, **423** while another `owner` holds the lease, **502** when a packet failed and the measured pose disagrees).
+1. **LeRobot joint server** (Python 3.12) — *not* a ROS node. The only process touching the arm's serial port: it reads the 6 motor positions and applies commanded angles, exposed as plain HTTP inside the container (port 8002). It exists because the LeRobot SDK needs Python ≥3.10 while the container's ROS2 libraries are built for Python 3.8 — the two halves talk over HTTP. API: `GET /read` (angles JSON), `GET /status`, `GET`/`POST /torque` (the on/off switch — enabling it seeds the goals from the present positions, so "arm" means "hold where you are"), `GET /owner` and `POST /claim`/`POST /release` (the write-path lease), `POST /write` (body `{"angles": [6 floats]}`, or `{"angles": [5 floats], "hold": ["gripper"]}`; answered **409** while that arm's torque is off, **400** with a sentence when the array is the wrong length or a value is not finite or outside the joint's range, **423** while another `owner` holds the lease — that one applies to `/write` only, because torque is the operator's switch and the web button and the pad send no token — **502** when a packet failed and the measured pose disagrees).
    ```bash
    docker exec so100-arm curl -s http://127.0.0.1:8002/read
    docker exec so100-arm curl -s -X POST http://127.0.0.1:8002/write \
@@ -1871,9 +1871,9 @@ keeps **one** write in flight per arm so a newer command supersedes an older one
 backlog, and records the receipt time because the array carries none. `ARBITER_ENFORCE=0` is the
 default and the deployed arrangement: it validates and reports on `/cell/arbiter` while `arm_bridge`
 keeps writing. `ARBITER_ENFORCE=1` makes it the only writer — it claims each arm's lease
-(`POST /claim`, renewed every 0.5 s, 2 s ttl) and every other writer, including a `curl` from the web
-page's terminal, gets **423**; the arm containers must then run `ARM_WRITE_MODE=arbiter` so the bridge
-stops forwarding. A failed packet re-reads the arm, compares it with what was asked, and holds the path
+(`POST /claim`, renewed every 0.5 s, 2 s ttl) and every other writer of **motion**, including a `curl`
+from the web page's terminal, gets **423**; the arm containers must then run `ARM_WRITE_MODE=arbiter` so
+the bridge stops forwarding. Arming the arm (web button, pad B) keeps working: torque is not leased. A failed packet re-reads the arm, compares it with what was asked, and holds the path
 until torque is cycled or the lease re-claimed.
 
 | Topic | Direction | What it carries |

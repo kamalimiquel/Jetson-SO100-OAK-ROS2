@@ -195,10 +195,18 @@ def main() -> None:
                 self._json({"owner": None, "seconds_left": 0.0})
                 return
 
-            refused = owner_refused(self)
-            if refused:
-                self._json({"error": refused}, 423)
+            if self.path not in ("/torque", "/write"):
+                self._json({"error": "not found"}, 404)
                 return
+
+            if self.path == "/write":
+                # The lease gates MOTION. Torque stays the operator's switch: the web button and
+                # the pad's B send no X-Owner, and a supervisor able to energise an arm is what
+                # this design forbids (a policy talks the topic, never this port).
+                refused = owner_refused(self)
+                if refused:
+                    self._json({"error": refused}, 423)
+                    return
 
             if self.path == "/torque":
                 try:

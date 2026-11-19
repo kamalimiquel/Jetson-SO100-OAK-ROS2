@@ -49,8 +49,11 @@ artifact with a per-arm age in it.
   the encoders: if the arm is where it was told, the packet counts as delivered; if not, the path is
   held (**409** with the fault and the measured pose) until torque is cycled or the arm re-claimed.
 - **Ownership at the port**: `GET /owner`, `POST /claim {"owner", "ttl_s"}`, `POST /release`. While a
-  lease is held, `/write` and `/torque` require `X-Owner: <owner>` and answer **423** otherwise.
-  Unclaimed is the default, which is what keeps the web torque button and the pad working unchanged.
+  lease is held, **`/write`** requires `X-Owner: <owner>` and answers **423** otherwise. `/torque` stays
+  outside the lease on purpose: the web button and the pad's B send no token, and a supervisor that can
+  energise an arm is exactly what this design forbids — a policy talks the topic, never the port. The
+  lease gates motion, not the switch that decides whether the arm is held at all. Unclaimed is the
+  default, which keeps the deployed behaviour.
 - `docker/ws/control/arbiter.py` — subscribes `/arm1|2/joint_targets`, validates with the same
   contract, keeps **one** write in flight per arm (a newer command supersedes the pending one instead
   of queueing a backlog), records the receipt time as the only honest stamp, and publishes
