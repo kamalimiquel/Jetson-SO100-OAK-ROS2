@@ -1875,8 +1875,9 @@ default and the deployed arrangement: it validates and reports on `/cell/arbiter
 keeps writing. `ARBITER_ENFORCE=1` makes it the only writer — it claims each arm's lease
 (`POST /claim`, renewed every 0.5 s, 2 s ttl) and every other writer of **motion**, including a `curl`
 from the web page's terminal, gets **423**; the arm containers must then run `ARM_WRITE_MODE=arbiter` so
-the bridge stops forwarding. Arming the arm (web button, pad B) keeps working: torque is not leased. A failed packet re-reads the arm, compares it with what was asked, and holds the path
-until torque is cycled or the lease re-claimed.
+the bridge stops forwarding. Arming the arm (web button, pad B) keeps working: torque is not leased.
+A failed packet re-reads the arm, compares it with what was asked, and holds the path until torque is
+cycled or the lease re-claimed.
 
 | Topic | Direction | What it carries |
 |---|---|---|
@@ -1914,6 +1915,25 @@ RECORD_DIR=/episodes RECORD_INSTRUCTION="put the yellow block in the red tray" \
   docker compose up -d --force-recreate control
 ls docker/episodes/*/ && cat docker/episodes/*/manifest.json
 ```
+
+**Where the files land.** `RECORD_DIR` is a path *inside* the control container; compose mounts
+`${EPISODES_DIR:-./episodes}` there, and the `./` is the compose file's own directory — on the Xavier
+that is **`~/so100/docker/episodes/`**, so the episode above is
+`/home/maju/so100/docker/episodes/20261119-194107` (59 MB: `manifest.json`, `observations.jsonl`,
+`commands.jsonl`, `frames/`). The directory is in `.gitignore`, so an episode never reaches the repo,
+and the container path and the host path are the same tree, not a copy. To work on one from the
+operator PC:
+
+```
+rsync -az --exclude __pycache__ -e "sshpass -p maria ssh" \
+  maju@192.168.1.185:~/so100/docker/episodes/20261119-194107 ./
+```
+
+**First teleoperated episode, 2026-11-19** — the pad moved arm 1 through the arbiter for **90.7 s**:
+**455 + 454** arm samples, **453** wrist frames, **242** scene frames, ages **48–76 ms**, no stale
+sample. What it does *not* fix is the pixels: it was recorded at night, so the wrist frames are black,
+and the scene camera frames the operator's desk instead of the bench ([§17.3](#173-next)). The episode
+proves the plumbing, not the data.
 
 Two IK tests ship with it, both runnable without hardware:
 
@@ -2264,8 +2284,16 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
   on a loopback port against a fake bus, so the 400/409/423/502 answers are exercised, not described).
   **On the bench, 2026-11-19**: one `sync_write` moved four joints of arm 1 in a single packet
   (`shoulder_pan` +4°, `shoulder_lift` +4° against gravity, `wrist_roll` +12°, jaw 0→10 %) with a 1.0 s
-  settle and ≤0.4 units of error; a teleop session with the arbiter enforcing ended with **sent 535,
-  superseded 219, rejected 0, faults 0** while a direct `curl` to `/write` got 423
+  settle and ≤0.4 units of error. A teleop session with the arbiter **enforcing** ended with **sent 535,
+  superseded 219, rejected 0, stale 0, faults 0** while a direct `curl` to `/write` got **423** and
+  `/torque` without a token still answered 200; the pad's own arming path was untouched. A joint that
+  refuses both directions in the same packet (`elbow_flex` folded against the bench) is a pose problem,
+  not a driver problem — said as such in ADR-0024
+- [x] **Episodes, end to end** — the recorder wrote a 90.7 s teleoperation episode from inside the
+  container (counts and ages above), and two defects the bench found are fixed: the manifest is flushed
+  every 2 s (a `SIGTERM` used to leave 695 frames with no summary) and the signal flag no longer
+  collides with the close flag. `tools/episode_manifest.py` rebuilds a manifest from the logs. Still
+  missing for a *usable* episode: light on the table and the scene camera aimed at it
 - [x] **Headless test for the pad logic** — `tools/test_two_arm_switch.py` fakes the buttons and the two
   torque HTTP calls (nothing is energised) and checks the switch, the torque rules, the buzzes and the
   measurements: **41 checks**
@@ -2274,7 +2302,9 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
 ### 17.3 Next
 
 - [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
-- [ ] **Episode recording + LeRobot export (ADR-0012)** — the recorder writes the episode (see §13.6); what is still missing is the offline converter to the LeRobot dataset format, and its first run on the bench
+- [ ] **Episode recording + LeRobot export (ADR-0012)** — the recorder writes the episode (§13.6) and a teleoperated one exists; what is still missing is the offline converter to the LeRobot dataset format
+- [ ] **Light the table and aim the scene camera at it** — the 19:41 episode's pixels are unusable: the wrist frames are black (night session) and the OAK frames the operator's desk, so no policy can learn from them. Move the scene camera to see the block and the tray, add light, and record one more episode before training anything
+- [ ] **Hand-eye sweep with six values** — the command contract now refuses a five-value array, so `tools/handeye_capture.py` sends six (jaw commanded where it already is); the sweep itself has not been re-run on the bench since the change
 - [ ] **Hand-eye extrinsic — needs a new capture** — the 2026-11-09 dataset does not close: the board lands 694 mm from the jaw with a 300 mm spread, so the poses and the frames are not from the same instants ([§12.3](#123-hand-eye--where-the-camera-sits-in-the-arms-frame)). The board's own size is ruled out as the cause (13.5 / 18 / 20 mm squares → 235 / 48 / 47 px, 2026-11-17) and the PDF is now generated and measured by `tools/gen_charuco.py --check`. Bolt the board to the jaw, read the pose at the shot, and run `tools/handeye_bundle.py`, which reports the leave-one-out error instead of a spread that looks small on bad data. Until then no node consumes an extrinsic, which is the safe state
 - [ ] **Gripper camera focus (ADR-0022)** — the USB RGB webcam is **mounted on the moving jaw** and streams at 10 Hz; what is still missing is the *measured* focus at 10-15 cm, with the procedure and the CSV in [§12.5](#125-the-gripper-camera--is-it-in-focus-at-10-15-cm) (`tools/camfocus.py`)
 - [ ] **SO-100 models** — the arm on the bench is an **SO-100** and both models (URDF and MJCF) are the SO-101 (ADR-0021). Regenerate them from the SO-100 description and re-check FK against the arm and against the twin: until then RViz and MuJoCo show the right *shape* with SO-101 link geometry
@@ -2301,7 +2331,8 @@ Every architecture decision is proposed with 3 alternatives (pros, cons, recomme
 - `docs/architecture.md` — architecture overview, ADR index, open items
 - `docs/two-arm-integration-plan.md` — the two-arm plan: phases 0–8, their tests (T*.*) and the status
   measured on the bench
-- `docs/adr/` — Architecture Decision Records (0001–0022)
+- `docs/adr/` — Architecture Decision Records (0001–0024; 0023 is the symmetric namespaces and 0024
+  the command contract, the single writer and the episode recorder, [§13.6](#136-so100-control--the-arbiter-and-the-episode-recorder))
 - `docs/architecture-flow.svg` / `.png` — data-flow diagram, generated by `tools/make_architecture_flow.py`
 
 ## 20. Releases
