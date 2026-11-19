@@ -75,6 +75,13 @@ class Recorder(Node):
         self.deadline = time.monotonic() + seconds if seconds else None
         self.queue = queue.Queue(maxsize=QUEUE_MAX)
         self.dropped = 0
+        self.last_flush = time.monotonic()
+        # Two flags, not one: `stop_requested` is what a signal sets, `finished` is what closing
+        # sets. Sharing them made finish() return immediately on SIGTERM ("if finished: return") and
+        # the episode was killed with 705 frames and no manifest — measured on the board.
+        self.stop_requested = False
+        self.commands_seen = {}      # namespace -> count, so the rate limit does not lose the total
+        self.last_command_log = {}
         self.writer = threading.Thread(target=self.write_loop, name="episode-writer", daemon=True)
         self.writer.start()
         self.get_logger().info("recording %s at %.1f Hz -> %s" % (", ".join(STATES + (WRIST, SCENE)),
@@ -108,13 +115,23 @@ class Recorder(Node):
             self.published[topic] = (receipt, bytes(msg.data))
 
     def on_command(self, ns, msg):
+        # The pad publishes at ~50 Hz: one line per message made a 30 s episode carry 991 command
+        # rows nobody reads. Count every one, log two per second, and say the total in the reason.
+        now = time.monotonic()
+        self.commands_seen[ns] = self.commands_seen.get(ns, 0) + 1
+        last = self.last_command_log.get(ns, 0.0)
+        if now - last < 0.5:
+            return
+        self.last_command_log[ns] = now
         try:
             driven, held, _ = cc.validate_topic(list(msg.data))
             self.log.command(ns, driven, accepted=False,
-                             reason="requested on the topic by some writer; the arbiter decides "
-                                    "what reaches the bus" + (" (hold %s)" % sorted(held) if held else ""))
+                             reason="%d message(s) on the topic so far; the arbiter decides what "
+                                    "reaches the bus" % self.commands_seen[ns]
+                                    + (" (hold %s)" % sorted(held) if held else ""))
         except cc.CommandError as exc:
-            self.log.command(ns, list(msg.data), accepted=False, reason=str(exc))
+            self.log.command(ns, list(msg.data), accepted=False,
+                             reason="%d message(s): %s" % (self.commands_seen[ns], exc))
 
     def tick(self):
         for topic, (stamp, receipt, values) in list(self.latest.items()):
@@ -132,6 +149,9 @@ class Recorder(Node):
                 # The disk is behind the cameras. Counting it (and saying it in the summary) is the
                 # only honest option: a recorder that silently drops is a recorder you cannot trust.
                 self.dropped += 1
+        if time.monotonic() - self.last_flush >= 2.0:
+            self.last_flush = time.monotonic()
+            self.log.flush()          # the manifest survives a hard kill, not just a polite exit
         if self.deadline and time.monotonic() > self.deadline:
             self.finish()
 
@@ -154,6 +174,9 @@ class Recorder(Node):
         if self.dropped:
             self.log.note("%d observations dropped: the disk could not keep up with the cameras"
                           % self.dropped)
+        if self.commands_seen:
+            self.log.note("commands seen on the topic: %s (logged at 2 Hz)"
+                          % ", ".join("%s=%d" % (k, v) for k, v in sorted(self.commands_seen.items())))
         self.queue.put(None)
         self.writer.join(timeout=30.0)
         self.get_logger().info(self.log.summary())
@@ -178,10 +201,10 @@ def main():
         import signal
 
         def _stop(_signum, _frame):
-            node.finished = True
+            node.stop_requested = True
 
         signal.signal(signal.SIGTERM, _stop)
-        while rclpy.ok() and not getattr(node, "finished", False):
+        while rclpy.ok() and not node.stop_requested and not getattr(node, "finished", False):
             rclpy.spin_once(node, timeout_sec=0.1)
     except KeyboardInterrupt:
         pass                   # Ctrl+C closes the episode in the finally block

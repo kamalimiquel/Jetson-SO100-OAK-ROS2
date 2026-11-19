@@ -113,14 +113,27 @@ class EpisodeLog:
             self.manifest["commands"] += 1
         return row
 
+    def flush(self, ended=False):
+        """Write the manifest now, atomically.
+
+        Called periodically and NOT only at close: a recorder ends because the container is
+        stopped, and `docker stop` sends SIGKILL after its grace period — measured on the board,
+        an episode that was killed left 705 frames and 1604 observations with **no manifest at
+        all**. A file that only exists if the process exits politely is not a record."""
+        if ended:
+            self.manifest["ended"] = iso(self.clock())
+            self.manifest["duration_s"] = round(self.mono() - self.started_mono, 3)
+        tmp = os.path.join(self.dir, "manifest.json.tmp")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(self.manifest, fh, indent=2, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, os.path.join(self.dir, "manifest.json"))
+
     def close(self):
-        ended_wall, ended_mono = self.clock(), self.mono()
-        self.manifest["ended"] = iso(ended_wall)
-        self.manifest["duration_s"] = round(ended_mono - self.started_mono, 3)
         self._obs.close()
         self._cmd.close()
-        with open(os.path.join(self.dir, "manifest.json"), "w", encoding="utf-8") as fh:
-            json.dump(self.manifest, fh, indent=2, sort_keys=True)
+        self.flush(ended=True)
         return self.dir
 
     def summary(self):

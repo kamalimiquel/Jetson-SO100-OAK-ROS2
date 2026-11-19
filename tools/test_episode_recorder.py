@@ -176,6 +176,12 @@ def main():
         check("and is not counted as stale", "/oak/scene/color/compressed" in log.manifest["stale"],
               False)
 
+        print("the manifest exists before the process exits")
+        log.flush()
+        mid = json.load(open(os.path.join(log.dir, "manifest.json")))
+        check("flush() leaves a readable manifest mid-episode", mid["observations"]["/arm1/joint_states"], 2)
+        check("and it is not marked ended yet", mid["ended"], None)
+
         print("commands")
         log.command("arm1", {"shoulder_pan": 1.0}, accepted=True)
         log.command("arm1", {"shoulder_pan": 1.0}, accepted=False, reason="outside -170..170")
@@ -194,6 +200,18 @@ def main():
         check("duration is on the monotonic clock", manifest["duration_s"], 1.15)
         check("counts agree with the lines", manifest["observations"]["/arm1/joint_states"], 2)
         check("the summary mentions the worst age", "worst age 0.90s" in log.summary(), True)
+
+        print("a killed episode can be rebuilt from its own logs")
+        import subprocess
+        tool = os.path.join(HERE, "episode_manifest.py")
+        out = subprocess.run([sys.executable, tool, episode_dir, "--show"],
+                             capture_output=True, text=True, check=True).stdout
+        rebuilt = json.loads(out)
+        check("the rebuilt counts match the live manifest",
+              rebuilt["observations"], manifest["observations"])
+        check("and so does the stale count", rebuilt["stale"], manifest["stale"])
+        check("frames are counted from the lines", rebuilt["frames"], 2)
+        check("accepted commands too", rebuilt["commands"], manifest["commands"])
 
         print("two episodes in one second do not share a directory")
         a = el.EpisodeLog(root, clock=lambda: 1_800_000_100.0, mono=lambda: 1.0)
@@ -239,7 +257,12 @@ def main():
         cmd = rec.Float64MultiArray()
         cmd.data = [1.0, 2.0, 3.0, 4.0, 5.0]
         node.on_command("arm1", cmd)
+        # a signal sets stop_requested, and the exit path must still close the episode: sharing one
+        # flag made finish() return immediately and killed a real episode with no manifest
+        node.stop_requested = True
         node.finish()              # drains the queue, then closes the episode
+        check("a stop request still writes an ended manifest",
+              json.load(open(os.path.join(node.log.dir, "manifest.json")))["ended"] is not None, True)
         rows = [json.loads(line) for line in
                 open(os.path.join(node.log.dir, "commands.jsonl")).readlines()]
         check("a five-value command is recorded with its refusal, not obeyed",

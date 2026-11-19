@@ -1898,6 +1898,17 @@ files are written by a **separate thread**: on the board, writing from the timer
 subscriptions (a 10 s episode lost whole topics and reached 0.93 s of age); with the writer thread the
 same run recorded all four sources with **worst age 0.36 s** and no stale sample.
 
+The manifest is **rewritten every 2 s**, not only at the end: a recorder stops because the container
+is stopped, and `docker stop` gives it a grace period then a SIGKILL — measured on the board, a killed
+episode left 695 frames and 1604 observations with no manifest at all, and the polite exit was silent
+because the signal handler and the close path shared one flag (fixed). If the summary is ever missing
+or the directory was copied, it is derivable from the logs:
+
+```
+python3 tools/episode_manifest.py /episodes/20261119-194107 --show    # rebuild, print only
+python3 tools/episode_manifest.py /episodes/20261119-194107           # write manifest.json
+```
+
 ```
 RECORD_DIR=/episodes RECORD_INSTRUCTION="put the yellow block in the red tray" \
   docker compose up -d --force-recreate control

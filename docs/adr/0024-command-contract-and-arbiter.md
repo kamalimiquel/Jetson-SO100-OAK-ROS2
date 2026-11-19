@@ -134,6 +134,14 @@ restarted), torque off on both arms:
   shared the board — the threshold is `MERGE_STALE_S`, raise it to 1.0 if RViz blinks under load.
 - A real episode: 12 s, 47 + 46 arm samples, 51 wrist frames, 24 scene frames, max age 0.36 s, no
   stale sample, manifest carrying the two caveats (jaw proxy, scene without metric pose).
+- **A teleoperated episode, 90.7 s** (the pad moved arm 1 through the arbiter): 455 + 454 arm samples,
+  453 wrist frames, 242 scene frames, 695 files, ages 48-76 ms, **no stale sample**, 991 command
+  messages on the topic. Two defects came out of this one, both invisible headless: the manifest was
+  written only at close, so a `SIGTERM` left 695 frames with **no manifest**; and the signal handler
+  set the same `finished` flag that makes `finish()` return at its first line, so the polite exit closed
+  nothing either. The manifest is now flushed every 2 s and the two flags are separate;
+  `tools/episode_manifest.py` rebuilds a manifest from the logs, and the episode above was rebuilt with
+  it (that is where those numbers come from).
 
 - **`sync_write` on the real bus, torque on** (arm 1 resting on the bench, small steps): one command
   moved four joints at once — `shoulder_pan` +4°, `shoulder_lift` +4° **against gravity**, `wrist_roll`
