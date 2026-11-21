@@ -1,0 +1,37 @@
+Phase 1 — joint units: what was reproduced, on which machine, against which files
+==================================================================================
+Date:            2026-11-19 (evening session)
+Host:            Xavier NX, L4T R35.6.5, kernel 5.10.216-tegra, aarch64
+Deployed copy:   maju@192.168.1.185:~/so100 (rsync; board has no .git)
+SDK:             lerobot 0.7.0 (venv py3.12.16), rclpy in the driver image py3.8.10
+Torque:          OFF on both arms for every read below (arms resting on the bench)
+
+File identity (the ledger records hashes, not names):
+  lerobot_joint_server.py  local  sha256 b160738667796f5c95fef66503108a489908f1d71505c3d2f17991a3d5f68452
+  lerobot_joint_server.py   board  sha256 b160738667796f5c95fef66503108a489908f1d71505c3d2f17991a3d5f68452
+  -> IDENTICAL
+
+Boot assertion (both arms, docker logs):
+  units OK — sdk 0.7.0, degrees=True
+  arm1 calibration .../so100_cell.json    sha256 0051a9d80d1e...
+  arm2 calibration .../so100_cell_b.json  sha256 d9cccea7e7ea...
+  Body joints: DEGREES (id 1..5, model sts3215). Jaw: RANGE_0_100 (id 6).
+
+The manifest check is fail-closed: a wrong use_degrees, a changed bus id, a reordered map, or a
+missing normalize keyword makes the server exit 2 before it binds the port. Tested headless in
+tools/test_units_manifest.py (18 checks) and against the real handler (tools/test_joint_server.py).
+
+What the table proves (joint_units.csv + ros_snapshot.json, 12 rows, arm passive):
+  * SDK value  ==  raw tick  -> DEGREES formula (mid = (range_min+range_max)/2, 4095 counts)
+                    |delta| = 0.000 deg on all five body joints of both arms;
+     jaw: pct = (tick - range_min)/(range_max - range_min) * 100, |delta| = 0.000 %.
+  * ROS value  ==  SDK value (|delta| = 0.000): arm_bridge copies the numbers verbatim, so the
+     topic carries the same unit the server reports.
+  * Calibration hashes above are the ones the numbers were produced against.
+
+NOT yet measured (needs hands and instruments — phase 1 is not signed off without these):
+  * external reference per joint: inclinometer on lift/elbow, marked disk on roll, three measured
+    angles on pan. The table's external_reference/external_unit columns are empty on purpose.
+  * jaw aperture in mm, both directions (tools/jaw_curve.py), plus hysteresis and deadband.
+  * supported signed maintenance moves with the independent stop available.
+  * loaded vs unloaded sag, backlash on reversal, soft endpoints under load.

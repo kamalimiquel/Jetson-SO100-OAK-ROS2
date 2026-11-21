@@ -1,0 +1,79 @@
+# Frozen baseline — 2026-11-19, repository SHA 6d63efc93aa24574b08fce2b56cf35300c38ba58
+# Filled from the live Xavier NX, not from the README. Anything this file does not say was not
+# measured here, and the spec's evidence vocabulary applies (reproduced / reported / proposed).
+reviewed_sha: 6d63efc93aa24574b08fce2b56cf35300c38ba58
+branch: main
+date: "2026-11-19"
+deployed_copy: "maju@192.168.1.185:~/so100 (rsync of the SHA above; the board has no .git)"
+
+host:
+  model: Jetson Xavier NX (16 GB SKU; 14 GiB visible to Linux)
+  l4t: "R35 (release), REVISION 6.5, BOARD t186ref, EABI aarch64"
+  kernel: 5.10.216-tegra
+  arch: aarch64
+  docker: 26.1.3
+  memory_used_at_freeze: "3 GiB used, 10 GiB available"
+  power_and_clock: "no RTC; board loses wall time on every boot (journal is persistent)"
+
+images:
+  # Locally built images carry no RepoDigest: the image ID is the identity, plus the build date.
+  - {name: "so100-web:latest", id: "4802eac78aa0", digest: null, built: "7 days before freeze"}
+  - {name: "so100-cams:latest", id: "def923fe0ce9", digest: null, built: "13 days before freeze"}
+  - {name: "so100-rosbridge:latest", id: "4ee13172face", digest: null, built: "7 days before freeze"}
+  - {name: "dustynv/ros:humble-ros-base-l4t-r35.4.1", id: "441bbd3796f4",
+     digest: "sha256:e9761a81548fb7b9f4b9c71ada4ea940839bb2c02ef2cfe1a2b41c903a2f14a0"}
+  - {name: "arm64v8/ros:humble-ros-base", id: "cfda958c28a9",
+     digest: "sha256:69cab4b59d81c5c79710576563ac9b5984d0fade92db7662bd4ecfb10fe5ff88"}
+
+runtimes:
+  container_python: "3.8.10 (L4T images, rclpy)"
+  lerobot_venv_python: "3.12.16"
+  lerobot: "0.7.0"
+  ros: "Humble (L4T build, /opt/ros/humble/install)"
+  domain_id: 42
+  rmw: rmw_fastrtps_cpp
+
+devices:
+  # Host symlinks (udev). Inside arm 1's container /dev/so100_arm is mounted as /dev/ttyACM0.
+  arms:
+    - {symlink: /dev/arm1_tty, target: ttyACM1, usb: "1a86:55d3", note: "also /dev/so100_arm"}
+    - {symlink: /dev/arm2_tty, target: ttyACM0, usb: "1a86:55d3"}
+  wrist_cameras:
+    - {symlink: /dev/arm1_wrist, target: video0, product: "046d Camera (Logitech/Labtec)",
+       usb: "046d:08aa", note: "legacy alias /dev/so100_wrist"}
+    - {symlink: /dev/arm2_wrist, target: video1, product: "Creative Live! Cam Sync HD VF0770",
+       usb: "041e:4095"}
+  scene_camera:
+    mxid: "184430101111F90F00"
+    usb: "03e7:f63b"
+    link: "5000M on bus 002 port 3 (USB-C, not PoE)"
+    calib_reported_by_node: "default color=MISSING stereo=MISSING; depth 1280x720 fx=833.00 cx=639.23"
+  hub: "Terminus 1a40:0101, self-powered, 480M links for both arms and both wrist cameras"
+
+resolved_modes_at_freeze:
+  # Compose interpolation, read back from the running containers.
+  ARM_NS: {arm: arm1, arm2: arm2}
+  IK_APPLY: "0"
+  ARBITER_ENFORCE: "1"
+  ARM_WRITE_MODE: arbiter
+  RECORD_DIR: ""            # recorder off: no /episodes episode is being written
+  recorder_process: absent  # verified with `docker exec so100-control ps aux`
+  torque: {arm1: false, arm2: false}
+  arms_support: "resting on the bench, unsupported by fixture"
+
+checks_at_freeze:
+  # Run locally against the same SHA; each command is `python3 tools/<name>.py`.
+  - {name: check_namespaces, result: pass, detail: "the invariant holds (incl. command surface)"}
+  - {name: test_command_contract, result: pass, checks: 36}
+  - {name: test_joint_server, result: pass, checks: 33}
+  - {name: test_arbiter, result: pass, checks: 29}
+  - {name: test_joint_merge, result: pass, checks: 21}
+  - {name: test_episode_recorder, result: pass, checks: 38}
+  - {name: test_compat_bridge, result: pass, checks: 11}
+  - {name: test_ik_frame, result: pass, checks: 10}
+
+not_measured_here:
+  - "workstation GPU / WSL: this host has neither (spec §3 says the same)"
+  - "scene camera mounting pose (extrinsic rejected, phase 3)"
+  - "jaw aperture in mm (phase 1, needs a caliper)"
+  - "any joint's external reference (phase 1, needs an inclinometer/gauge)"

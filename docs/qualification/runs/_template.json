@@ -1,0 +1,44 @@
+{
+  "_readme": "Template for docs/qualification/runs/<RUN-ID>.json. Copy, fill, never edit afterwards. Values shown are placeholders, not measurements.",
+  "run_id": "YYYYMMDD-STAGE-01",
+  "stage": "BENCH",
+  "started": "2026-11-19T00:00:00+01:00",
+  "ended": "2026-11-19T00:00:00+01:00",
+  "duration_s": 0.0,
+  "operator": "who was at the bench",
+  "scorer": "who scored, and whether blind to the controller",
+  "robot": {
+    "arms": ["so100_cell", "so100_cell_b"],
+    "boot_epoch": 0,
+    "calibration_hashes": {"arm1": "sha256:...", "arm2": "sha256:..."},
+    "robot_id": "bench-02"
+  },
+  "config": {
+    "repo_sha": "6d63efc93aa24574b08fce2b56cf35300c38ba58",
+    "images": {"arm": "sha256:...", "control": "sha256:"},
+    "adapter_hash": "sha256:...",
+    "skill_revision": "place_in_tray/v1",
+    "weights": null
+  },
+  "layout": {
+    "layout_id": "L01",
+    "block_mm": [40, 40, 40],
+    "block_colour": "yellow",
+    "tray_inner_mm": [90, 90],
+    "tray_colour": "red",
+    "lighting": "bench LED on",
+    "camera_ids": {"scene": "184430101111F90F00", "wrist_arm1": "046d:08aa", "wrist_arm2": "041e:4095"}
+  },
+  "stage_results": {
+    "detect": {"result": "not_run", "reason": null},
+    "plan": {"result": "not_run", "reason": null},
+    "grasp": {"result": "not_run", "reason": null},
+    "transfer": {"result": "not_run", "reason": null},
+    "release": {"result": "not_run", "reason": null},
+    "verify": {"result": "not_run", "reason": null}
+  },
+  "first_failure": {"stage": null, "contributing_factor": null},
+  "interventions": {"count": 0, "kinds": []},
+  "evidence": [],
+  "notes": ""
+}

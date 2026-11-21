@@ -1,0 +1,24 @@
+{
+  "arm1": {
+    "stamp": 1795246612.929808,
+    "values": {
+      "elbow_flex": 96.44,
+      "gripper": 0.714,
+      "shoulder_lift": -38.637,
+      "shoulder_pan": -21.319,
+      "wrist_flex": 40.967,
+      "wrist_roll": -60.703
+    }
+  },
+  "arm2": {
+    "stamp": 1795246612.9300625,
+    "values": {
+      "elbow_flex": 95.385,
+      "gripper": 0.502,
+      "shoulder_lift": -89.802,
+      "shoulder_pan": -7.297,
+      "wrist_flex": 73.802,
+      "wrist_roll": -68.967
+    }
+  }
+}

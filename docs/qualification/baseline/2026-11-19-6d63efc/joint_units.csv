@@ -1,0 +1,13 @@
+arm,port,joint,motor_id,model,norm_mode,unit,raw_ticks,sdk_value,ros_value,calibration_sha256,external_reference,external_unit,note
+arm1,8002,shoulder_pan,1,sts3215,DEGREES,deg,1859,-21.319,-21.319,0051a9d80d1e9969,,,ros==sdk
+arm1,8002,shoulder_lift,2,sts3215,DEGREES,deg,1586,-38.637,-38.637,0051a9d80d1e9969,,,ros==sdk
+arm1,8002,elbow_flex,3,sts3215,DEGREES,deg,2960,96.44,96.44,0051a9d80d1e9969,,,ros==sdk
+arm1,8002,wrist_flex,4,sts3215,DEGREES,deg,2446,40.967,40.967,0051a9d80d1e9969,,,ros==sdk
+arm1,8002,wrist_roll,5,sts3215,DEGREES,deg,1357,-60.703,-60.703,0051a9d80d1e9969,,,ros==sdk
+arm1,8002,gripper,6,sts3215,RANGE_0_100,%,1751,0.714,0.714,0051a9d80d1e9969,,,ros==sdk
+arm2,8003,shoulder_pan,1,sts3215,DEGREES,deg,1918,-7.297,-7.297,d9cccea7e7ea3aed,,,ros==sdk
+arm2,8003,shoulder_lift,2,sts3215,DEGREES,deg,1027,-89.802,-89.802,d9cccea7e7ea3aed,,,ros==sdk
+arm2,8003,elbow_flex,3,sts3215,DEGREES,deg,2979,95.385,95.385,d9cccea7e7ea3aed,,,ros==sdk
+arm2,8003,wrist_flex,4,sts3215,DEGREES,deg,2806,73.802,73.802,d9cccea7e7ea3aed,,,ros==sdk
+arm2,8003,wrist_roll,5,sts3215,DEGREES,deg,1263,-68.967,-68.967,d9cccea7e7ea3aed,,,ros==sdk
+arm2,8003,gripper,6,sts3215,RANGE_0_100,%,1254,0.502,0.502,d9cccea7e7ea3aed,,,ros==sdk
