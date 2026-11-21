@@ -46,7 +46,12 @@
     "gripper": {
       "scale": null,
       "csv": "jaw_curve_arm1.csv",
-      "note": "a percentage is not an angle: J(mm) = 1.346*% + 15.1 opening over 0-50 %, 16 mm at 0 %, 4 mm hysteresis at 25 %. Above 50 % the jaw is a rotating finger, not a parallel gripper."
+      "note": "a percentage is not an angle: J(mm) = 1.346*% + 15.1 opening over 0-50 %, 16 mm at 0 %, 4 mm hysteresis at 25 %. Above 50 % the jaw is a rotating finger, not a parallel gripper.",
+      "curve": {
+        "closed_mm": 16.0,
+        "mm_per_pct": 1.346,
+        "valid_to_pct": 50
+      }
     }
   }
 }

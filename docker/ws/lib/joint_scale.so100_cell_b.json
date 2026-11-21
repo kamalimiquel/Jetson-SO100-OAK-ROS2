@@ -46,7 +46,12 @@
     "gripper": {
       "scale": null,
       "csv": "jaw_curve_arm2.csv",
-      "note": "J(mm) = 0.733*pct + 12.4 over 0-50 %: 17 mm at 6 %, 31 at 25, 49 at 50, and 13 mm at 1.8 % closing. No hysteresis seen at 25 % (31 both ways). Arm 1 is 1.35 mm/% and 16 mm closed, so the two jaws need separate curves."
+      "note": "J(mm) = 0.733*pct + 12.4 over 0-50 %: 17 mm at 6 %, 31 at 25, 49 at 50, and 13 mm at 1.8 % closing. No hysteresis seen at 25 % (31 both ways). Arm 1 is 1.35 mm/% and 16 mm closed, so the two jaws need separate curves.",
+      "curve": {
+        "closed_mm": 12.4,
+        "mm_per_pct": 0.733,
+        "valid_to_pct": 50
+      }
     }
   }
 }
