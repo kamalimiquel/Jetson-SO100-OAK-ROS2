@@ -473,15 +473,23 @@ consistent with 1.000 at 0.1° readings), about **1° of backlash** showed up on
 −10° command was achieved as −6.9° on the shoulder and −4.8° on the elbow under load. That last one is why
 the owner re-reads the encoders instead of trusting a write.
 
-**Status:** `shoulder_lift` and `elbow_flex` have an external reference, and the jaw has a curve in the
-range where it means anything. Measured on 2026-11-19, arm 1, unloaded: **J(0 %) ≈ 16 mm** (the fingers do
-not touch when the command says closed), `J = 1.346 · % + 15.1` opening and `1.384 · % + 14.3` closing over
-**0–50 %**, with hysteresis of **4 mm at 25 %** and 1 mm at 50 %. Above ~50 % the gripper stops being a
-parallel jaw — the moving finger rotates until the faces cross, so there is **no millimetre aperture to
-declare** and the row is kept empty on purpose: there the command sets an angle, and the URDF models it as
-a revolute joint. `shoulder_pan` (protractor on the table), `wrist_flex` and `wrist_roll` (marked disk) are
-still open, and no point has been taken loaded. A joint without its instrument column filled is not
-signed off.
+**Status after the 2026-11-19 session (arm 1, unloaded).** Five of the six joints and the jaw now have a
+number; one does not, and the table says why rather than rounding it away:
+
+| joint | scale | how it was measured | caveat |
+|---|---|---|---|
+| `shoulder_lift` | **0.990** | inclinometer resting on a flat face, 15.2° span | ±0.02 from 0.1° readings |
+| `elbow_flex` | **0.976** | same instrument on the forearm, fit on shoulder+elbow | absolute inclination, not the joint alone |
+| `shoulder_pan` | **1.059** | printed 190 mm sheet on the table, pointer on the link | useful travel ends at **116°**, not ±170 |
+| `wrist_flex` | **0.94** | inclinometer taped to the link, 23.3° span | an out-of-plane tilt looks identical; two mountings agreeing (0.96 / 0.937) is what makes it a joint number |
+| `wrist_roll` | **—** | two attempts, both invalid | a hand-read angle on a cylinder or a tilted card is distorted by the viewpoint; needs a photo taken along the axis |
+| `gripper` | **curve, 0–50 %** | caliper at the grasp plane, six poses, both directions | `J(0 %) ≈ 16 mm`; 4 mm hysteresis at 25 %; above ~50 % it is an angle, not a width |
+
+Two method rules came out of it and cost more than the numbers: an instrument that is **placed by hand**
+must be taped or clamped (the hand-held series read 60.5° where the taped one read 57.0° at the *same*
+tick), and a check is only a check if the **pose is revisited** at the end — the return is what exposes the
+instrument, not the joint. Repeatability and any loaded point are still open, and `shoulder_pan`'s 6 %
+means a commanded 90° lands near 95°: that belongs in the margin, not in a footnote.
 
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
