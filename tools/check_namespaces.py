@@ -41,6 +41,9 @@ HTTP_SERVERS = {
     # ROS topics are asserted explicitly in check_command_surface() below, the same way the
     # bridge's are.
     "docker/ws/control/arbiter.py",
+    # The supervisor's /claim, /release, /read_raw and /write are routes on the same ports; its one
+    # real topic is /cell/skill, which is inside a prefix and needs no exemption.
+    "docker/ws/control/supervisor.py",
 }
 # The invariant's own fixtures, and the figure that draws the chain for the docs.
 SELF = {"tools/check_namespaces.py", "tools/test_compat_bridge.py",
