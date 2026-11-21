@@ -1,0 +1,5 @@
+point,step_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note
+R0,-,-85.23,1078,0.0,deg,"permanent-marker lines on collar and forearm, read along the axis","zero: marks aligned, read along the forearm axis"
+Q1,+89.49,4.26,2096,82.0,deg,"permanent-marker lines on collar and forearm, read along the axis",90 deg step: 2 deg of reading noise is 2 % of the change
+Q2,+86.69,90.24,3074,,deg,"permanent-marker lines on collar and forearm, read along the axis",abandoned: at ~175 deg the marks pass out of sight / wrap
+Q3,-173.89,-83.65,1096,0.0,deg,"permanent-marker lines on collar and forearm, read along the axis",return after 179 deg of travel: back to 0
