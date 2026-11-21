@@ -1,0 +1,10 @@
+# A bounded skill asked for by an agent. `args_json` keeps the schema in the skill, not in this file, so a
+# new skill does not need a new .srv — but it does need the mission id, which is what ties an outcome to a
+# ledger entry.
+string skill
+string mission_id
+string args_json
+---
+bool accepted
+string reason
+string ticket

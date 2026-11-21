@@ -1,0 +1,7 @@
+# The same lease the per-arm port already serves over HTTP (ADR-0024), typed for ROS clients.
+string owner
+float64 ttl_s
+---
+bool ok
+string holder
+float64 seconds_left

@@ -141,6 +141,11 @@ services:
       - /dev/arm2_wrist:/dev/arm2_wrist
       - ./ws:/opt/ws
       - ../tools:/opt/tools:ro
+      # The typed surface (ros/so100_cell_interfaces). entry.sh builds it at boot into the container's
+      # own workspace: a few seconds, and it cannot go stale against the mounted source.
+      - ../ros:/opt/ros_src:ro
+      # Built here once and reused: see the note in control/entry.sh. Not in git.
+      - ${IFACE_CACHE:-./iface_cache}:/opt/iface_cache
     device_cgroup_rules:
       - "c 189:* rmw"
       - "c 81:* rmw"
@@ -185,6 +190,11 @@ services:
       - ./bashrc-cell:/root/.bashrc:ro
       - ./ws:/opt/ws
       - ../tools:/opt/tools:ro
+      # The typed surface (ros/so100_cell_interfaces). entry.sh builds it at boot into the container's
+      # own workspace: a few seconds, and it cannot go stale against the mounted source.
+      - ../ros:/opt/ros_src:ro
+      # Built here once and reused: see the note in control/entry.sh. Not in git.
+      - ${IFACE_CACHE:-./iface_cache}:/opt/iface_cache
       # Episode files land here; a host directory so they survive the container.
       - ${EPISODES_DIR:-./episodes}:/episodes
     command: ["bash", "/opt/ws/control/entry.sh"]

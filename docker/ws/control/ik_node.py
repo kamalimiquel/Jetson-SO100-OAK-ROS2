@@ -35,6 +35,16 @@ from std_msgs.msg import Float64MultiArray, String
 
 URDF = os.environ.get("IK_URDF", "/opt/ws/arm/urdf/so101.urdf")
 APPLY = os.environ.get("IK_APPLY", "") == "1"
+
+# The typed surface (ros/so100_cell_interfaces). Optional on purpose: the bench has to keep working with
+# a bare ROS install, and a missing message package must not stop the arm from reporting. With it, a
+# request carries an id and the answer carries the same id back.
+try:
+    from so100_cell_interfaces.msg import SolveRequest, SolveResult   # noqa: F401
+    TYPED = True
+except Exception:                                                     # noqa: BLE001
+    SolveRequest = SolveResult = None
+    TYPED = False
 # Two-arm (Plan Phase 7): ARM_NS moves the topics to /arm2/ik/* and the base to
 # arm2_base, so a second instance can solve for arm 2 from its own frame.
 NS = os.environ.get("ARM_NS", "").strip("/")
@@ -259,6 +269,10 @@ class IkNode(Node):
         self.pub_status = self.create_publisher(String, topic("ik/status"), 10)
         self.pub_target = (self.create_publisher(Float64MultiArray, topic("joint_targets"), 10)
                            if APPLY else None)
+        # The typed pair, when the interface package is installed.
+        self.pub_result = self.create_publisher(SolveResult, topic("ik/result"), 10) if TYPED else None
+        if TYPED:
+            self.create_subscription(SolveRequest, topic("ik/solve"), self.on_solve, 10)
         self.q_deg = None
         self.grip_deg = None
         self.create_subscription(JointState, topic("joint_states"), self.on_joints, 10)
@@ -268,6 +282,9 @@ class IkNode(Node):
             % (self.chain.n, self.chain.links,
                ["%.0f..%.0f deg" % (math.degrees(a), math.degrees(b)) for a, b in self.chain.limits],
                "APPLY (publishes /joint_targets)" if APPLY else "report only"))
+        self.get_logger().info(
+            "ik: typed surface %s" % ("on (ik/solve -> ik/result, correlated by request_id)" if TYPED
+                                      else "OFF (so100_cell_interfaces not installed; untyped topics only)"))
 
     def on_joints(self, msg):
         try:
@@ -280,29 +297,68 @@ class IkNode(Node):
         except (ValueError, IndexError):
             pass
 
+    def _solve(self, T_t, frame_id, max_pos_mm, max_ori_deg):
+        """Pose in, answer out — the one place a target becomes angles. Returns a dict, never raises."""
+        if not accepts_frame(frame_id, BASE_FRAME):
+            return {"ok": False, "detail": "rejected: frame_id is %r, expected '%s' (no extrinsics are "
+                                           "applied here)" % (frame_id, BASE_FRAME),
+                    "q_deg": [], "pos_err_mm": -1.0, "ori_err_deg": -1.0, "iterations": 0}
+        if self.q_deg is None:
+            return {"ok": False, "detail": "no joint_states yet: the seed would be zeros, and a solve "
+                                           "from a guessed pose is a guess",
+                    "q_deg": [], "pos_err_mm": -1.0, "ori_err_deg": -1.0, "iterations": 0}
+        q_deg, iters, pos_m, ori_deg = solve(self.chain, T_t, self.q_deg)
+        # A caller may ask for a tighter tolerance than the node's, never a looser one: the node's
+        # numbers are the fuse, and a supervisor asking for 10 mm does not get 10 mm.
+        pos_mm = pos_m * 1000.0
+        ok = (pos_mm <= min(max_pos_mm, TOL_MM)) and (ori_deg <= min(max_ori_deg, TOL_DEG))
+        return {"ok": ok, "q_deg": [float(v) for v in q_deg], "pos_err_mm": pos_mm,
+                "ori_err_deg": ori_deg, "iterations": iters,
+                "detail": "pos_err=%.1f mm ori_err=%.1f deg iters=%d" % (pos_mm, ori_deg, iters)}
+
+    def _publish_solution(self, res):
+        out = Float64MultiArray()
+        out.data = res["q_deg"]
+        self.pub_sol.publish(out)
+        if self.pub_target is not None and res["ok"]:
+            tgt = Float64MultiArray()
+            grip = self.grip_deg if self.grip_deg is not None else 50.0
+            tgt.data = list(res["q_deg"]) + [grip]
+            self.pub_target.publish(tgt)
+
     def on_target(self, msg):
+        """Untyped carrier: PoseStamped in, /ik/solution and (when ok) /joint_targets out."""
         T_t = np.eye(4)
         T_t[:3, :3] = quat_to_mat(msg.pose.orientation.x, msg.pose.orientation.y,
                                   msg.pose.orientation.z, msg.pose.orientation.w)
         T_t[:3, 3] = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
-        if not accepts_frame(msg.header.frame_id, BASE_FRAME):
-            self._status("rejected: frame_id is %r, expected '%s' (no extrinsics are applied here)"
-                         % (msg.header.frame_id, BASE_FRAME), ok=False)
-            return
-        seed = self.q_deg if self.q_deg is not None else np.zeros(self.chain.dof)
-        q_deg, iters, pos_m, ori_deg = solve(self.chain, T_t, seed)
-        ok = (pos_m * 1000.0 <= TOL_MM) and (ori_deg <= TOL_DEG)
-        out = Float64MultiArray()
-        out.data = [float(v) for v in q_deg]
-        self.pub_sol.publish(out)
-        self._status("ok=%s pos_err=%.1f mm ori_err=%.1f deg iters=%d q_deg=%s"
-                     % (ok, pos_m * 1000.0, ori_deg, iters,
-                        "[" + ", ".join("%.1f" % v for v in q_deg) + "]"), ok=ok)
-        if self.pub_target is not None and ok:
-            tgt = Float64MultiArray()
-            grip = self.grip_deg if self.grip_deg is not None else 50.0
-            tgt.data = [float(v) for v in q_deg] + [grip]
-            self.pub_target.publish(tgt)
+        res = self._solve(T_t, msg.header.frame_id, TOL_MM, TOL_DEG)
+        if res["q_deg"]:
+            self._publish_solution(res)
+        self._status("%s %s" % ("ok=%s" % res["ok"], res["detail"]), ok=res["ok"])
+
+    def on_solve(self, msg):
+        """Typed carrier: the same solve, with the caller's id echoed in the result."""
+        T_t = np.eye(4)
+        q = msg.target.pose.orientation
+        T_t[:3, :3] = quat_to_mat(q.x, q.y, q.z, q.w)
+        p = msg.target.pose.position
+        T_t[:3, 3] = [p.x, p.y, p.z]
+        want_pos = float(msg.max_pos_err_mm) if msg.max_pos_err_mm > 0 else TOL_MM
+        want_ori = float(msg.max_ori_err_deg) if msg.max_ori_err_deg > 0 else TOL_DEG
+        res = self._solve(T_t, msg.target.header.frame_id, want_pos, want_ori)
+        out = SolveResult()
+        out.request_id = msg.request_id
+        out.ok = bool(res["ok"])
+        out.q_deg = res["q_deg"]
+        out.pos_err_mm = float(res["pos_err_mm"])
+        out.ori_err_deg = float(res["ori_err_deg"])
+        out.iterations = int(res["iterations"])
+        out.detail = res["detail"]
+        self.pub_result.publish(out)
+        if res["q_deg"]:
+            self._publish_solution(res)          # untyped consumers keep working
+        self._status("req=%s ok=%s %s" % (msg.request_id or "-", res["ok"], res["detail"]), ok=res["ok"])
 
     def _status(self, text, ok):
         m = String()

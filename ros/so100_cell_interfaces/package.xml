@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>so100_cell_interfaces</name>
+  <version>0.1.0</version>
+  <description>
+    The typed surface between a supervisor (or an agent) and the cell: a correlated IK request and its
+    result, and the ownership/lease request that the per-arm port already implements over HTTP.
+    Chapter 2 of the MCP specification asks for a Humble interface package; this is it, and it exists so
+    that "which target does this solution answer?" has a field to live in instead of an assumption.
+  </description>
+  <maintainer email="miquel@example.com">miquel</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
