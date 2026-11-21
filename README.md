@@ -450,7 +450,13 @@ poses that must be held, and with the recorder off:
    between series changes the offset but not the slope — so an old series is kept as history and **never
    mixed** with a new one.
 4. **Calibrate the jaw, which is not an angle** (`jaw_curve.py`). The driver reports 0–100 %, `deg2rad`
-   multiplies by a constant that is explicitly a drawing, and the camera hangs on the moving jaw. Sweep
+   multiplies by a constant that is explicitly a drawing, and the camera hangs on the moving jaw. The
+   quantity to measure is `J`, the gap between the two **inner** faces at the depth where the block will
+   sit — not the width of the jaws from outside and not the tip-to-tip distance:
+
+   ![Where the grasp plane is: the aperture J is measured between the two inner jaw faces, perpendicular to the closing direction](docs/jaw-grasp-plane.png)
+
+   Sweep
    `0 → 100 → 0` in steps, **measure the aperture in millimetres at the grasp plane with a caliper at
    every step**, and fit two monotonic curves (opening and closing) plus their inverse. The difference
    between the two directions at the same percentage is the hysteresis; the flat region near the ends is

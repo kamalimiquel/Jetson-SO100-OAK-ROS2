@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#ffffff"/>
+  <text x="40" y="52" font-family="DejaVu Sans, sans-serif" font-size="30" font-weight="bold" fill="#111">Dónde está el plano de agarre</text>
+  <text x="40" y="88" font-family="DejaVu Sans, sans-serif" font-size="19" fill="#444">Vista de sección de la pinza del SO-100/101: dos dedos, uno fijo y uno móvil, y un bloque entre ellos.</text>
+
+  <!-- fixed jaw (right, the wide one) -->
+  <path d="M 760 200 L 900 200 L 900 520 L 760 520 Z" fill="#f0a04b" stroke="#8a4b12" stroke-width="3"/>
+  <text x="800" y="560" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#8a4b12">dedo FIJO</text>
+
+  <!-- moving jaw (left) -->
+  <path d="M 300 200 L 440 200 L 440 520 L 300 520 Z" fill="#f0a04b" stroke="#8a4b12" stroke-width="3"/>
+  <text x="300" y="560" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#8a4b12">dedo MÓVIL</text>
+
+  <!-- closing direction: the moving jaw travels to the right -->
+  <line x1="200" y1="360" x2="285" y2="360" stroke="#1a73e8" stroke-width="6"/>
+  <path d="M 285 360 L 262 348 L 262 372 Z" fill="#1a73e8"/>
+  <text x="120" y="345" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#1a73e8">cierre</text>
+
+  <!-- the object, sitting between the inner faces -->
+  <rect x="440" y="300" width="320" height="120" fill="#ffe066" stroke="#a37b00" stroke-width="3"/>
+  <text x="520" y="375" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#6b5200">bloque</text>
+
+  <!-- the two inner faces -->
+  <line x1="440" y1="240" x2="440" y2="480" stroke="#d81b60" stroke-width="7"/>
+  <line x1="760" y1="240" x2="760" y2="480" stroke="#d81b60" stroke-width="7"/>
+  <text x="330" y="628" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#d81b60">cara interior</text>
+  <text x="700" y="628" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#d81b60">cara interior</text>
+
+  <!-- aperture dimension J -->
+  <line x1="440" y1="600" x2="760" y2="600" stroke="#111" stroke-width="3"/>
+  <path d="M 440 600 L 456 591 L 456 609 Z" fill="#111"/>
+  <path d="M 760 600 L 744 591 L 744 609 Z" fill="#111"/>
+  <text x="565" y="592" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="bold" fill="#111">J = apertura</text>
+
+  <!-- the grasp plane, seen edge-on: the mid-plane between the two faces -->
+  <line x1="600" y1="150" x2="600" y2="660" stroke="#0b8043" stroke-width="4" stroke-dasharray="16 12"/>
+  <text x="612" y="176" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#0b8043">plano de agarre</text>
+  <text x="612" y="202" font-family="DejaVu Sans, sans-serif" font-size="15" fill="#0b8043">(a media apertura, perpendicular al cierre)</text>
+
+  <!-- caliper note -->
+  <text x="40" y="686" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#333">El calibre se mete ENTRE las dos caras interiores (las rojas), con sus bocas paralelas a ellas, en la profundidad donde va el bloque:</text>
+  <text x="40" y="710" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#333">lo que se mide es J. No se mide en la punta de los dedos ni sobre el exterior de la pinza.</text>
+</svg>
