@@ -99,17 +99,40 @@ def main() -> None:
     print(f"[joint_server] connecting SO100Follower id={ARM_ID} port={SERIAL}", flush=True)
     # use_degrees is stated, not inherited: the SDK default chooses between degrees and a -100..100
     # fraction for the five body joints, and nothing raises if it changes.
+    # A joint can be declared ABSENT for a maintenance session (a servo unplugged on purpose, e.g. to
+    # free the wrist for a roll sweep, or a link that has failed). It is removed from the bus map
+    # *before* connecting — lerobot refuses to connect when a motor it expects is missing — and every
+    # command must name it as held: the arm does not silently drive five and pretend it is six.
+    absent = [a.strip() for a in os.environ.get("ABSENT_MOTORS", "").split(",") if a.strip()]
+    unknown = [a for a in absent if a not in cc.JOINT_ORDER]
+    if unknown:
+        print(f"[joint_server] refusing to start: ABSENT_MOTORS names unknown joint(s) {unknown}",
+              flush=True)
+        return 1
+
     config = SO100FollowerConfig(port=SERIAL, id=ARM_ID, use_degrees=True)
     arm = SO100Follower(config)
-    connect_with_retry(arm)  # calibrate=True by default; raises if the calib file is missing
+    for a in absent:
+        arm.bus.motors.pop(a, None)
+        arm.bus.calibration.pop(a, None)
+    if absent:
+        # lerobot caches `ids` (a cached_property) from the calibration it loaded at __init__, so
+        # popping the motor is not enough: its own motor check then trips over a KeyError from its
+        # bookkeeping (motors_bus.py, _assert_motors_exist). Clearing the cache makes the declared
+        # set the real one.
+        for attr in ("ids", "_ids"):
+            arm.bus.__dict__.pop(attr, None)
+    connect_with_retry(arm)
     bus = arm.bus
-    names = list(bus.motors.keys())
-
+    names = [n for n in list(bus.motors.keys()) if n not in absent]
+    if absent:
+        print(f"[joint_server] joints declared ABSENT: {', '.join(absent)} — the other "
+              f"{len(names)} are readable and commandable; commands must name them as held", flush=True)
     # Fail closed: the numbers mean what the manifest says, or the arm does not come up.
     import inspect
     signatures = {m: inspect.signature(getattr(bus, m)).parameters for m in ("read", "write", "sync_write")}
     manifest = um.observed_from(arm, config=config, sdk_version=sdk_version(), signatures=signatures)
-    errors, warnings = um.check(manifest)
+    errors, warnings = um.check(manifest, absent=absent)
     for line in um.describe(manifest):
         print("[joint_server] units  " + line, flush=True)
     for w in warnings:
@@ -133,7 +156,7 @@ def main() -> None:
     # unit table, because it changes a command's meaning — so it is opt-in and it is announced.
     scale_apply = str(os.environ.get("JOINT_SCALE_APPLY", "0")).strip().lower() in ("1", "true", "yes")
     try:
-        scale = js.load()
+        scale = js.load(js.path_for(ARM_ID))
     except js.ScaleError as exc:
         if scale_apply:
             print(f"[joint_server] refusing to start: JOINT_SCALE_APPLY=1 but {exc}", flush=True)
@@ -186,6 +209,25 @@ def main() -> None:
             return 0.0
         return left
 
+    def torque_each(want_on):
+        """Enable or disable ONE motor at a time, and say which refused.
+
+        `bus.disable_torque()` with no argument is all-or-nothing: a single servo that stops answering
+        (a pulled cable at the last link of the daisy chain is the usual way) makes the whole call fail,
+        so the five healthy motors stay energised and the operator cannot let go of the arm. Looping
+        costs a few milliseconds and turns one dead motor into one dead motor.
+        """
+        failed = {}
+        for name in names:
+            try:
+                if want_on:
+                    bus.enable_torque(motors=[name], num_retry=1)
+                else:
+                    bus.disable_torque(motors=[name], num_retry=1)
+            except Exception as exc:  # noqa: BLE001
+                failed[name] = str(exc)
+        return failed
+
     def owner_refused(handler):
         """423 when a lease is held by someone else; None when the caller may write."""
         if lease_left() and handler.headers.get("X-Owner") != lease["owner"]:
@@ -234,6 +276,7 @@ def main() -> None:
                             "use_degrees": manifest["use_degrees"], "joints": manifest["joints"],
                             "unit": units, "calibration": str(calib) if calib else None,
                             "calibration_sha256": calib_sha,
+                            "absent": absent,
                             "joint_scale": ({"sha256": scale["sha256"], "applied": scale_apply,
                                              "session": scale.get("session")} if scale else None),
                             "limits": {n: cc.LIMITS[n] for n in cc.JOINT_ORDER}})
@@ -249,6 +292,19 @@ def main() -> None:
                             "sha256": scale["sha256"],
                             "session": scale.get("session"), "evidence": scale.get("evidence"),
                             "definition": scale["definition"], "joints": scale["joints"]})
+            elif self.path == "/diag":
+                # Which motors answer, one at a time: a 500 on /read_raw says "something is wrong",
+                # this says which link of the chain. Slow on a dead motor, so it is asked for.
+                motors = {}
+                for n in names:
+                    try:
+                        sdk = float(bus.read("Present_Position", n))
+                        motors[n] = {"ok": True, "sdk": round(sdk, 2),
+                                     "tick": int(bus.read("Present_Position", n, normalize=False))}
+                    except Exception as exc:  # noqa: BLE001
+                        motors[n] = {"ok": False, "error": str(exc)}
+                self._json({"motors": motors,
+                            "unreachable": [n for n, v in motors.items() if not v["ok"]]})
             elif self.path == "/status":
                 self._json({"connected": True, "calibrated": arm.is_calibrated})
             else:
@@ -315,43 +371,62 @@ def main() -> None:
             if self.path == "/torque":
                 try:
                     on = bool(body.get("on"))
+                    failed, unreachable = {}, {}
                     if on:
-                        # Freeze the arm where it IS. A servo keeps its own Goal_Position, so
-                        # `enable_torque()` alone makes it snap back to the last command it was
-                        # given — the jump seen when arming, and the reason the arm went to a
-                        # pose from *before* the torque was removed. Writing the present
-                        # positions as goals first (torque still off) makes "arm" mean "stay".
-                        present = {n: float(bus.read("Present_Position", n)) for n in names}
-                        bus.sync_write("Goal_Position", present)
-                        bus.enable_torque()
-                        # Some Feetech firmwares ignore goal writes while torque is off and hold
-                        # the OLD goal until the first packet after enabling; write the same
-                        # values again with torque on, so the snap (if any) lasts one packet.
-                        # Close the loop. Even with the goal equal to the present position a
-                        # servo taking up a gravity load sags a little before it settles, and a
-                        # firmware that ignored the loose write snaps first. Two or three short
-                        # corrections put the arm back exactly where it was before arming.
+                        # Freeze the arm where it IS: a servo keeps its own Goal_Position, so arming
+                        # alone snaps it back to the last command it was given. Read what answers,
+                        # seed those goals, then energise them one by one.
+                        present = {}
+                        for n in names:
+                            try:
+                                present[n] = float(bus.read("Present_Position", n))
+                            except Exception as exc:  # noqa: BLE001
+                                unreachable[n] = str(exc)
+                        if present:
+                            bus.sync_write("Goal_Position", present)
+                        failed = torque_each(True)
                         corrections, worst = 0, 0.0
                         for _ in range(4):
                             time.sleep(0.15)
-                            now = {n: float(bus.read("Present_Position", n)) for n in names}
-                            worst = max(abs(now[n] - present[n]) for n in names)
+                            now, lost = {}, False
+                            for n in present:
+                                try:
+                                    now[n] = float(bus.read("Present_Position", n))
+                                except Exception:  # noqa: BLE001
+                                    lost = True
+                                    break
+                            if lost:
+                                break
+                            worst = max(abs(now[n] - present[n]) for n in present)
                             if worst <= 0.5:
                                 break
                             corrections += 1
                             bus.sync_write("Goal_Position", present)
                         print("[joint_server] armed at " +
-                              ", ".join(f"{n}={present[n]:.1f}" for n in names) +
+                              ", ".join(f"{n}={present[n]:.1f}" for n in present) +
                               (f" — {corrections} correction(s), worst {worst:.1f}deg" if corrections
                                else f" — held it (worst {worst:.1f}deg)"), flush=True)
+                        torque_on = bool(present) and len(present) > len(failed)
                     else:
-                        bus.disable_torque()
-                    torque_on = on
-                    # Cycling torque re-seeds every goal from the measured position, so it is
-                    # also the physical way out of a held write path.
+                        failed = torque_each(False)
+                        # Any motor that would not let go is still energised: torque stays TRUE so
+                        # nothing downstream believes the arm is safe.
+                        torque_on = bool(failed)
+                    if failed or unreachable:
+                        print("[joint_server] torque %s — motors that did not answer: %s%s"
+                              % ("ON" if on else "OFF",
+                                 ", ".join(sorted(set(list(failed) + list(unreachable)))),
+                                 " — CUT POWER before touching the arm" if failed and not on else ""),
+                              flush=True)
+                    else:
+                        print(f"[joint_server] torque {'ENABLED' if on else 'DISABLED'}", flush=True)
                     fault = None
-                    print(f"[joint_server] torque {'ENABLED' if on else 'DISABLED'}", flush=True)
-                    self._json({"torque": bool(torque_on)})
+                    self._json({"torque": bool(torque_on), "failed": failed,
+                                "unreachable": unreachable,
+                                "note": ("%d motor(s) did not answer%s" % (
+                                    len(set(list(failed) + list(unreachable))),
+                                    "; they are still energised" if failed and not on else ""))
+                                if (failed or unreachable) else ""})
                 except Exception as exc:  # noqa: BLE001
                     self._json({"error": str(exc)}, 500)
                 return
@@ -375,6 +450,16 @@ def main() -> None:
                 print(f"[joint_server] write rejected: {exc}", flush=True)
                 self._json({"error": str(exc)}, 400)
                 return
+            if absent:
+                driven_absent = sorted(set(driven) & set(absent))
+                if driven_absent:
+                    self._json({"error": "%s declared absent (ABSENT_MOTORS) — drive only %s and name the "
+                                         "absent joint(s) as held" % (driven_absent, names)}, 400)
+                    return
+                if isinstance(body.get("hold"), list) and not set(absent) <= set(body.get("hold") or []):
+                    self._json({"error": "a declared-absent joint must also be named in 'hold': %s"
+                                         % sorted(set(absent) - set(body.get("hold") or []))}, 400)
+                    return
             if not torque_on:
                 # do not energise the servos behind the operator's back: the web
                 # button is the gate, and the boot state is torque off

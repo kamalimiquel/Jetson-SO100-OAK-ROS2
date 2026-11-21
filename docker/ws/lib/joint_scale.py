@@ -40,6 +40,17 @@ class ScaleError(ValueError):
     """The table does not describe this cell. The message says which joint and what to fix."""
 
 
+def path_for(arm_id, base_dir=None):
+    """The table that belongs to this arm: `joint_scale.<arm_id>.json` if it exists, else the default.
+
+    A file per arm rather than one file with two sections: the names are ugly but a copy-paste between
+    arms is impossible, and `check_arm()` still verifies the contents agree with the file name.
+    """
+    base = base_dir or os.path.dirname(DEFAULT_PATH)
+    candidate = os.path.join(base, "joint_scale.%s.json" % arm_id)
+    return candidate if os.path.exists(candidate) else DEFAULT_PATH
+
+
 def sha256(path=DEFAULT_PATH):
     with open(path, "rb") as fh:
         return hashlib.sha256(fh.read()).hexdigest()

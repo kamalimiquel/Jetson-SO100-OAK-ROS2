@@ -59,15 +59,21 @@ def observed_from(arm, config=None, sdk_version=None, signatures=None):
     }
 
 
-def check(observed):
-    """Compare an observed manifest with the expectation. Returns (errors, warnings)."""
+def check(observed, absent=()):
+    """Compare an observed manifest with the expectation. Returns (errors, warnings).
+
+    `absent` names joints that are physically not on the bus this session (a servo unplugged on
+    purpose, ABSENT_MOTORS). They are skipped in both directions — but only because the caller said so
+    out loud; a motor that disappears without being declared is still an error.
+    """
     errors, warnings = [], []
+    absent = set(absent)
 
     if observed.get("use_degrees") is not True:
         errors.append("use_degrees is %r, expected True: the five body joints would be a -100..100 "
                       "fraction, not degrees" % (observed.get("use_degrees"),))
 
-    want = [(n, i, m, m_) for n, i, m, m_ in JOINTS]
+    want = [(n, i, m, m_) for n, i, m, m_ in JOINTS if n not in absent]
     got = [(j.get("name"), j.get("id"), j.get("model"), j.get("norm")) for j in observed.get("joints", [])]
 
     if len(got) != len(want):
@@ -87,9 +93,10 @@ def check(observed):
             errors.append("%s: normalisation %r, expected %r — the unit of this joint is wrong"
                           % (name, gnorm, norm))
     order = [g[0] for g in got]
-    if order and order != [j[0] for j in JOINTS]:
+    expected_order = [j[0] for j in want]          # absent joints removed, order preserved
+    if order and order != expected_order:
         errors.append("wire order %s, expected %s (the array has no names; order is the contract)"
-                      % (order, [j[0] for j in JOINTS]))
+                      % (order, expected_order))
 
     sig = observed.get("signatures") or {}
     for method in ("read", "write", "sync_write"):

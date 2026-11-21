@@ -1,0 +1,52 @@
+{
+  "definition": "physical = scale * sdk",
+  "units": {
+    "shoulder_pan": "deg",
+    "shoulder_lift": "deg",
+    "elbow_flex": "deg",
+    "wrist_flex": "deg",
+    "wrist_roll": "deg",
+    "gripper": "%"
+  },
+  "session": "2026-11-21",
+  "arm": "so100_cell_b",
+  "evidence": "docs/qualification/baseline/2026-11-21-arm2/",
+  "why": "Measured on this arm with the same procedure as arm 1. The numbers differ from its neighbour (pan 1.050 vs 1.059, elbow 0.953 vs 0.976, wrist_flex 0.967 vs 0.94), which is exactly why the server refuses a table measured on another arm.",
+  "joints": {
+    "shoulder_pan": {
+      "scale": 1.05,
+      "uncertainty": 0.02,
+      "csv": "ref_shoulder_pan_arm2.csv",
+      "note": "five poses over 87 deg on the printed sheet; return to 1 deg"
+    },
+    "shoulder_lift": {
+      "scale": 0.977,
+      "uncertainty": 0.01,
+      "csv": "ref_shoulder_lift_arm2.csv",
+      "note": "taped inclinometer, 30.15 deg span, return within 0.7 deg"
+    },
+    "elbow_flex": {
+      "scale": 0.953,
+      "uncertainty": 0.02,
+      "csv": "ref_elbow_flex_arm2.csv",
+      "note": "magnitude; positive elbow lowers the forearm, so the fit is negative. One pose discarded (level dead zone at the horizontal)"
+    },
+    "wrist_flex": {
+      "scale": 0.967,
+      "uncertainty": 0.02,
+      "csv": "ref_wrist_flex_arm2.csv",
+      "note": "two segments agree to 0.001; the return is 3.5 deg off a 1:1 upstream-drift correction"
+    },
+    "wrist_roll": {
+      "scale": 0.88,
+      "uncertainty": 0.04,
+      "csv": "ref_wrist_roll_arm2.csv",
+      "note": "PROVISIONAL: two 90 deg series gave 0.916 and 0.838, so the eye-read marks are worth +-4 deg. 0.88 is the mid-point, not a measurement"
+    },
+    "gripper": {
+      "scale": null,
+      "csv": null,
+      "note": "not measured on this arm: the servo was unplugged for the roll sweep, and the jaw curve has to come from its own caliper readings"
+    }
+  }
+}

@@ -675,35 +675,67 @@ coupling question stays open instead of being absorbed into the number.
                "note": "two segments agree to 0.001; the return is 3.5 deg off a 1:1 upstream-drift correction"}
 ```
 
-#### `wrist_roll` — **0.916**, measured in one 90° step
+#### `wrist_roll` — **0.88, and only to ±0.04**
 
-| pose | step | roll SDK | tick | marks |
-|---|---|---|---|---|
-| R0 | — | −85.23 | 1078 | 0° (aligned) |
-| Q1 | +89.49 | 4.26 | 2096 | 82° |
-| Q2 | +86.69 | 90.24 | 3074 | abandoned |
-| Q3 | −173.89 | −83.65 | 1096 | 0° (return) |
+Two series with identical geometry, one 90° step each, on the same marks:
 
-Two attempts before this one were abandoned, and both failures are worth keeping:
+| series | SDK change | marks | slope |
+|---|---|---|---|
+| first | +89.49° | 0 → 82° | 0.916 |
+| second (gripper unplugged, `ABSENT_MOTORS`) | +89.50° | 0 → 75° | 0.838 |
 
-- **steps of 30° were too small.** A hand-read mark carries ±1–2° of noise, which is 5 % of a 30° step and
-  2 % of a 90° step. The series that kept "needing a restart" was mostly the step size. `82 / 89.49 = 0.916`.
-- **at ~175° the marks cannot be read at all**: they pass behind the link and the eye cannot tell a wrap
-  from a rotation. Reading to 90° and coming back needs no ambiguity, so the sweep is 0 → 90 → 0, and the
-  return lands on 0° at tick 1096 against 1078 — the joint repeats and the instrument did not move.
+**Seven degrees apart on the same joint.** That is not a joint changing its mind: it is what a hand-read
+collar gives at ±4°, and it means one 90° step cannot pin this joint down. What the two series do agree on
+is everything else — both return to 0° after 179° of travel (ticks 1097/1096 against 1095/1078), so the
+mechanics repeat and the marks did not slip; the uncertainty is in the eye, not in the servo.
+
+So the table carries **0.88 with ±0.04** and says `PROVISIONAL` in the note. Arm 1's 0.877 sits inside that
+interval, so the honest statement is "both arms are around 0.88 and the roll is the least known scale on
+either" — not two numbers that disagree.
 
 ```python
-scale = 82.0 / 89.49          # 0.916, one 90 deg step, +-2 deg of reading noise -> +-0.025
+scale = 0.88            # mid-point of 0.916 and 0.838, NOT a measurement
+uncertainty = 0.04      # half the spread of the two series; the marks are read to about +-4 deg
 ```
 
 ```json
-"wrist_roll": {"scale": 0.916, "uncertainty": 0.03,
+"wrist_roll": {"scale": 0.88, "uncertainty": 0.04,
                "csv": "ref_wrist_roll_arm2.csv",
-               "note": "one 90 deg step; arm 1 is 0.877, so the two arms differ by 4 % here"}
+               "note": "PROVISIONAL: two 90 deg series gave 0.916 and 0.838"}
 ```
 
-Arm 1 measured **0.877** on the same joint with a four-point sweep, so this is the least certain number of
-the two — one segment instead of four, and the arms differ by 4 %. It is written down as such.
+#### Arm 2, in one table
+
+| joint | scale | how | confidence |
+|---|---|---|---|
+| `shoulder_lift` | **0.977** | taped inclinometer, 30° span, return 0.7° | ±0.01 |
+| `elbow_flex` | **0.953** | taped inclinometer, 27° span, return 0.3° | ±0.02 |
+| `shoulder_pan` | **1.050** | printed sheet, 87° sweep, return 1° | ±0.02 |
+| `wrist_flex` | **0.967** | taped inclinometer, 47° sweep | ±0.02 |
+| `wrist_roll` | **0.88** | two 90° series that disagree by 7° | **±0.04, provisional** |
+| `gripper` | — | not measured: its servo was unplugged for the roll sweep | — |
+
+Two of these (pan, wrist_flex) are within 1–3 % of arm 1; `elbow_flex` differs by 2.4 % and the roll is the
+one that cannot be called. Which is the point of measuring each arm instead of copying a table.
+
+The table lives in `docker/ws/lib/joint_scale.so100_cell_b.json` — one file per arm, chosen by
+`js.path_for(ARM_ID)`, so a copy between arms is impossible and `check_arm()` still verifies that the
+contents agree with the file it came from.
+
+```python
+# docker/ws/lib/joint_scale.py
+def path_for(arm_id, base_dir=None):
+    base = base_dir or os.path.dirname(DEFAULT_PATH)
+    candidate = os.path.join(base, "joint_scale.%s.json" % arm_id)
+    return candidate if os.path.exists(candidate) else DEFAULT_PATH
+```
+
+```python
+# docker/ws/arm/lerobot_joint_server.py — the server picks its own arm's table, then checks it
+scale = js.load(js.path_for(ARM_ID))
+if scale_apply:
+    js.check_arm(scale, ARM_ID)      # refuses a table measured on the other arm
+```
 
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.

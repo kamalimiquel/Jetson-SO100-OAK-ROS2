@@ -25,6 +25,9 @@ services:
       # Apply the measured joint scale to /write (ADR-0026). Off by default: with it on, degrees
       # are read as physical. The table is per arm and the server refuses one measured elsewhere.
       - JOINT_SCALE_APPLY=${JOINT_SCALE_APPLY:-0}
+      # Comma-separated joints that are physically absent this session (unplugged servo, failed link).
+      # They leave the read/write set and every command must name them as held.
+      - ABSENT_MOTORS=${ABSENT_MOTORS:-}
       # Static transform of the wrist webcam (ADR-0022): metres from the moving-jaw link to the
       # lens, then rpy to the optical convention. Nominal bracket values — measure and override,
       # README §12.5. Set here (not in the entrypoint) so the numbers live beside the hardware.
@@ -68,6 +71,9 @@ services:
       # Apply the measured joint scale to /write (ADR-0026). Off by default: with it on, degrees
       # are read as physical. The table is per arm and the server refuses one measured elsewhere.
       - JOINT_SCALE_APPLY=${JOINT_SCALE_APPLY:-0}
+      # Comma-separated joints that are physically absent this session (unplugged servo, failed link).
+      # They leave the read/write set and every command must name them as held.
+      - ABSENT_MOTORS=${ABSENT_MOTORS:-}
       - JOINT_PORT=8003
       - TORQUE_PORT=8095
       # lerobot_joint_server reads these itself (Phase 1):

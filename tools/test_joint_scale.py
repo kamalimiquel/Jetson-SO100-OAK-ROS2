@@ -185,6 +185,36 @@ check(js.check_arm(table, "so100_cell") is None, "the table belongs to so100_cel
 check_raises(lambda: js.check_arm(table, "so100_cell_b"), js.ScaleError,
              "the same table applied to arm 2 is refused", must_say="measured on")
 
+
+# ---------------------------------------------------------------- a table per arm
+a2_path = js.path_for("so100_cell_b")
+check(os.path.exists(a2_path) and "so100_cell_b" in a2_path,
+      "arm 2 has its own table file", a2_path)
+a2 = js.load(a2_path)
+check(a2["arm"] == "so100_cell_b", "and it says which arm it was measured on")
+check(a2["joints"]["wrist_roll"]["scale"] == 0.88 and a2["joints"]["wrist_roll"]["uncertainty"] == 0.04,
+      "the provisional roll value carries its uncertainty")
+check(a2["joints"]["gripper"]["scale"] is None, "arm 2's jaw has no angle scale either")
+check(js.check_arm(a2, "so100_cell_b") is None, "arm 2's table belongs to arm 2")
+check_raises(lambda: js.check_arm(a2, "so100_cell"), js.ScaleError,
+             "and it is refused by arm 1", must_say="measured on")
+check_raises(lambda: js.check_arm(table, "so100_cell_b"), js.ScaleError,
+             "and arm 1's table is refused by arm 2", must_say="measured on")
+check(js.path_for("so100_cell") == js.DEFAULT_PATH, "arm 1 falls back to the default file")
+
+EVIDENCE2 = os.path.join(REPO, "docs", "qualification", "baseline", "2026-11-21-arm2")
+for name, entry in a2["joints"].items():
+    if entry.get("csv"):
+        check(os.path.exists(os.path.join(EVIDENCE2, entry["csv"])),
+              "arm 2 %s: the CSV it names exists" % name, entry["csv"])
+
+for joint, csv_name in (("shoulder_pan", "ref_shoulder_pan_arm2.csv"),
+                        ("shoulder_lift", "ref_shoulder_lift_arm2.csv")):
+    slope, n = slope_from_csv(os.path.join(EVIDENCE2, csv_name))
+    declared = a2["joints"][joint]["scale"]
+    check(abs(abs(slope) - declared) <= 0.02, "arm 2 %s matches its CSV" % joint,
+          "csv %.3f over %d points, table %.3f" % (slope, n, declared))
+
 check(os.path.isdir(os.path.join(REPO, table["evidence"].rstrip("/"))),
       "the evidence directory named in the table exists")
 
