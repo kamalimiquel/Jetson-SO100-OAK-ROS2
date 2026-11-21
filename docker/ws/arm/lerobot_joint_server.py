@@ -140,6 +140,12 @@ def main() -> None:
             return 1
         scale, scale_apply = None, False
         print(f"[joint_server] joint scale NOT applied ({exc})", flush=True)
+    if scale and scale_apply:
+        try:
+            js.check_arm(scale, ARM_ID)
+        except js.ScaleError as exc:
+            print(f"[joint_server] refusing to start: JOINT_SCALE_APPLY=1 but {exc}", flush=True)
+            return 1
     if scale:
         print(f"[joint_server] joint scale {js.describe(scale)}"
               f" — {'APPLIED: /write takes physical degrees' if scale_apply else 'loaded, not applied'}"
@@ -239,7 +245,8 @@ def main() -> None:
                 if not scale:
                     self._json({"error": "no joint_scale.json next to this server"}, 404)
                     return
-                self._json({"applied": scale_apply, "sha256": scale["sha256"],
+                self._json({"applied": scale_apply, "arm": scale.get("arm"), "this_arm": ARM_ID,
+                            "sha256": scale["sha256"],
                             "session": scale.get("session"), "evidence": scale.get("evidence"),
                             "definition": scale["definition"], "joints": scale["joints"]})
             elif self.path == "/status":
@@ -402,7 +409,7 @@ def main() -> None:
                     print(f"[joint_server] write reported {exc} but the arm is where it was told "
                           f"it should be — treating the packet as delivered", flush=True)
                     self._json({"status": "ok", "note": f"bus error ignored: {exc}",
-                                "driven": driven, "held": sorted(held)})
+                                "driven": driven, "held": sorted(held), "notes": notes})
                     return
                 fault = "write failed (%s); measured differs from the command on %s" % (exc, off)
                 print(f"[joint_server] FAULT {fault}", flush=True)
@@ -411,7 +418,7 @@ def main() -> None:
             if notes:
                 print("[joint_server] " + "; ".join(notes), flush=True)
             self._json({"status": "ok", "driven": {n: round(v, 2) for n, v in driven.items()},
-                        "held": sorted(held)})
+                        "held": sorted(held), "notes": notes})
 
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
 

@@ -83,9 +83,19 @@ def load(path=DEFAULT_PATH):
             raise ScaleError("%s: %s scale %r is outside %s..%s — that is a different mechanism, not a "
                              "calibration" % (path, name, scale, SCALE_MIN, SCALE_MAX))
 
-    return {"joints": joints, "path": path, "sha256": sha256(path),
+    return {"joints": joints, "path": path, "sha256": sha256(path), "arm": raw.get("arm"),
             "session": raw.get("session"), "evidence": raw.get("evidence"),
             "definition": raw.get("definition", "physical = scale * sdk")}
+
+
+def check_arm(table, arm_id):
+    """Refuse a table measured on another arm. Each arm has its own calibration file, its own
+    homing offsets and possibly its own servos; a scale borrowed from its neighbour is a guess
+    dressed as a measurement."""
+    owner = table.get("arm")
+    if owner and owner != arm_id:
+        raise ScaleError("the scale table was measured on %r and this arm is %r — re-run the phase-1 "
+                         "sweeps on this arm, or run with JOINT_SCALE_APPLY=0" % (owner, arm_id))
 
 
 def to_sdk(table, joint, physical):

@@ -20,7 +20,10 @@ where, and how to keep them from becoming folklore.
    uncertainty, the session and the evidence directory, and a `gripper` entry whose scale is **null**:
    a percentage is not an angle, and the jaw's millimetres live in a curve that is only valid below
    ~50 %. `joint_scale.py` validates the table (six joints, no extras, scale within 0.5–1.5, gripper
-   null) and refuses anything else with a sentence.
+   null) and refuses anything else with a sentence. It also carries the arm it was measured on, and the
+   server refuses to *apply* a table whose arm is not its own: arm 2 has its own calibration file and its
+   own servos, so borrowing arm 1's scales would be a guess dressed as a measurement. Verified live —
+   `JOINT_SCALE_APPLY=1` on arm 2 exits with that sentence.
 2. **The conversion happens at the joint server's write path, before the range check.**
    `POST /write` with `{"units": "physical"}` takes degrees the caller means physically and divides by
    the scale of each joint; the SDK-range fuse is then applied to the number that actually goes on the

@@ -180,6 +180,11 @@ for joint, csv_name, zero_row in (("shoulder_pan", "ref_shoulder_pan_arm1.csv", 
           "%s: the table matches its CSV" % joint,
           "csv says %.3f over %d points, table says %.3f" % (slope, n, declared))
 
+# an arm may not borrow its neighbour's scale
+check(js.check_arm(table, "so100_cell") is None, "the table belongs to so100_cell")
+check_raises(lambda: js.check_arm(table, "so100_cell_b"), js.ScaleError,
+             "the same table applied to arm 2 is refused", must_say="measured on")
+
 check(os.path.isdir(os.path.join(REPO, table["evidence"].rstrip("/"))),
       "the evidence directory named in the table exists")
 
