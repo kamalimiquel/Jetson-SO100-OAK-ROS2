@@ -50,7 +50,9 @@ async def pump():
             ns = ns_of(topic)
             ensure(ns)
             st = STATE[ns]
-            for i in range(6):
+            # A five-value command is legal (the jaw is held), so never index past the goal: this fake
+            # crashed on a five-value target with an IndexError that read like a client bug.
+            for i in range(min(6, len(st["goal"]), len(st["pos"]))):
                 d = st["goal"][i] - st["pos"][i]
                 st["pos"][i] += max(-6.0, min(6.0, d))
             msg = {"op": "publish", "topic": topic,

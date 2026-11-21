@@ -18,6 +18,7 @@ Usage (on the Windows PC):
 """
 
 import argparse
+import sys
 import json
 import math
 import os
@@ -46,6 +47,10 @@ ALIASES = {
     "wrist_roll": ["wrist_roll"],
     "gripper": ["jaw"],
 }
+
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import twin_commands as tc          # the arithmetic, testable without a model (tools/test_twin_commands.py)
 
 
 def build_map(model, arm2=False):
@@ -149,6 +154,10 @@ def main():
     parser.add_argument("--headless", action="store_true",
                         help="no viewer window: subscribe and print the rates only (use it next to the "
                              "pad, or to check the bridge without opening a second window)")
+    parser.add_argument("--commands", action="store_true",
+                        help="also subscribe to /armN/joint_targets and report commanded vs actual")
+    parser.add_argument("--log-commands", default="",
+                        help="with --commands: append commanded/actual/error rows to this CSV")
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(args.model)
@@ -191,14 +200,65 @@ def main():
         subs.append(sub)
     print("subscribed: " + ", ".join(t[0] for t in topics))
 
+    # The commanded half. A command is an intention with an age: it drives the report only while it is
+    # fresh, because an old target compared against a moving arm invents a fault nobody can fix.
+    commanded = [{} for _ in mappings]
+    cmd_stamp = [0.0 for _ in mappings]
+    inverse = [{q: want for want, q in m.items()} for m in mappings]
+    if args.commands:
+        for tname, arm in topics:
+            tgt = tname.replace("/joint_states", "/joint_targets")
+            tsub = roslibpy.Topic(client, tgt, "std_msgs/Float64MultiArray")
+
+            def on_targets(msg, arm=arm, tgt=tgt):
+                try:
+                    commanded[arm] = tc.decode_targets(msg.get("data") or [])
+                except ValueError as exc:
+                    print("  %s: %s — ignored" % (tgt, exc), flush=True)
+                    return
+                cmd_stamp[arm] = time.time()
+
+            tsub.subscribe(on_targets)
+            subs.append(tsub)
+            print("subscribed: " + tgt)
+
+    log = None
+    if args.commands and args.log_commands:
+        log = open(args.log_commands, "a", buffering=1)
+        if log.tell() == 0:
+            log.write(tc.CSV_HEADER + "\n")
+
+    def report(now):
+        """One line per arm, only for joints with both a fresh command and a reading."""
+        out = []
+        for arm, m in enumerate(mappings):
+            if not commanded[arm] or not tc.fresh(cmd_stamp[arm], now):
+                continue
+            actual = {inverse[arm][q]: math.degrees(v) for q, v in latest[arm].items() if q in inverse[arm]}
+            err = tc.compare(commanded[arm], actual)
+            if not err:
+                continue
+            worst = max(err, key=lambda k: abs(err[k]))
+            out.append("%s worst %.3f deg on %s%s"
+                       % (["arm1", "arm2"][arm], err[worst], worst,
+                          "  (all: %s)" % ", ".join("%s %.1f" % (k, err[k]) for k in tc.JOINT_ORDER if k in err)))
+            if log:
+                for row in tc.csv_rows(now, ["arm1", "arm2"][arm], err, commanded[arm], actual):
+                    log.write(row + "\n")
+        if out:
+            print("  " + " | ".join(out), flush=True)
+
     if args.headless:
         period = 1.0 / max(args.fps, 1.0)
         t0, n0 = time.time(), 0
+        t_cmd = time.time()
         print("headless: no viewer, Ctrl+C to stop")
         try:
             while True:
                 time.sleep(period)
                 n0 += 1
+                if args.commands and time.time() - t_cmd >= 2.0:
+                    report(time.time()); t_cmd = time.time()
                 if time.time() - t0 >= 5.0:                      # a heartbeat, so silence means dead
                     print("  %.1f Hz drawing, %d of %d joints seen"
                           % (n0 / (time.time() - t0), len(latest[0]) + len(latest[1]),
@@ -207,6 +267,8 @@ def main():
         except KeyboardInterrupt:
             pass
         finally:
+            if log:
+                log.close()
             safe_terminate(client)
         return
 
@@ -214,6 +276,7 @@ def main():
     period = 1.0 / max(args.fps, 1.0)
     frames = 0
     t_report = time.time()
+    t_cmd = time.time()
     try:
         while handle.is_running():
             tick = time.time()
@@ -223,6 +286,8 @@ def main():
             mujoco.mj_forward(model, data)
             handle.sync()
             frames += 1
+            if args.commands and time.time() - t_cmd >= 2.0:
+                report(time.time()); t_cmd = time.time()
             if time.time() - t_report >= 5.0:                     # if this line stops, the loop is stuck
                 print("  %.0f fps, %d of %d joints seen"
                       % (frames / (time.time() - t_report), len(latest[0]) + len(latest[1]),
@@ -232,6 +297,8 @@ def main():
             if rest > 0:                                          # a busy loop here starves the pad
                 time.sleep(rest)                                  # on a small PC
     finally:
+        if log:
+            log.close()
         safe_terminate(client)
         handle.close()
 
