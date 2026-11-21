@@ -98,3 +98,21 @@ where it read 0 — so backlash is at most ~2 deg, and the encoder lost no steps
 Travel: asking 126 deg stalls at 116.00 (two sub-steps of 10 commanded, no movement, the stall guard
 stopped the pose). So the useful pan travel is roughly +-116, not the +-170 the driver's clamp suggests;
 the clamp is a fuse, not the travel range.
+
+wrist_flex — 2026-11-19, arm 1, hand-held inclinometer
+------------------------------------------------------
+W1 56.53 (tick 2623) 57.0; W2 32.18 (2346) 36.9; W3 8.70 (2079) 13.8; back to W4 56.53 (2623) 60.5.
+shoulder_lift and elbow_flex recorded at each pose because the instrument measures absolute inclination
+and those two drift about 1.5 deg under load; the corrected segments come out 0.92 and 1.01, total 0.96.
+
+The decisive line is W4: **the same SDK value and the same tick 2623 as W1, and the instrument reads 60.5
+where it read 57.0.** The joint did not move; the inclinometer did, because it is placed by hand on a small
+link. That 3.5 deg is the instrument's placement error, and it is three times larger than the effects this
+series was meant to resolve — which is why the 0.92/1.01 split is scatter and not a cos(23 deg) projection.
+
+Verdict: wrist_flex is **not signed off**, but nothing suggests a bad joint either: the encoder returns to
+the identical tick, so the mechanics repeat. What is missing is an instrument that stays put.
+
+Fix for the next attempt: clamp or tape the inclinometer to the link (the earlier shoulder series was
+usable precisely because the instrument rested on a flat face), then three poses over 40-50 deg plus a
+return, and read W1 vs W4 as the check that the instrument did not move.

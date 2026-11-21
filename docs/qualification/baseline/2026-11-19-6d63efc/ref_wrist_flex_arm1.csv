@@ -1,0 +1,5 @@
+point,step_deg,sdk_deg,raw_ticks,external_deg,shoulder_deg,elbow_deg,instrument,note
+W1,-,56.53,2623,57.0,-76.0,92.5,hand-held digital inclinometer on the wrist link,
+W2,-24.35,32.18,2346,36.9,-75.91,94.68,hand-held digital inclinometer on the wrist link,
+W3,-23.48,8.70,2079,13.8,-75.91,95.3,hand-held digital inclinometer on the wrist link,
+W4,+47.83,56.53,2623,60.5,-75.91,95.82,hand-held digital inclinometer on the wrist link,"same sdk and same tick as W1, 3.5 deg apart on the instrument"
