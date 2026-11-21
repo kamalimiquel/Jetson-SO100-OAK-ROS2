@@ -57,11 +57,23 @@ Segment slopes: 1.011 (first 20 deg), 1.112 (second 20 deg), total 1.062 over 42
 Ticks per degree 11.38 against 4095/360 = 11.375, so the SDK value is the encoder itself and the
 discrepancy is not in the bridge.
 
-Interpretation, deliberately provisional: an error that starts at zero and *grows* with distance from
-the reference (0.2 deg then 2.2 deg) is the signature of an **eccentric disk** — the card's centre is
-off the roll axis, so the reading error is sinusoidal with 360 deg period — rather than a 6 % scale
-error, which would show the same slope in both segments (1.011 vs 1.112 does not). The test that
-separates them is a sweep over more of the circle: if the error turns back towards zero, it is
-eccentricity; if it keeps growing linearly, it is scale.
+Interpretation: the instrument, not the joint, is what failed here.
+Error against the SDK: +0.2 deg at 20, +2.4 at 40, +8.2 at 60, **+27.9 at 120**. Segment slopes 1.011,
+1.112, 1.138, 1.234. A round trip of 240 deg brings the disk back to exactly 9.0 at -85.50 (tick 1075
+against 1072 at the start), so nothing slipped and the joint returns to where it was.
 
-Not done: that sweep, a repeat of the series, and any loaded point.
+That combination rules things out rather than leaving them open:
+- scale error: a 6 % scale would give ~7 deg at 120, not 28;
+- eccentric card: bounded by 2e/r (about 1.4 deg for 1 mm of offset) and back to zero at 180;
+- slip of the card or of the coupling: excluded by the exact return.
+What is left is the **mounting plane**: a card whose face is not perpendicular to the roll axis makes the
+apparent angle non-uniform, and the distortion grows with the turn. Reversible, superlinear, no slip.
+
+So: this series is kept as a record of a bad instrument. Only the first 40 deg (slope 1.01-1.11) is
+usable to say the sense and the order of magnitude agree; wrist_roll is NOT signed off.
+
+Next attempt, in order of preference: a line drawn with a permanent marker directly on the rotating
+collar, read against a fixed mark on the forearm (no card, no plane, nothing to slip); or the same disk
+mounted on a face turned square to the axis and centred on it. Ticks per degree 11.38 against
+4095/360 = 11.375 confirms the bridge copies the encoder faithfully, so the next series only needs to
+test the mechanics.

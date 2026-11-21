@@ -1,5 +1,8 @@
-point,step,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note
-R0,-,-85.76,1072,9.0,deg,"printed 80 mm disk, index line vs fixed mark",
-R1,+20,-65.98,1297,29.0,deg,"printed 80 mm disk, index line vs fixed mark",
-R2,+20,-46.20,1522,51.0,deg,"printed 80 mm disk, index line vs fixed mark",
-R3,-39.78,-85.85,1071,9.0,deg,"printed 80 mm disk, index line vs fixed mark","return point: same reading as R0, so no hysteresis at the endpoints"
+point,step_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note
+R0,-,-85.76,1072,9.0,deg,"printed 80 mm disk, index vs fixed mark",
+R1,+20,-65.98,1297,29.0,deg,"printed 80 mm disk, index vs fixed mark",
+R2,+20,-46.20,1522,51.0,deg,"printed 80 mm disk, index vs fixed mark",
+R3,-39.78,-85.85,1071,9.0,deg,"printed 80 mm disk, index vs fixed mark",return after 40 deg: same as R0
+S1,+59.78,-26.07,1751,77.0,deg,"printed 80 mm disk, index vs fixed mark","error 0.2 at 20 deg, 2.4 at 40, 8.2 at 60"
+S2,+59.43,+33.36,2427,156.0,deg,"printed 80 mm disk, index vs fixed mark",error 27.9 at 120 deg
+S3,-119.2,-85.50,1075,9.0,deg,"printed 80 mm disk, index vs fixed mark","return after 240 deg of travel: back to 9, so the card did not slip"
