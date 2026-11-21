@@ -781,6 +781,37 @@ if scale_apply:
     js.check_arm(scale, ARM_ID)      # refuses a table measured on the other arm
 ```
 
+#### The two arms, side by side
+
+Same procedure, same instruments, two robots. The point of the table is not that they match — it is where
+they do not:
+
+| joint | arm 1 (`so100_cell`) | arm 2 (`so100_cell_b`) | difference | how well known |
+|---|---|---|---|---|
+| `shoulder_pan` | 1.059 | 1.050 | −0.9 % | ±0.02 both |
+| `shoulder_lift` | 0.990 | 0.977 | −1.3 % | ±0.02 / ±0.01 |
+| `elbow_flex` | 0.976 | 0.953 | −2.4 % | ±0.02 both |
+| `wrist_flex` | 0.94 | 0.967 | +2.9 % | ±0.02 both |
+| `wrist_roll` | 0.877 | **0.825** | **−6.0 %** | ±0.03 / ±0.02 |
+| `gripper` | 1.35 mm/% + 15.1 mm | 0.733 mm/% + 12.4 mm | **−46 % of the slope** | ±0.5 mm / ±0.2 mm |
+| jaw at 25 % | 46 mm | **31 mm** | −33 % | |
+| jaw closed (≈0 %) | 16 mm | 12.4 mm | −23 % | |
+| jaw hysteresis | 4 mm at 25 % | none seen at 25 % | | one point each |
+
+What this table is for:
+
+- **The five joints agree within 1–3 %** except the roll, which is 6 % apart and the least certain number on
+  either arm. That is the scale at which "the same robot twice" is a reasonable assumption and "the same
+  robot" is not.
+- **The jaws are not comparable at all.** 25 % is 46 mm on one and 31 mm on the other, and the closed gap
+  differs by 4 mm, so an aperture asked for in millimetres has to be resolved against the arm actually
+  holding the block. A policy trained on arm 1's percentages would crush or drop on arm 2.
+- **Every number is applied per arm** (`joint_scale.json` and `joint_scale.so100_cell_b.json`), and the server
+  refuses a table measured on its neighbour. The temptation this table removes is copying one row across.
+- **Nothing here is measured under load, and none of it is repeated.** Both are the next rung: three passes per
+  joint, and a loaded point per joint, before any of these numbers is quoted as a benchmark rather than a
+  calibration of this bench on this day.
+
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
 
