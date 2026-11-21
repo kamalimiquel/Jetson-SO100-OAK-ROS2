@@ -150,10 +150,18 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        # Release first, always: a supervisor that dies holding the leases leaves both arms answering 423
+        # to the operator until the TTL expires.
         for port in PORTS.values():
-            http(port, "/release", {"owner": OWNER})
+            try:
+                http(port, "/release", {"owner": OWNER})
+            except Exception as exc:                                     # noqa: BLE001
+                print("supervisor: could not release port %d: %s" % (port, exc), flush=True)
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            # SIGINT already tore the context down in some builds; calling it twice raises a
+            # RCLError that reads like a crash and is not.
+            rclpy.shutdown()
     return 0
 
 
