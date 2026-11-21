@@ -59,6 +59,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [2.4 What you need from the repository](#24-what-you-need-from-the-repository)
   - [2.5 A second arm — what USB can and cannot take](#25-a-second-arm--what-usb-can-and-cannot-take)
 - **[3. The joints — one name for every layer](#3-the-joints--one-name-for-every-layer)**
+  - [3.1 How a joint is calibrated, and what proves it](#31-how-a-joint-is-calibrated-and-what-proves-it)
 - **[4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)](#4-arms-bring-up--uv--lerobot-sdk-arm-1-then-arm-2)**
   - [4.1 Re-calibrating the arm (with pose pictures)](#41-re-calibrating-the-arm-with-pose-pictures)
 - **[5. Second arm, live — calibration and the one-model RViz](#5-second-arm-live--calibration-and-the-one-model-rviz)**
@@ -401,6 +402,75 @@ rule that keeps the two apart is positional, not clever:
 bare topic names — and everything it describes has an `arm2` twin under the namespace. Wherever the two
 differ on purpose (the merged model, the pad's arm switch, the twin's scene) the section says so. The
 numbers in [§17.2](#172-implemented-on-the-hardware) are the verified state of both.
+
+### 3.1 How a joint is calibrated, and what proves it
+
+![The six joints this section calibrates: shoulder pan and lift, elbow flex, wrist flex, wrist roll and the parallel-jaw gripper](docs/so100-joint-map.png)
+
+"Calibrated" means two different things in this cell, and confusing them is how a bench ends up moving in
+the wrong units with every light green.
+
+**1. The servo's own calibration** ([§4.1](#41-re-calibrating-the-arm-with-pose-pictures)):
+LeRobot asks the operator to pose each joint mid-range and then sweep it, and writes four numbers per
+motor into `~/.cache/huggingface/lerobot/calibration/robots/so_follower/so100_cell.json` — `id`,
+`homing_offset`, `range_min`, `range_max`. That file is what turns a raw encoder tick (0…4095) into an
+angle, because the SDK's degrees mode computes `(tick − (min+max)/2) · 360 / 4095`. It is per **servo**,
+not per robot: the two arms have separate ids (`so100_cell`, `so100_cell_b`) and separate files.
+
+**2. The proof that the number means what it says.** A file of four numbers, a library default and a
+model that renders are all *claims*. Three checks turn them into evidence, and they answer different
+questions:
+
+| Check | Question it answers | Tool | Where the result lands |
+|---|---|---|---|
+| Manifest at boot | does the installed SDK still report the same unit system, motor ids, models and raw-tick capability? | `docker/ws/lib/units_manifest.py`, asserted in the joint server ([ADR-0025](docs/adr/0025-joint-units-asserted-at-boot.md)) | the boot log, and `GET /manifest` |
+| Audit table | do the encoder, the SDK and the ROS topic agree with each other? | `tools/joint_units.py` | `docs/qualification/baseline/<date>-<sha>/joint_units.csv` |
+| External reference | is a "degree" a degree, on a real link, with a real instrument? | `tools/joint_reference.py` (joints), `tools/jaw_curve.py` (jaw) | `ref_*.csv` in the same directory |
+
+The audit table alone is not enough and this is the trap: **all three layers can be wrong together**,
+because they are the same number copied along. Only an instrument outside the robot closes that.
+
+**The procedure, in order.** Everything below is done with the arms **passive** (torque off) except the
+poses that must be held, and with the recorder off:
+
+1. **Freeze what you are measuring.** Record the deployed image ids, the calibration file's sha256 and the
+   SDK version — `tools/joint_units.py` prints all three and refuses nothing, so check them yourself.
+   The hash is the identity of the calibration; a re-calibration makes every earlier number stale.
+2. **Produce the audit table** (`joint_units.py`, run **on the Xavier**: the joint servers bind loopback).
+   For every motor it records the raw tick, the SDK value, the ROS value and the calibration hash. Pass
+   when, for all twelve rows, `SDK == formula(tick)` and `ROS == SDK`; a mismatch means the calibration
+   file, the SDK or the bridge is not what the manifest says.
+3. **Measure one joint against an external reference** (`joint_reference.py --joint … `). Hold a pose,
+   read the instrument and `/read_raw` **at the same pose**, step the joint, repeat. Three poses spanning
+   ≥15–30°, and at least one step **in the opposite direction**, because the interesting number is not
+   only the slope: reversing exposes **backlash**, and a reversal that loses a degree followed by a step
+   that returns it is the signature.
+   Fit `external = slope · SDK + offset`. Acceptance: slope **1.000 ± the session's resolution**, offset
+   free (it is the mounting), backlash and lag inside the clearance budget. Re-mounting the instrument
+   between series changes the offset but not the slope — so an old series is kept as history and **never
+   mixed** with a new one.
+4. **Calibrate the jaw, which is not an angle** (`jaw_curve.py`). The driver reports 0–100 %, `deg2rad`
+   multiplies by a constant that is explicitly a drawing, and the camera hangs on the moving jaw. Sweep
+   `0 → 100 → 0` in steps, **measure the aperture in millimetres at the grasp plane with a caliper at
+   every step**, and fit two monotonic curves (opening and closing) plus their inverse. The difference
+   between the two directions at the same percentage is the hysteresis; the flat region near the ends is
+   the deadband. Only then can `JAW_RAD_PER_PERCENT` be replaced by a measured curve, and only then can a
+   policy be asked for "aperture in mm".
+5. **Record the limits by arm serial.** The driver clamp (±170°, jaw 0–100) is a fuse; the URDF's ±95–110°
+   is the mechanical travel; the *safe* range for a task is the intersection, minus a stop margin. Store it
+   per serial, because the two arms are bolted in different places and one of them is parked.
+
+**What this buys, and what it costs.** With the table and the fits, "commanded", "achieved" and "physical"
+become three numbers you can put side by side — and they are not the same number: on 2026-11-19 the
+`shoulder_lift` slope came out **0.990** over 15.2° and the `elbow_flex` **0.976** over 7.5° (both
+consistent with 1.000 at 0.1° readings), about **1° of backlash** showed up on the first reversal, and a
+−10° command was achieved as −6.9° on the shoulder and −4.8° on the elbow under load. That last one is why
+the owner re-reads the encoders instead of trusting a write.
+
+**Status:** `shoulder_lift` and `elbow_flex` have an external reference; `shoulder_pan` (protractor on the
+table), `wrist_flex`, `wrist_roll` (marked disk) and the **jaw curve in millimetres** are still open, and no
+point has been taken loaded. A joint without its instrument column filled is not signed off, and the CSV
+keeps that column empty on purpose.
 
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
