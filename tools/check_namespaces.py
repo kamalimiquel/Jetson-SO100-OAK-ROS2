@@ -216,14 +216,14 @@ def check_command_surface():
     server = open(os.path.join(ROOT, "docker/ws/arm/lerobot_joint_server.py"), encoding="utf-8").read()
     for needle, why, want in (
         ("use_degrees=True", "the unit system is stated, not inherited", True),
-        ("um.check(manifest)", "and checked against the manifest at boot", True),
+        ("um.check(manifest, absent=absent)", "and checked against the manifest at boot", True),
         ("raise SystemExit(2)", "and the arm refuses to come up on a mismatch", True),
         ('"/read_raw"', "raw ticks are readable for the unit table", True),
         ('"/manifest"', "and the resolved manifest is reportable", True),
         ('bus.sync_write("Goal_Position", driven)', "one packet for all six motors", True),
         ("for name, value in zip(names, angles)", "not one write per motor (partial poses)", False),
         ("cc.validate_body(", "the command contract is enforced at the port", True),
-        ("js.load()", "the measured joint scale comes from data, not from a constant in the code", True),
+        ("js.load(js.path_for(ARM_ID))", "the measured joint scale comes from data, per arm", True),
         ("JOINT_SCALE_APPLY", "and applying it is opt-in and named as such", True),
         ('"/claim"', "and ownership is taken at the port, not on the topic", True),
     ):

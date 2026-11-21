@@ -675,34 +675,48 @@ coupling question stays open instead of being absorbed into the number.
                "note": "two segments agree to 0.001; the return is 3.5 deg off a 1:1 upstream-drift correction"}
 ```
 
-#### `wrist_roll` — **0.88, and only to ±0.04**
+#### `wrist_roll` — **0.825**, six points, three on each side
 
-Two series with identical geometry, one 90° step each, on the same marks:
+| pose | step | roll SDK | tick | marks | as seen |
+|---|---|---|---|---|---|
+| Z0 | — | −83.56 | 1095 | 0° | aligned |
+| P1 | +29.80 | −53.76 | 1436 | 25° | |
+| P2 | +59.43 | −24.13 | 1773 | 49° | |
+| P3 | +88.97 | 5.41 | 2109 | 75° | |
+| Z1 | −88.97 | −83.21 | 1101 | 0° | back to zero |
+| N1 | −29.01 | −112.57 | 767 | 23° (337 on the dial) | other side |
+| N2 | −59.17 | −142.73 | 424 | 47° (313) | |
+| N3 | −79.03 | −162.59 | 198 | 65° (295) | −90 would pass the ±170° fuse |
+| Z2 | +79.03 | −83.91 | 1093 | 0° | final return |
 
-| series | SDK change | marks | slope |
-|---|---|---|---|
-| first | +89.49° | 0 → 82° | 0.916 |
-| second (gripper unplugged, `ABSENT_MOTORS`) | +89.50° | 0 → 75° | 0.838 |
+Fitted separately by direction, because a joint with backlash is two curves:
 
-**Seven degrees apart on the same joint.** That is not a joint changing its mind: it is what a hand-read
-collar gives at ±4°, and it means one 90° step cannot pin this joint down. What the two series do agree on
-is everything else — both return to 0° after 179° of travel (ticks 1097/1096 against 1095/1078), so the
-mechanics repeat and the marks did not slip; the uncertainty is in the eye, not in the servo.
+```
+positive side:  0.837      (segments 0.839 / 0.825 / 0.843)
+negative side:  0.811      (segments 0.783 / 0.790 / 0.819)
+combined:       0.825      asymmetry 0.027  ->  about 2.5 deg at 80 deg
+```
 
-So the table carries **0.88 with ±0.04** and says `PROVISIONAL` in the note. Arm 1's 0.877 sits inside that
-interval, so the honest statement is "both arms are around 0.88 and the roll is the least known scale on
-either" — not two numbers that disagree.
+This replaces two earlier single-sided attempts that gave 0.916 and 0.838 from the same joint — a 7°
+spread that was the *reading*, not the mechanism. Three points on each side, with the marks returning to 0°
+at Z1 and Z2 (ticks 1101 and 1093 against 1095), pins it at **0.825 ± 0.02** and shows the backlash that a
+one-sided sweep hides.
 
 ```python
-scale = 0.88            # mid-point of 0.916 and 0.838, NOT a measurement
-uncertainty = 0.04      # half the spread of the two series; the marks are read to about +-4 deg
+pos = [(29.80, 25.0), (59.43, 49.0), (88.97, 75.0)]
+neg = [(29.01, 23.0), (59.17, 47.0), (79.03, 65.0)]
+ls  = lambda p: sum(a * b for a, b in p) / sum(a * a for a, b in p)
+scale, hysteresis = ls(pos + neg), ls(pos) - ls(neg)   # 0.825, 0.027
 ```
 
 ```json
-"wrist_roll": {"scale": 0.88, "uncertainty": 0.04,
+"wrist_roll": {"scale": 0.825, "uncertainty": 0.02,
                "csv": "ref_wrist_roll_arm2.csv",
-               "note": "PROVISIONAL: two 90 deg series gave 0.916 and 0.838"}
+               "note": "six points, three each side: +0.837 / -0.811; the 0.027 gap is backlash"}
 ```
+
+Arm 1 measured 0.877 on the same joint, so the two arms differ by 6 % here — the largest disagreement of the
+six joints, and the reason the table is per arm.
 
 #### Arm 2, in one table
 
@@ -712,7 +726,7 @@ uncertainty = 0.04      # half the spread of the two series; the marks are read 
 | `elbow_flex` | **0.953** | taped inclinometer, 27° span, return 0.3° | ±0.02 |
 | `shoulder_pan` | **1.050** | printed sheet, 87° sweep, return 1° | ±0.02 |
 | `wrist_flex` | **0.967** | taped inclinometer, 47° sweep | ±0.02 |
-| `wrist_roll` | **0.88** | two 90° series that disagree by 7° | **±0.04, provisional** |
+| `wrist_roll` | **0.825** | six points, three each side, read along the axis | ±0.02 (backlash 0.027 between directions) |
 | `gripper` | — | not measured: its servo was unplugged for the roll sweep | — |
 
 Two of these (pan, wrist_flex) are within 1–3 % of arm 1; `elbow_flex` differs by 2.4 % and the roll is the

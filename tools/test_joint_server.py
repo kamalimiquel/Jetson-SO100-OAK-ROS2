@@ -51,6 +51,8 @@ class FakeBus:
         self.single_writes = []
         self.torque = False
         self.fail_next_sync = None
+        self.dead = set()          # motors that stop answering, as a pulled cable does
+        self.enabled = set()
 
     def read(self, what, name, *, normalize=True):   # normalize= is what the audit table needs
         return self.present[name] if normalize else int(self.present[name] * 10) + 2048
@@ -68,11 +70,19 @@ class FakeBus:
             raise RuntimeError(err)
         self.present.update({k: v for k, v in values.items()})
 
-    def enable_torque(self):
-        self.torque = True
+    def enable_torque(self, motors=None, num_retry=0):
+        for name in (motors or list(self.present)):
+            if name in self.dead:
+                raise RuntimeError("motor %r did not answer" % name)
+            self.enabled.add(name)
+        self.torque = bool(self.enabled)
 
-    def disable_torque(self):
-        self.torque = False
+    def disable_torque(self, motors=None, num_retry=0):
+        for name in (motors or list(self.present)):
+            if name in self.dead:
+                raise RuntimeError("motor %r did not answer" % name)
+            self.enabled.discard(name)
+        self.torque = bool(self.enabled)
 
 
 BUS = FakeBus()

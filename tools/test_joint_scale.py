@@ -192,8 +192,8 @@ check(os.path.exists(a2_path) and "so100_cell_b" in a2_path,
       "arm 2 has its own table file", a2_path)
 a2 = js.load(a2_path)
 check(a2["arm"] == "so100_cell_b", "and it says which arm it was measured on")
-check(a2["joints"]["wrist_roll"]["scale"] == 0.88 and a2["joints"]["wrist_roll"]["uncertainty"] == 0.04,
-      "the provisional roll value carries its uncertainty")
+check(a2["joints"]["wrist_roll"]["scale"] == 0.825 and a2["joints"]["wrist_roll"]["uncertainty"] == 0.02,
+      "arm 2's roll carries the six-point value and its uncertainty")
 check(a2["joints"]["gripper"]["scale"] is None, "arm 2's jaw has no angle scale either")
 check(js.check_arm(a2, "so100_cell_b") is None, "arm 2's table belongs to arm 2")
 check_raises(lambda: js.check_arm(a2, "so100_cell"), js.ScaleError,

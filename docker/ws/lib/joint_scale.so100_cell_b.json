@@ -38,10 +38,10 @@
       "note": "two segments agree to 0.001; the return is 3.5 deg off a 1:1 upstream-drift correction"
     },
     "wrist_roll": {
-      "scale": 0.88,
-      "uncertainty": 0.04,
+      "scale": 0.825,
+      "uncertainty": 0.02,
       "csv": "ref_wrist_roll_arm2.csv",
-      "note": "PROVISIONAL: two 90 deg series gave 0.916 and 0.838, so the eye-read marks are worth +-4 deg. 0.88 is the mid-point, not a measurement"
+      "note": "six points, three each side, read along the axis: +0.837 / -0.806, combined 0.823. The 0.031 gap between directions is backlash (~2.5 deg at 80)"
     },
     "gripper": {
       "scale": null,

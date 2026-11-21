@@ -1,8 +1,10 @@
 point,step_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note
-R0,-,-85.23,1078,0.0,deg,"permanent-marker lines on collar and forearm, read along the axis","zero: marks aligned, read along the forearm axis"
-Q1,+89.49,4.26,2096,82.0,deg,"permanent-marker lines on collar and forearm, read along the axis",90 deg step: 2 deg of reading noise is 2 % of the change
-Q2,+86.69,90.24,3074,,deg,"permanent-marker lines on collar and forearm, read along the axis",abandoned: at ~175 deg the marks pass out of sight / wrap
-Q3,-173.89,-83.65,1096,0.0,deg,"permanent-marker lines on collar and forearm, read along the axis",return after 179 deg of travel: back to 0
-S0,-,-83.74,1095,0.0,deg,"same marks, gripper unplugged (ABSENT_MOTORS)",second series with a 90 deg step
-S1,+89.50,5.76,2113,75.0,deg,,
-S2,-89.50,-83.56,1097,0.0,deg,,"return after 179 deg: back to 0, tick 1097 vs 1095"
+Z0,-,-83.56,1095,0,deg,"permanent-marker lines on collar and forearm, read along the axis","zero: marks aligned, read along the axis"
+P1,+29.80,-53.76,1436,25,deg,"permanent-marker lines on collar and forearm, read along the axis",positive side
+P2,+59.43,-24.13,1773,49,deg,"permanent-marker lines on collar and forearm, read along the axis",
+P3,+88.97,5.41,2109,75,deg,"permanent-marker lines on collar and forearm, read along the axis",
+Z1,-88.97,-83.21,1101,0,deg,"permanent-marker lines on collar and forearm, read along the axis","back to zero: the marks return, tick 1101 vs 1095"
+N1,-29.01,-112.57,767,-23,deg,"permanent-marker lines on collar and forearm, read along the axis",negative side: the marks read 337 on a 360 dial
+N2,-59.17,-142.73,424,-47,deg,"permanent-marker lines on collar and forearm, read along the axis",313 on the dial
+N3,-79.03,-162.59,198,-65,deg,"permanent-marker lines on collar and forearm, read along the axis",295 on the dial; -90 would pass the +-170 fuse
+Z2,+79.03,-83.91,1093,0,deg,"permanent-marker lines on collar and forearm, read along the axis","final return: 0 again, tick 1093 vs 1095"
