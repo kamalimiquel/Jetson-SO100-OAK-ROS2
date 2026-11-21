@@ -1,0 +1,5 @@
+point,step,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note
+R0,-,-85.76,1072,9.0,deg,"printed 80 mm disk, index line vs fixed mark",
+R1,+20,-65.98,1297,29.0,deg,"printed 80 mm disk, index line vs fixed mark",
+R2,+20,-46.20,1522,51.0,deg,"printed 80 mm disk, index line vs fixed mark",
+R3,-39.78,-85.85,1071,9.0,deg,"printed 80 mm disk, index line vs fixed mark","return point: same reading as R0, so no hysteresis at the endpoints"

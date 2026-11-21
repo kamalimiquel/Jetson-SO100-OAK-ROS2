@@ -47,3 +47,21 @@ Not measured in this session
 - loaded vs unloaded comparison: every point here is unloaded (arm in the air, no payload).
 - repeatability: one reading per pose; no repeated readings, so the reading noise is not separated
   from the joint noise.
+
+wrist_roll — 2026-11-19, arm 1, printed 80 mm disk
+--------------------------------------------------
+R0 -85.76 (tick 1072) -> 9.0 deg; +20 -> R1 -65.98 (1297) -> 29.0; +20 -> R2 -46.20 (1522) -> 51.0;
+then -39.78 back to R3 -85.85 (1071) -> 9.0, the same reading as R0: no hysteresis at the endpoints.
+
+Segment slopes: 1.011 (first 20 deg), 1.112 (second 20 deg), total 1.062 over 42 deg of disk.
+Ticks per degree 11.38 against 4095/360 = 11.375, so the SDK value is the encoder itself and the
+discrepancy is not in the bridge.
+
+Interpretation, deliberately provisional: an error that starts at zero and *grows* with distance from
+the reference (0.2 deg then 2.2 deg) is the signature of an **eccentric disk** — the card's centre is
+off the roll axis, so the reading error is sinusoidal with 360 deg period — rather than a 6 % scale
+error, which would show the same slope in both segments (1.011 vs 1.112 does not). The test that
+separates them is a sweep over more of the circle: if the error turns back towards zero, it is
+eccentricity; if it keeps growing linearly, it is scale.
+
+Not done: that sweep, a repeat of the series, and any loaded point.
