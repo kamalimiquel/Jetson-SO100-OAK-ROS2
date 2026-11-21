@@ -77,3 +77,24 @@ collar, read against a fixed mark on the forearm (no card, no plane, nothing to 
 mounted on a face turned square to the axis and centred on it. Ticks per degree 11.38 against
 4095/360 = 11.375 confirms the bridge copies the encoder faithfully, so the next series only needs to
 test the mechanics.
+
+shoulder_pan — 2026-11-19, arm 1, printed 190 mm sheet on the table
+--------------------------------------------------------------------
+Pointer taped to the rotating link, tip sweeping on the paper; sheet centred on the pan axis, 0 deg at
+the front of the bench. Points: 0, 32, 63, 94, 123 deg of sheet against 0, 29.36, 58.46, 88.17, 116.04
+of SDK, then back to 0.
+
+Fit over 0..116: external = **1.0589 . SDK + 0.56 deg**, max residual 0.56 deg (pure scale without the
+offset: 1.0652, rms 0.53). Segment ratios fall from 1.090 to 1.041, so the first segment is the weakest
+reading, not a curvature. Ticks per degree 11.38 again, consistent with 4095/360.
+
+**Pan is about 6 % faster than its own degrees.** A commanded 90 deg lands near 95 physical deg. That is
+the largest real discrepancy of the three joints measured so far (shoulder_lift 0.990, elbow_flex 0.976)
+and it is in the opposite direction.
+
+Reversibility: the return lands on tick 2101, the same tick it left from, and the pointer reads 2 deg
+where it read 0 — so backlash is at most ~2 deg, and the encoder lost no steps over 232 deg of travel.
+
+Travel: asking 126 deg stalls at 116.00 (two sub-steps of 10 commanded, no movement, the stall guard
+stopped the pose). So the useful pan travel is roughly +-116, not the +-170 the driver's clamp suggests;
+the clamp is a fuse, not the travel range.

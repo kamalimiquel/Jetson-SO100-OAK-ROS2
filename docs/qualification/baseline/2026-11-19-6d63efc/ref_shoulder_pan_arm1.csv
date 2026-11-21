@@ -1,0 +1,7 @@
+point,step_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note
+P0,-,-0.04,2101,0.0,deg,"printed 190 mm sheet on the table, 1 deg ticks",reference pose; pointer at 0
+P1,+29.36,29.32,2435,32.0,deg,"printed 190 mm sheet on the table, 1 deg ticks",
+P2,+29.10,58.42,2766,63.0,deg,"printed 190 mm sheet on the table, 1 deg ticks",
+P3,+29.71,88.13,3104,94.0,deg,"printed 190 mm sheet on the table, 1 deg ticks",
+P4,+27.87,116.00,3421,123.0,deg,"printed 190 mm sheet on the table, 1 deg ticks","asked 126, stalled at 116: end of travel"
+P5,-116.04,-0.04,2101,2.0,deg,"printed 190 mm sheet on the table, 1 deg ticks","return: same tick as P0, pointer 2 deg off"
