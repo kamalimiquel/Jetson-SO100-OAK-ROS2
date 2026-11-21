@@ -2714,6 +2714,11 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
 
 ### 17.3 Next
 
+- [ ] **Repeatability — three passes per joint** — every scale in [§3.1](#31-how-a-joint-is-calibrated-and-what-proves-it) and [§3.2](#32-arm-2--the-same-procedure-its-own-numbers) is one series per joint. Three passes, three fits, and the spread between them is the error bar this bench actually has; today the quoted ±0.02 is the *fitting* error of one series, not repeatability
+- [ ] **Loaded points — one per joint, per arm** — nothing measured so far was taken with the arm carrying anything, and the elbow already showed a −10° command arriving at −4.8° under its own weight. A scale measured unloaded is the right first step and not the number a grasp will use
+- [ ] **Arm 2's `wrist_roll` is the weakest number on the bench** — 0.825 ± 0.02 from six points, after two earlier single-sided series had to be discarded (0.916 and 0.838 from the same joint). The marks are read by eye on a collar; a fixture that holds a dial square to the axis would settle it
+- [ ] **Write the three field traps into the skill** — done in `jetson-so100-cell`, kept here so the next session does not rediscover them: `ABSENT_MOTORS` (and lerobot's cached `ids`, which has to be purged or its own motor check dies with a `KeyError`), torque released **one motor at a time** (a dead servo used to leave five energised with no way to let go), and **jaw curves are per arm** (0.733 vs 1.35 mm/%, 31 vs 46 mm at 25 %)
+
 - [ ] **Depth scale, second distance** — repeat the PnP-vs-depth check at ~0.40 m to tell a proportional error from a fixed offset, then decide whether `OAK_SCENE_DEPTH_SCALE` becomes 0.971 or stays 1.0
 - [ ] **Episode recording + LeRobot export (ADR-0012)** — the recorder writes the episode (§13.6) and a teleoperated one exists; what is still missing is the offline converter to the LeRobot dataset format
 - [ ] **Light the table and aim the scene camera at it** — the 19:41 episode's pixels are unusable: the wrist frames are black (night session) and the OAK frames the operator's desk, so no policy can learn from them. Move the scene camera to see the block and the tray, add light, and record one more episode before training anything
