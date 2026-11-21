@@ -1,0 +1,6 @@
+point,step_deg,sdk_deg,raw_ticks,shoulder_deg,external_deg,note
+E0,-,52.66,2493,-62.37,13.9,
+E1,-14.77,37.89,2325,-64.04,29.3,
+E2,-10.46,27.43,2206,-64.13,39.8,
+E3,+26.72,54.15,2510,-64.40,13.6,"return: 13.6 vs 13.9 at E0, tick 2510 vs 2493"
+X,+21.98,74.64,2743,-64.04,6.0,DISCARDED: the forearm crossed horizontal and the level folded

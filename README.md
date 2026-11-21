@@ -591,6 +591,50 @@ physical = sdk * table["joints"]["shoulder_lift"]["scale"]     # -33.19 sdk -> -
 Arm 1 came out at **0.990** on the same link with the same instrument, so the two arms are within 1.3 % of
 each other here — but that is a thing to check per arm, not to assume.
 
+#### `elbow_flex` — **0.953**, and a sign worth writing down
+
+| pose | step | elbow SDK | tick | shoulder | forearm inclinometer |
+|---|---|---|---|---|---|
+| E0 | — | 52.66 | 2493 | −62.37 | 13.9° |
+| E1 | −14.77 | 37.89 | 2325 | −64.04 | 29.3° |
+| E2 | −10.46 | 27.43 | 2206 | −64.13 | 39.8° |
+| E3 | +26.72 | 54.15 | 2510 | −64.40 | 13.6° (return) |
+| — | +21.98 | 74.64 | 2743 | −64.04 | 6.0° — **discarded** |
+
+The discarded row is the useful one: opening the elbow past ~65° carried the forearm **through the
+horizontal**, and the level folded near its zero (13.9° → 6.0° for a 22° turn, which no mechanism can do).
+Every inclinometer of this kind has a dead zone there. The fix is not a correction, it is a different
+sweep: work on one side of the horizontal, which is why E1 and E2 go *down* from E0.
+
+Fitted on the three valid poses with `x` = Δ(elbow + shoulder), because the instrument reads absolute
+inclination and the shoulder drifted 1.7° while holding:
+
+```
+Σxy = (−16.44)(15.4) + (−26.99)(25.9) = −952.2
+Σxx =         16.44²  +         26.99² =  998.8
+scale = −952.2 / 998.8 = −0.953        (segments: −0.937 then −0.995)
+```
+
+**The magnitude is 0.95; the sign is a convention.** Positive `elbow_flex` lowers the forearm on this build,
+so the absolute inclination falls as the number rises. The scale in the table is the magnitude, and the
+sign lives where it belongs — in the kinematic model and in `deg2rad` — not inside a gain.
+
+```python
+import csv
+rows = list(csv.DictReader(open("docs/qualification/baseline/2026-11-21-arm2/ref_elbow_flex_arm2.csv")))
+rows = [r for r in rows if r["note"].startswith("") and not r["note"].startswith("DISCARDED")]
+x = [(float(r["sdk_deg"]) - float(rows[0]["sdk_deg"])) +
+     (float(r["shoulder_deg"]) - float(rows[0]["shoulder_deg"])) for r in rows]
+y = [float(r["external_deg"]) - float(rows[0]["external_deg"]) for r in rows]
+scale = abs(sum(a * b for a, b in zip(x, y)) / sum(a * a for a in x))   # 0.953
+```
+
+```json
+"elbow_flex": {"scale": 0.953, "uncertainty": 0.02,
+               "csv": "ref_elbow_flex_arm2.csv",
+               "note": "magnitude; positive elbow lowers the forearm, so the fit is negative"}
+```
+
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
 
