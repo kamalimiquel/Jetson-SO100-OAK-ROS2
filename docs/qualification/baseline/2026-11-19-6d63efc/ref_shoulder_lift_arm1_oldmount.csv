@@ -1,0 +1,4 @@
+joint,step,delta_deg,commanded_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note,shoulder_deg
+shoulder_lift,0,0.0,-25.1,-25.1,1755,65.0,deg,digital inclinometer,"INVALID: same pose read 78.0 (old mount) vs 75.9 (S1, new mount) -> mount changed",
+shoulder_lift,1,6.0,-18.48,-17.802,1823,71.8,deg,digital inclinometer,"INVALID: same pose read 78.0 (old mount) vs 75.9 (S1, new mount) -> mount changed",
+shoulder_lift,2,6.0,-11.8,-11.121,1899,78.0,deg,digital inclinometer,"INVALID: same pose read 78.0 (old mount) vs 75.9 (S1, new mount) -> mount changed",

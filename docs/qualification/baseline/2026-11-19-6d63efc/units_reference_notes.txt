@@ -1,0 +1,49 @@
+Phase 1 — external reference, session of 2026-11-19 (evening)
+==============================================================
+Arm: arm1 (so100_cell), passive reads, torque ON only while a pose was held, arming and disarming
+done by tools/joint_reference.py. Arm resting/raised on the bench; no support under the forearm.
+
+Instrument: handheld digital inclinometer, read to 0.1 deg by the operator and dictated.
+Mounting: on a flat face of the link, axis along the link; the instrument's measuring plane was
+re-mounted between the first series and the second (see "invalidated series").
+
+Protocol per joint: hold a pose, read /read_raw and the instrument at the same pose, then step the
+joint and repeat. The SDK value and the encoder tick are recorded with each reading; for the elbow
+the shoulder value is recorded too, because the instrument on the forearm measures absolute
+inclination, i.e. shoulder + elbow.
+
+Results (least squares, external = slope * SDK + offset)
+-------------------------------------------------------
+shoulder_lift   n=3   slope 0.990   span 15.2 deg   offset 87.4 deg
+                segments 0.835 (reversal) / 1.113 (same direction)
+elbow_flex      n=3   slope 0.976   span  7.5 deg   offset -6.7 deg   (fit on shoulder+elbow)
+                segments 0.914 / 0.972
+
+Reading: the SDK unit is a degree, to within the resolution of this session. Over a 15 deg span and
+0.1 deg readings the slope uncertainty is about +-0.02, so 0.990 is consistent with 1.000 and also
+with a real 1 % scale error; tightening it needs a wider span (~30 deg) or repeated readings per pose.
+
+Two other findings, both recorded because they are what a controller has to live with:
+
+- Backlash / lag on reversal, about 1 deg: for shoulder_lift the reversal segment loses 1.1 deg and
+  the next same-direction segment gives it back (0.835 then 1.113, summing to 0.986 over the pair).
+  The elbow shows the same shape more weakly (0.914 then 0.972).
+- The joint does not reach the commanded angle under this load: elbow commanded -10.0 deg arrived at
+  -4.84 (5.2 short) and +10.0 arrived at +10.99; shoulder commanded -10.0 arrived at -6.94 (3.1 short)
+  and +6.0 arrived at +6.68. Commanded, achieved and physical are three different numbers, which is
+  why the owner re-reads the encoders and never treats a write as a pose.
+
+Invalidated series
+------------------
+The first shoulder_lift series (files ref_shoulder_lift_arm1_oldmount.csv) was taken before the
+instrument was re-mounted: the same pose read 78.0 deg then and 75.9 deg afterwards. A change of
+mounting changes the offset but not the slope, so that series is kept as history and not used in any
+fit. It is the reason every row carries the instrument name.
+
+Not measured in this session
+----------------------------
+- shoulder_pan (needs a protractor on the table and a mark on the base), wrist_flex, wrist_roll
+  (marked disk), and the jaw aperture curve in mm (tools/jaw_curve.py + caliper).
+- loaded vs unloaded comparison: every point here is unloaded (arm in the air, no payload).
+- repeatability: one reading per pose; no repeated readings, so the reading noise is not separated
+  from the joint noise.

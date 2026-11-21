@@ -1,0 +1,4 @@
+joint,step,delta_deg,commanded_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note,shoulder_deg
+shoulder_lift,0,0.0,-11.21,-11.209,1868,75.9,deg,digital inclinometer,valid series: instrument re-mounted before S1,
+shoulder_lift,1,-10.0,-21.21,-18.154,1819,70.1,deg,digital inclinometer,valid series: instrument re-mounted before S1,
+shoulder_lift,2,-10.0,-29.21,-26.418,1725,60.9,deg,digital inclinometer,valid series: instrument re-mounted before S1,

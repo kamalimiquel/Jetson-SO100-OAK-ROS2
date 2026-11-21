@@ -1,0 +1,4 @@
+joint,step,delta_deg,commanded_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note,shoulder_deg
+elbow_flex,0,0.0,55.3,55.3,2492,19.9,deg,digital inclinometer,forearm absolute: external tracks shoulder+elbow,-27.91
+elbow_flex,1,-10.0,45.3,50.462,2437,16.2,deg,digital inclinometer,forearm absolute: external tracks shoulder+elbow,-27.12
+elbow_flex,2,10.0,60.46,61.451,2562,27.4,deg,digital inclinometer,forearm absolute: external tracks shoulder+elbow,-26.59

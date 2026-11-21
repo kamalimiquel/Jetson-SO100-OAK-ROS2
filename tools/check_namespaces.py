@@ -36,7 +36,7 @@ HTTP_SERVERS = {
     "docker/web/wrist_pair.py", "docker/web/xavier_temp.py",
     "docker/ws/arm/arm_bridge.py", "tools/camfocus.py",
     # HTTP clients for the joint server: their literals are routes, not ROS topics
-    "tools/joint_units.py", "tools/jaw_curve.py",
+    "tools/joint_units.py", "tools/jaw_curve.py", "tools/joint_reference.py",
     # The arbiter's literals are HTTP routes on the loopback ports (/write, /claim, /owner); its
     # ROS topics are asserted explicitly in check_command_surface() below, the same way the
     # bridge's are.
