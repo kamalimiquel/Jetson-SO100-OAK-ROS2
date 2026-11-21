@@ -116,3 +116,20 @@ the identical tick, so the mechanics repeat. What is missing is an instrument th
 Fix for the next attempt: clamp or tape the inclinometer to the link (the earlier shoulder series was
 usable precisely because the instrument rested on a flat face), then three poses over 40-50 deg plus a
 return, and read W1 vs W4 as the check that the instrument did not move.
+
+wrist_flex, second series — instrument taped to the link
+--------------------------------------------------------
+A1 69.54 (tick 2771) 46.1; A2 46.24 (2506) 24.2; A3 back to 69.45 (2770) 46.1. shoulder_lift and
+elbow_flex were flat to 0.09 deg across the sweep, so no drift correction is needed here.
+
+**Slope 0.937** over 23.3 deg, and the return to A3 reproduces A1 to 0.0 deg with the tick within 1:
+unlike the hand-held series (B, whose return was 3.5 deg off), this instrument did not move.
+
+Why 0.937 is taken as the joint and not as a mounting artefact: a tilt of the instrument out of the plane
+of rotation multiplies every reading by cos(phi) and is constant, so it cannot be told apart from a scale
+error in a single mounting — but two *different* mountings were used. Hand-held gave 0.96 over 48 deg,
+taped gave 0.937 over 23 deg; two different tilts landing within 0.03 of each other is a coincidence
+much less likely than a joint that is about 5 % short.
+
+Verdict: wrist_flex = **0.94 +- 0.02**, signed off with that caveat written down (single mounting would
+not have been enough). What is still missing: a longer arc, a repeat, and a loaded point.

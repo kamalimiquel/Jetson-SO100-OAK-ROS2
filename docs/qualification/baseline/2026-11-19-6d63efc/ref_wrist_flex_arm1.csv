@@ -1,5 +1,8 @@
-point,step_deg,sdk_deg,raw_ticks,external_deg,shoulder_deg,elbow_deg,instrument,note
-W1,-,56.53,2623,57.0,-76.0,92.5,hand-held digital inclinometer on the wrist link,
-W2,-24.35,32.18,2346,36.9,-75.91,94.68,hand-held digital inclinometer on the wrist link,
-W3,-23.48,8.70,2079,13.8,-75.91,95.3,hand-held digital inclinometer on the wrist link,
-W4,+47.83,56.53,2623,60.5,-75.91,95.82,hand-held digital inclinometer on the wrist link,"same sdk and same tick as W1, 3.5 deg apart on the instrument"
+point,mount,step_deg,sdk_deg,raw_ticks,external_deg,shoulder_deg,elbow_deg,instrument,note
+A1,hand-held,-,69.54,2771,46.1,-100.79,96.62,"digital inclinometer, 0.1 deg",
+A2,hand-held,-23.30,46.24,2506,24.2,-100.7,96.62,"digital inclinometer, 0.1 deg",
+A3,hand-held,+23.30,69.45,2770,46.1,-100.7,96.62,"digital inclinometer, 0.1 deg","return: same reading as A1, tick 2770 vs 2771 — instrument did not move"
+B1,taped,-,56.53,2623,57.0,-76.0,92.5,"digital inclinometer, 0.1 deg",
+B2,taped,-24.35,32.18,2346,36.9,-75.91,94.68,"digital inclinometer, 0.1 deg",
+B3,taped,-23.48,8.70,2079,13.8,-75.91,95.3,"digital inclinometer, 0.1 deg",
+B4,taped,+47.83,56.53,2623,60.5,-75.91,95.82,"digital inclinometer, 0.1 deg",return: same tick as B1 but 3.5 deg apart on the instrument — it had been re-placed by hand
