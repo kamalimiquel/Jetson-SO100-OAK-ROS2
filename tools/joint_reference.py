@@ -152,10 +152,15 @@ def main():
     finally:
         if armed and not args.keep_armed:
             call(args.host, args.port, "/torque", {"on": False})
-        elif armed:
+        elif armed and rows:
             print("\nARM HELD — torque is still ON at %s = %.2f (sdk). Measure now, and release with "
                   "`curl -X POST :8002/torque -d '{\"on\":false}'` when the session ends."
-                  % (args.joint, rows[-1]["sdk_deg"] if rows else float("nan")))
+                  % (args.joint, rows[-1]["sdk_deg"]))
+        elif armed:
+            # The server refused every step (torque off, a lease, the stall guard). Saying "ARM HELD"
+            # here sent a reader to the instrument for a pose that never happened.
+            print("\nNOT MOVED — nothing was written, so there is no pose to measure: check torque, "
+                  "the lease and the stall guard. Torque is still ON.", flush=True)
 
     with open(args.out, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=COLUMNS)

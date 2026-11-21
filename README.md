@@ -675,6 +675,36 @@ coupling question stays open instead of being absorbed into the number.
                "note": "two segments agree to 0.001; the return is 3.5 deg off a 1:1 upstream-drift correction"}
 ```
 
+#### `wrist_roll` — **0.916**, measured in one 90° step
+
+| pose | step | roll SDK | tick | marks |
+|---|---|---|---|---|
+| R0 | — | −85.23 | 1078 | 0° (aligned) |
+| Q1 | +89.49 | 4.26 | 2096 | 82° |
+| Q2 | +86.69 | 90.24 | 3074 | abandoned |
+| Q3 | −173.89 | −83.65 | 1096 | 0° (return) |
+
+Two attempts before this one were abandoned, and both failures are worth keeping:
+
+- **steps of 30° were too small.** A hand-read mark carries ±1–2° of noise, which is 5 % of a 30° step and
+  2 % of a 90° step. The series that kept "needing a restart" was mostly the step size. `82 / 89.49 = 0.916`.
+- **at ~175° the marks cannot be read at all**: they pass behind the link and the eye cannot tell a wrap
+  from a rotation. Reading to 90° and coming back needs no ambiguity, so the sweep is 0 → 90 → 0, and the
+  return lands on 0° at tick 1096 against 1078 — the joint repeats and the instrument did not move.
+
+```python
+scale = 82.0 / 89.49          # 0.916, one 90 deg step, +-2 deg of reading noise -> +-0.025
+```
+
+```json
+"wrist_roll": {"scale": 0.916, "uncertainty": 0.03,
+               "csv": "ref_wrist_roll_arm2.csv",
+               "note": "one 90 deg step; arm 1 is 0.877, so the two arms differ by 4 % here"}
+```
+
+Arm 1 measured **0.877** on the same joint with a four-point sweep, so this is the least certain number of
+the two — one segment instead of four, and the arms differ by 4 %. It is written down as such.
+
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
 
