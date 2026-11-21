@@ -51,9 +51,8 @@ def arm_status(name, port):
     if err:
         row["error"] = err
     else:
-        row["torque"] = (status or {}).get("torque")
-        row["fault"] = (status or {}).get("fault")
-        row["motors"] = (status or {}).get("motors")
+        row["connected"] = (status or {}).get("connected")
+        row["calibrated"] = (status or {}).get("calibrated")
     scale, err = get(port, "/scale")
     if err:
         row["scale"] = None

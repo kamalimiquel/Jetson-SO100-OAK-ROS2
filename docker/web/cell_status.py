@@ -47,13 +47,14 @@ def collect():
             continue
         row["reachable"] = True
         row["owner"] = (owner or {}).get("owner")
+        tw, err = get(port, "/torque")
+        row["torque"] = bool((tw or {}).get("torque")) if not err else None
         st, err = get(port, "/status")
         if err:
             row["error"] = err
         else:
-            row["torque"] = bool((st or {}).get("torque"))
-            row["fault"] = (st or {}).get("fault")
-            row["motors"] = (st or {}).get("motors")
+            row["connected"] = (st or {}).get("connected")
+            row["calibrated"] = (st or {}).get("calibrated")
         sc, err = get(port, "/scale")
         if not err and sc:
             row["scale"] = {"arm": sc.get("arm"), "applied": sc.get("applied"),
@@ -87,7 +88,8 @@ PAGE = """<!doctype html><meta charset="utf-8">
 const fmt = (d) => {
   const rows = d.arms.map((a) => {
     const state = a.reachable ? `<span class="on">up</span>` : `<span class="no">unreachable</span><br><small>${a.error||""}</small>`;
-    const torque = ("torque" in a) ? (a.torque ? `<span class="on">on</span>` : `<span class="off">off</span>`) : "—";
+    const torque = (a.torque === null || a.torque === undefined) ? "—"
+                 : a.torque ? `<span class="on">energised</span>` : `<span class="off">free</span>`;
     const sc = a.scale ? `<code>${a.scale.sha256}</code>${a.scale.applied ? "" : ` <span class="off">(not applied)</span>`}` : "—";
     return `<tr><td>${a.arm}</td><td>${a.port}</td><td>${state}</td><td>${a.owner || "—"}</td>
             <td>${torque}</td><td>${sc}</td><td>${a.scale ? a.scale.session : "—"}</td></tr>`;
