@@ -22,6 +22,7 @@ Env:
     IK_TOL_MM   default 2.0, IK_TOL_DEG default 2.0 — below this the solve counts as reached
 """
 
+import json
 import math
 import os
 import xml.etree.ElementTree as ET
@@ -35,6 +36,12 @@ from std_msgs.msg import Float64MultiArray, String
 
 URDF = os.environ.get("IK_URDF", "/opt/ws/arm/urdf/so101.urdf")
 APPLY = os.environ.get("IK_APPLY", "") == "1"
+
+# The swept-volume gate (docker/ws/lib/sweep_gate.py). Off by default, and it cannot be switched on
+# without a surveyed box: `cell_geometry.json` has no `sweep_volume` today, so IK_SWEEP=1 refuses to
+# start instead of blessing whatever path the solver found.
+SWEEP = os.environ.get("IK_SWEEP", "") == "1"
+GEOMETRY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cell_geometry.json")
 
 # The typed surface (ros/so100_cell_interfaces). Optional on purpose: the bench has to keep working with
 # a bare ROS install, and a missing message package must not stop the arm from reporting. With it, a
@@ -265,6 +272,17 @@ class IkNode(Node):
         # arm 2's, so `ros2 node list` showed two /arm2_ik (bench, 2026-11-18, ADR-0023).
         super().__init__(f"{NS}_ik" if NS else "ik")
         self.chain = Chain()
+        self.box = None
+        if SWEEP:
+            try:
+                geom = json.load(open(GEOMETRY))
+            except Exception as exc:  # noqa: BLE001
+                raise SystemExit("IK_SWEEP=1 but %s cannot be read: %s" % (GEOMETRY, exc))
+            self.box = geom.get("sweep_volume")
+            if not self.box:
+                raise SystemExit("IK_SWEEP=1 but %s has no 'sweep_volume': survey the bench and write the "
+                                 "box, or run without the gate — guessing it would refuse every pose or "
+                                 "bless the crash" % GEOMETRY)
         self.pub_sol = self.create_publisher(Float64MultiArray, topic("ik/solution"), 10)
         self.pub_status = self.create_publisher(String, topic("ik/status"), 10)
         self.pub_target = (self.create_publisher(Float64MultiArray, topic("joint_targets"), 10)
@@ -282,6 +300,9 @@ class IkNode(Node):
             % (self.chain.n, self.chain.links,
                ["%.0f..%.0f deg" % (math.degrees(a), math.degrees(b)) for a, b in self.chain.limits],
                "APPLY (publishes /joint_targets)" if APPLY else "report only"))
+        self.get_logger().info(
+            "ik: swept-volume gate %s" % ("ON — " + sweep_gate.describe(self.box) if self.box
+                                          else "OFF (IK_SWEEP=0 or no box declared)"))
         self.get_logger().info(
             "ik: typed surface %s" % ("on (ik/solve -> ik/result, correlated by request_id)" if TYPED
                                       else "OFF (so100_cell_interfaces not installed; untyped topics only)"))
@@ -312,6 +333,21 @@ class IkNode(Node):
         # numbers are the fuse, and a supervisor asking for 10 mm does not get 10 mm.
         pos_mm = pos_m * 1000.0
         ok = (pos_mm <= min(max_pos_mm, TOL_MM)) and (ori_deg <= min(max_ori_deg, TOL_DEG))
+        if self.box is not None:
+            # The tool's path between here and there, sampled in joint space. It is the tool and not
+            # every link: a coarse box plus the tool path catches the table and the far arm, and the
+            # limitation is written down rather than assumed away.
+            q_now = np.radians(np.array(self.q_deg[:self.chain.dof], dtype=float))
+            q_sol = np.radians(np.array(q_deg[:self.chain.dof], dtype=float))
+            path = [self.chain.fk(q)[:3, 3] for q in sweep_gate.sample_configs(q_now, q_sol, 24)]
+            viol = sweep_gate.first_violation([tuple(float(v) for v in p) for p in path], self.box)
+            if viol:
+                idx, point, axis = viol
+                ok = False
+                return {"ok": False, "q_deg": [], "pos_err_mm": pos_mm, "ori_err_deg": ori_deg,
+                        "iterations": iters,
+                        "detail": "swept volume: step %d of 24 leaves the box on %s at "
+                                  "(%.3f, %.3f, %.3f) m" % (idx, axis, point[0], point[1], point[2])}
         return {"ok": ok, "q_deg": [float(v) for v in q_deg], "pos_err_mm": pos_mm,
                 "ori_err_deg": ori_deg, "iterations": iters,
                 "detail": "pos_err=%.1f mm ori_err=%.1f deg iters=%d" % (pos_mm, ori_deg, iters)}
