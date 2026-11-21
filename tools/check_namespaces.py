@@ -225,11 +225,15 @@ def check_command_surface():
         ("cc.validate_body(", "the command contract is enforced at the port", True),
         ("js.load(js.path_for(ARM_ID))", "the measured joint scale comes from data, per arm", True),
         ("JOINT_SCALE_APPLY", "and applying it is opt-in and named as such", True),
+        ("SURFACE_POLICY", "and the command surface can be closed before autonomy", True),
         ('"/claim"', "and ownership is taken at the port, not on the topic", True),
     ):
         got = needle in server
         (ok if got == want else lambda m: bad(m))(why)
     bridge = open(os.path.join(ROOT, "docker/ws/arm/arm_bridge.py"), encoding="utf-8").read()
+    compat = open(os.path.join(ROOT, "docker/ws/arm/compat_bridge.py"), encoding="utf-8").read()
+    (ok if "SURFACE_POLICY" in compat and "/cell/compat/status" in compat else lambda m: bad(m))(
+        "the legacy write path can be refused instead of mapped")
     (ok if "ARM_WRITE_MODE" in bridge else lambda m: bad(m))(
         "the bridge can yield the write path to the arbiter")
     merge = open(os.path.join(ROOT, "docker/ws/arm/joint_merge.py"), encoding="utf-8").read()

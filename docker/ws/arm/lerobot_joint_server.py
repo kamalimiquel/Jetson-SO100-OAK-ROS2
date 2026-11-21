@@ -47,6 +47,11 @@ import joint_scale as js  # noqa: E402
 import units_manifest as um  # noqa: E402
 
 PORT = int(os.environ.get("PORT", "8002"))
+# "open" (default): anyone on loopback may write, as today. "autonomy": /write requires a claimed arm,
+# so a stray curl or a web button cannot drive under a supervisor. /torque stays the operator's.
+SURFACE_POLICY = os.environ.get("SURFACE_POLICY", "open").strip().lower()
+if SURFACE_POLICY not in ("open", "autonomy"):
+    raise SystemExit("SURFACE_POLICY must be 'open' or 'autonomy', got %r" % SURFACE_POLICY)
 SERIAL = os.environ.get("SO100_PORT", "/dev/ttyACM0")
 ARM_ID = os.environ.get("SO100_ID", "so100_cell")
 
@@ -170,7 +175,9 @@ def main() -> None:
             print(f"[joint_server] refusing to start: JOINT_SCALE_APPLY=1 but {exc}", flush=True)
             return 1
     if scale:
-        print(f"[joint_server] joint scale {js.describe(scale)}"
+        print(f"[joint_server] surface policy: {SURFACE_POLICY}" + ("" if SURFACE_POLICY == "open" else
+          " (a /write without a claimed arm answers 423)"), flush=True)
+    print(f"[joint_server] joint scale {js.describe(scale)}"
               f" — {'APPLIED: /write takes physical degrees' if scale_apply else 'loaded, not applied'}"
               f" (JOINT_SCALE_APPLY={'1' if scale_apply else '0'})", flush=True)
 
@@ -366,6 +373,12 @@ def main() -> None:
                 refused = owner_refused(self)
                 if refused:
                     self._json({"error": refused}, 423)
+                    return
+                if SURFACE_POLICY == "autonomy" and not lease_left():
+                    # No lease, autonomy policy: the port stops being a convenience and becomes a
+                    # barrier. The operator still holds the torque switch.
+                    self._json({"error": "SURFACE_POLICY=autonomy: /write needs a claimed arm — POST "
+                                         "/claim with an X-Owner token first"}, 423)
                     return
 
             if self.path == "/torque":

@@ -20,6 +20,12 @@ header stamp — the message is forwarded, not regenerated. It runs only in arm 
 (entry.sh starts it for `ARM_NS` empty or `arm1`).
 
     ARM_COMPAT_STATES=/arm1/joint_states python3 compat_bridge.py     # single-arm boot
+
+`SURFACE_POLICY` (default `open`) decides whether the bare 1.0 **write** path exists at all. Under
+`autonomy` the bridge keeps republishing states and the description — a 1.0 monitor still works — but it
+no longer maps `/joint_targets` onto arm 1: it subscribes only to count and refuse, and says so at 1 Hz on
+`/cell/compat/status`. A UI or a script that could still move the arm through an unprefixed topic is exactly
+the surface the audit asked to close before anything autonomous runs (chapter 2 of the MCP spec).
 """
 
 import os
@@ -47,16 +53,42 @@ def latched():
     return QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 
+POLICY = os.environ.get("SURFACE_POLICY", "open").strip().lower()
+if POLICY not in ("open", "autonomy"):
+    raise SystemExit("SURFACE_POLICY must be 'open' or 'autonomy', got %r" % POLICY)
+
+
 class CompatBridge(Node):
     """Re-publishes arm 1's messages on the bare 1.0 names, and bare commands back onto /arm1."""
 
     def __init__(self):
         super().__init__("compat_bridge")
         self.pubs = {}                      # keyed by the DESTINATION topic: that is what a test checks
+        self.refused = 0
         for _name, src, dst, cls, latch in FORWARD + BACKWARD:
+            if POLICY == "autonomy" and (_name, src, dst, cls, latch) in BACKWARD:
+                continue
             self.pubs[dst] = self.create_publisher(cls, dst, latched() if latch else 10)
             self.create_subscription(cls, src, self._forward(src, dst), latched() if latch else 10)
             self.get_logger().info(f"{src} -> {dst}")
+        if POLICY == "autonomy":
+            # Listen, so a client that still publishes is counted and told — not silently ignored.
+            self.create_subscription(Float64MultiArray, "/joint_targets", self._refuse, 10)
+            self.pub_status = self.create_publisher(String, "/cell/compat/status", 10)
+            self.create_timer(1.0, self._status)
+            self.get_logger().warn("SURFACE_POLICY=autonomy: /joint_targets is NOT mapped onto arm 1; "
+                                   "commands must go to /arm1/joint_targets (or the owner's port)")
+
+    def _refuse(self, msg):
+        self.refused += 1
+        if self.refused in (1, 10) or self.refused % 100 == 0:
+            self.get_logger().warn("refused %d message(s) on the bare /joint_targets: %s"
+                                   % (self.refused, [round(float(v), 1) for v in msg.data][:6]))
+
+    def _status(self):
+        m = String()
+        m.data = "policy=%s refused=%d" % (POLICY, self.refused)
+        self.pub_status.publish(m)
 
     def _forward(self, src, dst):
         seen = {"n": 0}

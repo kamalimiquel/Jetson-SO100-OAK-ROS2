@@ -20,6 +20,7 @@ when the extrinsic is wrong. This script does the honest thing instead:
 """
 
 import argparse
+import time
 import glob
 import json
 import math
@@ -204,6 +205,12 @@ def main():
     ap.add_argument("--dir", default="docs/calibration/datasets/2026-11-09-so101")
     ap.add_argument("--intrinsics", default="docs/calibration/scene_cam_intrinsics.yaml")
     ap.add_argument("--out", default="")
+    # Identity of what was measured. Without these the transform cannot be tied to hardware, and
+    # tools/check_transforms.py refuses it (MCP spec, chapter 2).
+    ap.add_argument("--camera-serial", default="", help="OAK MXID, from /read_raw of the camera")
+    ap.add_argument("--camera-model", default="OAK-D")
+    ap.add_argument("--mount-id", default="", help="which bracket/mount this was solved with")
+    ap.add_argument("--method", default="eye-to-hand, board clamped to the jaw")
     args = ap.parse_args()
 
     data = json.load(open(os.path.join(args.dir, "poses.json")))
@@ -266,7 +273,14 @@ def main():
             fh.write("# solver: tools/handeye_bundle.py — closed form + joint bundle adjustment\n")
             fh.write("# reprojection rms %.3f px over %d views; leave-one-out %.2f px / %.1f mm\n"
                      % (rms, len(views), np.median(px) if px else -1, np.median(mm) if mm else -1))
+            if not (args.camera_serial and args.mount_id):
+                fh.write("# !! NOT USABLE — no --camera-serial / --mount-id: this transform cannot be tied "
+                         "to hardware\n")
             fh.write("parent: base\nchild: scene_cam_link\n")
+            fh.write("camera_serial: %s\ncamera_model: %s\nmount_id: %s\nmethod: %s\n"
+                     "date: %s\nsolver: tools/handeye_bundle.py\ndataset: %s\n"
+                     % (args.camera_serial, args.camera_model, args.mount_id, args.method,
+                        time.strftime("%Y-%m-%d"), os.path.basename(args.dir.rstrip("/"))))
             fh.write("translation: [%.6f, %.6f, %.6f]\n" % (t[0], t[1], t[2]))
             for i in range(3):
                 fh.write("rotation_row%d: [%.8f, %.8f, %.8f]\n" % (i, R[i, 0], R[i, 1], R[i, 2]))

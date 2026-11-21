@@ -2774,6 +2774,29 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
   different models, so VID:PID is enough; the same camera twice would need `KERNELS==` on the port
 - [ ] **GraspGen (ADR-0013)** and **policy training (ADR-0016)** — need the IK node and the recorder first
 
+### 17.4 The audit's ten proposals, where each one actually stands
+
+Chapter 2 of `SO100_agents_MCP_specification.md` ends every row with a proposed change. Nine of them can be
+read off this repo, so here is where each stands — with the honest column, because "proposed" and "done" are
+not the same word.
+
+| # | proposed change | state | evidence |
+|---|---|---|---|
+| 1 | Humble interface package, supervisor overlay, images locked by digest, device mappings recorded | **split** — digests and devices are now written by `tools/pin_images.py` into `docs/qualification/images.lock`; the interface package and supervisor overlay are **not built** | `images.lock`, `--check` compares against the live containers |
+| 2 | Units and mode checks at boot; every physical command through a local owner; restrict UI, compatibility and raw writes | **done** | units asserted at boot ([ADR-0025](docs/adr/0025-joint-units-asserted-at-boot.md)); lease at the port (ADR-0024); `SURFACE_POLICY=autonomy` refuses the bare `/joint_targets` and answers **423** to an unclaimed `/write` (verified on the bench 2026-11-21) |
+| 3 | Survey both mounts, fit TCP/jaw calibration, consume per-arm stamps | **partly** — per-arm stamps and the jaw curve are in [§3.1](#31-how-a-joint-is-calibrated-and-what-proves-it)/[§3.2](#32-arm-2--the-same-procedure-its-own-numbers); the mount survey and the TCP are **not measured** | `joint_merge.py`, `jaw_curve_arm*.csv` |
+| 4 | Pair exposure times, calibrate optics, registered depth, persistent object IDs | **not started** — `perception` still sleeps | — |
+| 5 | Correlated IK request, positive solve status, swept-volume and stop gates, enforce at the bus | **partly** — `/joint_targets` is published only when the residual is inside tolerance; correlation ids and the swept-volume gate are **not built** | `ik_node.py`, `tools/test_ik_frame.py` |
+| 6 | Rigid, stationary, synchronised samples; version transforms with camera and mount IDs | **split** — versioning is now enforced (`tools/check_transforms.py`, and `handeye_bundle.py` refuses to write a transform without `--camera-serial`/`--mount-id`); the **new capture is still pending** | `tools/test_check_transforms.py`, `docs/calibration/scene_cam_extrinsic.yaml` (retired, with its reason) |
+| 7 | Keep the mirror; command-driven MuJoCo, leader adapter, source arbitration | **unchanged** — the mirror exists, the rest is not in this revision | `windows/`, ADRs 0019–0023 |
+| 8 | Keep demonstrations off in qualification; separate acceptance ledger, reference images, independent scores | **done** | `docs/qualification/`, `RECORD_DIR` empty rule |
+| 9 | Mobile and policy execution behind the interfaces of sections 6–8 | **not started** — no wheel driver, odometry or MCP endpoint | — |
+
+Two consequences worth stating plainly. The **hardware rows (3, 4, 6, 9) cannot be closed by writing code**:
+they need a survey, a capture, a commission. And row 1's interface package is the one piece that gates the
+MCP work — a correlated request needs a message type with a field to put the id in, which is why row 5 is
+half-done rather than done.
+
 ## 18. How we work
 
 Every architecture decision is proposed with 3 alternatives (pros, cons, recommended), chosen by the user, and recorded as an ADR in `docs/adr/`. The full workflow lives in `docs/PROMPT.md`.

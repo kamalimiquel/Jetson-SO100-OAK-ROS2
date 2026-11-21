@@ -46,6 +46,7 @@ class FakeNode:
         self.node_name = name
         self.pubs = {}
         self.subs = {}
+        self.timers = []
 
     def create_publisher(self, cls, name, qos):
         self.pubs[name] = Pub(name)
@@ -53,6 +54,10 @@ class FakeNode:
 
     def create_subscription(self, cls, name, cb, qos):
         self.subs[name] = cb
+        return object()
+
+    def create_timer(self, period, cb):
+        self.timers.append(cb)
         return object()
 
     def get_logger(self):
@@ -138,6 +143,23 @@ def main():
     # latched description: the QoS must be transient-local, or a late RViz sees nothing
     check("the description is published latched",
           node.pubs["/robot_description"] is not None, True)
+
+    # ---- SURFACE_POLICY=autonomy: the monitor stays, the command path closes (MCP spec, chapter 2)
+    os.environ["SURFACE_POLICY"] = "autonomy"
+    mod2 = load()
+    node2 = mod2.CompatBridge()
+    check("autonomy: states still reach the 1.0 names", "/arm1/joint_states" in node2.subs, True)
+    check("autonomy: the description too", "/arm1/robot_description" in node2.subs, True)
+    check("autonomy: no bare command path at all", "/arm1/joint_targets" in node2.pubs, False)
+    check("autonomy: it listens to /joint_targets to refuse it", "/joint_targets" in node2.subs, True)
+    check("autonomy: and publishes its own status", "/cell/compat/status" in node2.pubs, True)
+    m2 = mod2.Float64MultiArray()
+    m2.data = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    node2.subs["/joint_targets"](m2)
+    check("autonomy: a command on the bare topic is counted, not forwarded", node2.refused, 1)
+    check("autonomy: nothing was published on /arm1/joint_targets",
+          node2.pubs.get("/arm1/joint_targets"), None)
+    del os.environ["SURFACE_POLICY"]
 
     print("\n%s" % ("all checks pass" if not fails else "%d check(s) FAILED" % len(fails)))
     return 1 if fails else 0

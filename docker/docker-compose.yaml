@@ -28,6 +28,9 @@ services:
       # Comma-separated joints that are physically absent this session (unplugged servo, failed link).
       # They leave the read/write set and every command must name them as held.
       - ABSENT_MOTORS=${ABSENT_MOTORS:-}
+      # open (default) or autonomy: under autonomy the bare /joint_targets is refused instead of mapped
+      # and /write needs a claimed arm. MCP spec, chapter 2.
+      - SURFACE_POLICY=${SURFACE_POLICY:-open}
       # Static transform of the wrist webcam (ADR-0022): metres from the moving-jaw link to the
       # lens, then rpy to the optical convention. Nominal bracket values — measure and override,
       # README §12.5. Set here (not in the entrypoint) so the numbers live beside the hardware.
@@ -74,6 +77,9 @@ services:
       # Comma-separated joints that are physically absent this session (unplugged servo, failed link).
       # They leave the read/write set and every command must name them as held.
       - ABSENT_MOTORS=${ABSENT_MOTORS:-}
+      # open (default) or autonomy: under autonomy the bare /joint_targets is refused instead of mapped
+      # and /write needs a claimed arm. MCP spec, chapter 2.
+      - SURFACE_POLICY=${SURFACE_POLICY:-open}
       - JOINT_PORT=8003
       - TORQUE_PORT=8095
       # lerobot_joint_server reads these itself (Phase 1):

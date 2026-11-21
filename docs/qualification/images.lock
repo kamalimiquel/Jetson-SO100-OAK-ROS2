@@ -1,0 +1,71 @@
+{
+  "note": "Written by tools/pin_images.py: what was actually resolved, not what compose says",
+  "services": {
+    "so100-arm": {
+      "created": "2026-11-21T18:58:00.983245223Z",
+      "devices": [
+        {
+          "container": "/dev/ttyACM0",
+          "host": "/dev/so100_arm"
+        }
+      ],
+      "image": "dustynv/ros:humble-ros-base-l4t-r35.4.1",
+      "image_id": "sha256:441bbd3796f47073f11bfc3c4c7db74d58ac0280e6c4c046697009d71e61ffb9",
+      "present": true,
+      "repo_digests": []
+    },
+    "so100-arm2": {
+      "created": "2026-11-21T20:34:59.30473171Z",
+      "devices": [
+        {
+          "container": "/dev/ttyACM0",
+          "host": "/dev/arm2_tty"
+        }
+      ],
+      "image": "dustynv/ros:humble-ros-base-l4t-r35.4.1",
+      "image_id": "sha256:441bbd3796f47073f11bfc3c4c7db74d58ac0280e6c4c046697009d71e61ffb9",
+      "present": true,
+      "repo_digests": []
+    },
+    "so100-cams": {
+      "created": "2026-11-18T11:26:52.778417863Z",
+      "devices": [],
+      "image": "so100-cams:latest",
+      "image_id": "sha256:def923fe0ce972c3ccdb6cfcf3730f1c1071b6b8c5b90ce25bd4c76aa4d2c0d7",
+      "present": true,
+      "repo_digests": []
+    },
+    "so100-control": {
+      "created": "2026-11-21T08:02:24.587444821Z",
+      "devices": [],
+      "image": "dustynv/ros:humble-ros-base-l4t-r35.4.1",
+      "image_id": "sha256:441bbd3796f47073f11bfc3c4c7db74d58ac0280e6c4c046697009d71e61ffb9",
+      "present": true,
+      "repo_digests": []
+    },
+    "so100-perception": {
+      "created": "2026-11-15T06:45:57.074585624Z",
+      "devices": [],
+      "image": "dustynv/ros:humble-ros-base-l4t-r35.4.1",
+      "image_id": "sha256:441bbd3796f47073f11bfc3c4c7db74d58ac0280e6c4c046697009d71e61ffb9",
+      "present": true,
+      "repo_digests": []
+    },
+    "so100-rosbridge": {
+      "created": "2026-11-15T06:45:56.981026099Z",
+      "devices": [],
+      "image": "so100-rosbridge:latest",
+      "image_id": "sha256:4ee13172face10cf3f4d3e2ff3c02eff936a02a3a2cde6ed7d05d33a75be5f1b",
+      "present": true,
+      "repo_digests": []
+    },
+    "so100-web": {
+      "created": "2026-11-18T11:26:52.828757392Z",
+      "devices": [],
+      "image": "so100-web:latest",
+      "image_id": "sha256:4802eac78aa0625b903c3f68bec7e1ca81fd2d2454efd14f787a55b4f34b2410",
+      "present": true,
+      "repo_digests": []
+    }
+  }
+}
