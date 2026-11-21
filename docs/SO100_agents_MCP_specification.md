@@ -44,6 +44,69 @@ In simulation the endpoint binds to a private adapter and simulated sensors. In 
 
 Use SO-100/SO-101 as one project family and name the model revision in every run. The latest audited README identifies physical SO-100 hardware with SO-101 URDF/MJCF geometry, while older calibration notes identify SO-101 hardware. Photograph nameplates, identify actuator IDs, measure joint axes and link lengths, and compare loaded FK to independent landmarks before accepting either model. `arm2` is a serial adapter + calibration ID + camera ID, never an inference from the camera image. The model places it to arm 1's left along +y. Verify by moving only that passive chain and covering its wrist lens. LeRobot names the SDK. LeKiwi and XLeRobot describe possible platforms, not evidence of wheels on this cell.
 
+### 2.1 Implementation status — what was closed, and where it lives
+
+Written on 2026-11-21 against `main` of this repository. Six of the chapter 2 proposals are software and are
+now in the tree; the rest are measurements that this bench has not taken. Each entry names the file, the
+subject and the evidence, so this section can be re-audited without reading the source.
+
+**1. Every physical command goes through a local owner, and the legacy path can be closed.**
+The arm is claimed at its own loopback port — `POST /claim` on **8002** (arm 1) and **8003** (arm 2) with
+`{"owner": "<who>", "ttl_s": <seconds>}`, and every write then carries `X-Owner`. A second party gets
+**423**. `SURFACE_POLICY=autonomy` closes the legacy surface as well: the compatibility bridge stops mapping
+the bare `/joint_targets` onto arm 1 and counts what it refuses on `/cell/compat/status`, while still
+forwarding states and the description, so a 1.0 *monitor* keeps working and a 1.0 *writer* does not. The joint
+server under the same policy answers 423 to a `/write` with no claimed arm. Verified on the bench: unclaimed
+423, claimed passes the gate and stops at the operator's torque switch (409), then restored to `open`.
+
+**2. Transforms are versioned with the camera and the mount.**
+A stored pose must carry `parent`, `child`, `translation`, `rotation_row0..2`, `camera_serial`,
+`camera_model`, `mount_id`, `method`, `date`, `solver`, `dataset` and a residual (`residual_px` or
+`residual_mm`). `tools/check_transforms.py` refuses a file that cannot be tied to hardware, skips intrinsics
+honestly, and lets a retired file stay retired only if its first lines say why. `handeye_bundle.py` writes
+those fields and marks its output `NOT USABLE` when `--camera-serial` or `--mount-id` are missing. Nothing is
+accepted until a rigid, stationary capture exists — that capture is still pending, and
+`docs/calibration/scene_cam_extrinsic.yaml` remains retired with its reason.
+
+**3. Images are locked by digest and device mappings are recorded.**
+`tools/pin_images.py` writes `docs/qualification/images.lock`: the resolved image id, the repo digests (empty
+for locally built images) and the host-to-container device mapping of all seven services, with `--check` to
+detect drift. First lock taken from the Jetson on 2026-11-21.
+
+**4. Solve requests are correlated.**
+`ros/so100_cell_interfaces` (ament_cmake, built in the control container and cached on the host keyed by a
+hash of the sources) defines `SolveRequest`/`SolveResult`, `ClaimArm` and `SkillRequest`. The IK node — the
+executable is `ik_node.py`, the **nodes are `arm1_ik` and `arm2_ik`** — now serves both carriers: the
+untyped `PoseStamped`/`/ik/solution` pair unchanged, and `ik/solve → ik/result` correlated by `request_id`.
+Tolerances come from the caller, **bounded by the node's own**; a request with a deleted frame is refused with
+a sentence rather than solved. Verified on the bench: `base` refused with the id echoed, a 2 m target refused
+at 1981 mm / 101 deg. Two requests published back-to-back arrive as one result on this DDS setup; the node log
+shows both, so a client should send them one at a time (`tools/ik_typed_probe.py`).
+
+**5. A swept-volume gate exists, and refuses to run without a surveyed volume.**
+`docker/ws/lib/sweep_gate.py` samples the tool path in joint space and reports the first point outside the
+box; `ik_node` applies it in 24 steps and refuses the solution with the step and the point. It is **off**:
+`IK_SWEEP=1` with no `sweep_volume` in `cell_geometry.json` exits with a sentence instead of inventing a box,
+because an unsurveyed box either refuses every pose or blesses the crash. The gate follows the **tool**, not
+every link — a coarse box catches the table and the far arm and nothing finer.
+
+**6. One supervisor, and a skill is written only when the solver agrees.**
+`docker/ws/control/supervisor.py` (node `cell_supervisor`, service `/cell/skill`) claims both ports, renews
+from a daemon thread, and executes only what `docker/ws/lib/skill_plan.py` accepted. It is a ROS *server*
+toward an agent, a ROS *client and subscriber* toward IK, and an *HTTP client* toward the arms; the judgement
+itself imports neither ROS nor sockets. `move_pose` validates the pose (finite, normalised quaternion, that
+arm's base frame only, arm owned), dispatches it to IK with the ticket as `request_id`, and writes only when
+the correlated result says `ok`; the solver never drives the jaw (`hold: ["gripper"]`). Verified on the bench
+with torque off: claimed both arms, `move_joint` reached the port and stopped at 409, an unknown arm was
+refused before any ticket, `open_jaw 40 mm` resolved through that arm's own curve, and stopping the node
+returned `/owner` to null on both ports.
+
+**Still open, and all of it is measurement rather than code:** the `sweep_volume` box; the mount survey (base
+pose, levelling and table height per arm) and the TCP — today only arm 2's 0.300 m in y is measured, which is
+why the model agrees with itself and not with the bench; a new hand-eye capture with the board clamped; the
+perception service (§5); and any point under load or a repeated series, without which the quoted scales are
+one series each.
+
 ## 3. Deployment and dependencies
 
 | Phase | Physical devices and compute | MCP client → server → command owner | Link loss / fallback |
@@ -268,66 +331,3 @@ Execute in order. **Checked command** below means it ran during this audit. **Re
 14. **Prove new task composition on the released program.** Bench or qualified mobile setup as declared, unchanged executable and skill hashes. Replace requested colours with blue/green, introduce the original yellow/red distractors, then repeat with missing and duplicate targets. Proposed gate: 3/3 unambiguous placements verified with the correct IDs, all ambiguity tests inhibit motion, no code or configuration edits between colours. Save the two different bindings, before/after frames, unchanged hashes and trial ledger. If a hard-coded colour appears, revise the program and repeat normal and variant qualification.
 15. **Develop the missing quarter-turn skill only in simulation.** Windows isolated development environment, directional mark and signed angle definition from section 8. First run with the original registry and demonstrate a clean `UNAVAILABLE` with zero writes. Implement a versioned primitive, test alternate starting yaw and wraparound, losing the mark, dropped/slipped objects, regrasp, rim contact and loss of orientation after placement. Pass development when the paired/held-out gate, configured angle/containment checks and fault inhibitions all pass. A stopped or visually ambiguous result cannot count as success. Save failing seed, revised code/model hash, verifier tests, angular errors and simulator-only rollout evidence.
 16. **Supervise physical release, demonstrate reuse and roll back.** Qualified bench, old and new signed releases available, engineer B controlling setup. Run the quarter-turn on ordinary matte blocks with an asymmetric arrow and a measured tray, at varied initial yaw within arm-2 reach. Apply the supervised 10-layout and orientation/containment gates. Reuse the same skill on a second colour and a new initial yaw. Then switch to the prior release, prove quarter-turn is unavailable without motion and repeat one ordinary placement. Fail closed on a missing mark, wrong yaw, missed stop or changed hash. To reproduce the accepted demonstration, record the *actual* released software SHA, adapter/skill/weights and calibration hashes, ordinary prop dimensions/mark, surveyed table and tray pose, both starting arm states, base/start envelope, lighting and sensor IDs. Keep fresh pre-grasp, post-turn and post-release observations with timestamps, measured yaw/containment, bus/owner ledger, independent scores and rollback result. Report the calibrated tabletop pass, isolated dock pass and continuous mobile mission pass under their own run IDs.
-
-## 10. Implementation status — what was closed, and where it lives
-
-Written on 2026-11-21 against `main` of this repository. Six of the chapter 2 proposals are software and are
-now in the tree; the rest are measurements that this bench has not taken. Each entry names the file, the
-subject and the evidence, so this section can be re-audited without reading the source.
-
-**1. Every physical command goes through a local owner, and the legacy path can be closed.**
-The arm is claimed at its own loopback port — `POST /claim` on **8002** (arm 1) and **8003** (arm 2) with
-`{"owner": "<who>", "ttl_s": <seconds>}`, and every write then carries `X-Owner`. A second party gets
-**423**. `SURFACE_POLICY=autonomy` closes the legacy surface as well: the compatibility bridge stops mapping
-the bare `/joint_targets` onto arm 1 and counts what it refuses on `/cell/compat/status`, while still
-forwarding states and the description, so a 1.0 *monitor* keeps working and a 1.0 *writer* does not. The joint
-server under the same policy answers 423 to a `/write` with no claimed arm. Verified on the bench: unclaimed
-423, claimed passes the gate and stops at the operator's torque switch (409), then restored to `open`.
-
-**2. Transforms are versioned with the camera and the mount.**
-A stored pose must carry `parent`, `child`, `translation`, `rotation_row0..2`, `camera_serial`,
-`camera_model`, `mount_id`, `method`, `date`, `solver`, `dataset` and a residual (`residual_px` or
-`residual_mm`). `tools/check_transforms.py` refuses a file that cannot be tied to hardware, skips intrinsics
-honestly, and lets a retired file stay retired only if its first lines say why. `handeye_bundle.py` writes
-those fields and marks its output `NOT USABLE` when `--camera-serial` or `--mount-id` are missing. Nothing is
-accepted until a rigid, stationary capture exists — that capture is still pending, and
-`docs/calibration/scene_cam_extrinsic.yaml` remains retired with its reason.
-
-**3. Images are locked by digest and device mappings are recorded.**
-`tools/pin_images.py` writes `docs/qualification/images.lock`: the resolved image id, the repo digests (empty
-for locally built images) and the host-to-container device mapping of all seven services, with `--check` to
-detect drift. First lock taken from the Jetson on 2026-11-21.
-
-**4. Solve requests are correlated.**
-`ros/so100_cell_interfaces` (ament_cmake, built in the control container and cached on the host keyed by a
-hash of the sources) defines `SolveRequest`/`SolveResult`, `ClaimArm` and `SkillRequest`. The IK node — the
-executable is `ik_node.py`, the **nodes are `arm1_ik` and `arm2_ik`** — now serves both carriers: the
-untyped `PoseStamped`/`/ik/solution` pair unchanged, and `ik/solve → ik/result` correlated by `request_id`.
-Tolerances come from the caller, **bounded by the node's own**; a request with a deleted frame is refused with
-a sentence rather than solved. Verified on the bench: `base` refused with the id echoed, a 2 m target refused
-at 1981 mm / 101 deg. Two requests published back-to-back arrive as one result on this DDS setup; the node log
-shows both, so a client should send them one at a time (`tools/ik_typed_probe.py`).
-
-**5. A swept-volume gate exists, and refuses to run without a surveyed volume.**
-`docker/ws/lib/sweep_gate.py` samples the tool path in joint space and reports the first point outside the
-box; `ik_node` applies it in 24 steps and refuses the solution with the step and the point. It is **off**:
-`IK_SWEEP=1` with no `sweep_volume` in `cell_geometry.json` exits with a sentence instead of inventing a box,
-because an unsurveyed box either refuses every pose or blesses the crash. The gate follows the **tool**, not
-every link — a coarse box catches the table and the far arm and nothing finer.
-
-**6. One supervisor, and a skill is written only when the solver agrees.**
-`docker/ws/control/supervisor.py` (node `cell_supervisor`, service `/cell/skill`) claims both ports, renews
-from a daemon thread, and executes only what `docker/ws/lib/skill_plan.py` accepted. It is a ROS *server*
-toward an agent, a ROS *client and subscriber* toward IK, and an *HTTP client* toward the arms; the judgement
-itself imports neither ROS nor sockets. `move_pose` validates the pose (finite, normalised quaternion, that
-arm's base frame only, arm owned), dispatches it to IK with the ticket as `request_id`, and writes only when
-the correlated result says `ok`; the solver never drives the jaw (`hold: ["gripper"]`). Verified on the bench
-with torque off: claimed both arms, `move_joint` reached the port and stopped at 409, an unknown arm was
-refused before any ticket, `open_jaw 40 mm` resolved through that arm's own curve, and stopping the node
-returned `/owner` to null on both ports.
-
-**Still open, and all of it is measurement rather than code:** the `sweep_volume` box; the mount survey (base
-pose, levelling and table height per arm) and the TCP — today only arm 2's 0.300 m in y is measured, which is
-why the model agrees with itself and not with the bench; a new hand-eye capture with the board clamped; the
-perception service (§5); and any point under load or a repeated series, without which the quoted scales are
-one series each.
