@@ -34,6 +34,7 @@ import rclpy                  # noqa: E402
 from rclpy.node import Node   # noqa: E402
 
 try:
+    from so100_cell_interfaces.msg import SolveRequest, SolveResult
     from so100_cell_interfaces.srv import SkillRequest
 except Exception:                                                        # noqa: BLE001
     print("supervisor: so100_cell_interfaces is not installed — build ros/so100_cell_interfaces first",
@@ -45,6 +46,9 @@ TTL = float(os.environ.get("SUPERVISOR_TTL_S", "15"))
 PORTS = dict(part.split("=") for part in
              os.environ.get("SUPERVISOR_PORT_MAP", "so100_cell=8002,so100_cell_b=8003").split(","))
 PORTS = {k.strip(): int(v) for k, v in PORTS.items()}
+# cell id -> ROS namespace. Two names for the same arm (the port is per serial, the topic per namespace),
+# so the map is written once here instead of being guessed at every use.
+NS = {"so100_cell": "arm1", "so100_cell_b": "arm2"}
 
 
 def http(port, path, body=None, timeout=8.0):
@@ -66,6 +70,13 @@ class Supervisor(Node):
         self.owned = []
         self.tickets = 0
         self.create_service(SkillRequest, "/cell/skill", self.on_skill)
+        # A pose is dispatched to that arm's IK and only written when the correlated result says ok.
+        self.pub_solve = {ns: self.create_publisher(SolveRequest, "/%s/ik/solve" % ns, 10)
+                          for ns in NS.values()}
+        self.pending = {}
+        for ns in NS.values():
+            self.create_subscription(SolveResult, "/%s/ik/result" % ns,
+                                     lambda m, n=ns: self.on_result(n, m), 10)
         # A thread, not an rclpy timer: this image's Timer rejects the clock it is handed
         # ("'function' object has no attribute 'handle'"), and a lease renewal does not need a clock —
         # it needs to happen every TTL/3 seconds whether or not anything is spinning.
@@ -108,6 +119,24 @@ class Supervisor(Node):
         return {"arms": self.arms, "owned": list(self.owned), "scales": scales,
                 "jaw": jaw, "present": present}
 
+    # -- the answer from IK --------------------------------------------------------------
+    def on_result(self, ns, msg):
+        arm = self.pending.pop(msg.request_id, None)
+        if arm is None:
+            return                      # not ours (another client's request, or already handled)
+        if not msg.ok:
+            self.get_logger().warn("move_pose %s refused by IK: %s" % (msg.request_id, msg.detail))
+            return
+        if len(msg.q_deg) != 5:
+            self.get_logger().warn("move_pose %s: IK answered %d joints, expected 5 — not writing"
+                                   % (msg.request_id, len(msg.q_deg)))
+            return
+        # Joints in JOINT_ORDER, jaw held: the solver never drives the gripper.
+        r = http(PORTS[arm], "/write",
+                 {"angles": [float(v) for v in msg.q_deg], "hold": ["gripper"], "units": "sdk"})
+        self.get_logger().info("move_pose %s on %s -> %s"
+                               % (msg.request_id, arm, r.get("status") or r))
+
     # -- the service -------------------------------------------------------------------------------
     def on_skill(self, request, response):
         verdict = sp.plan(request.skill, request.mission_id, request.args_json, self.context())
@@ -117,6 +146,25 @@ class Supervisor(Node):
             return response
         action = verdict["action"]
         arm, port = action["arm"], PORTS[action["arm"]]
+        if action["kind"] == "solve":
+            self.tickets += 1
+            ticket = "m%d-%s-%d" % (self.tickets, arm, int(time.time()))
+            req = SolveRequest()
+            req.request_id = ticket
+            req.target.header.frame_id = action["frame"]
+            req.target.header.stamp = self.get_clock().now().to_msg()
+            (req.target.pose.position.x, req.target.pose.position.y,
+             req.target.pose.position.z) = action["pose"][:3]
+            (req.target.pose.orientation.x, req.target.pose.orientation.y,
+             req.target.pose.orientation.z, req.target.pose.orientation.w) = action["pose"][3:]
+            req.max_pos_err_mm, req.max_ori_err_deg = action["max_pos"], action["max_ori"]
+            self.pending[ticket] = arm
+            self.pub_solve[NS[arm]].publish(req)
+            response.accepted, response.ticket = True, ticket
+            response.reason = ("dispatched to %s/ik/solve; the write happens only when the correlated "
+                               "result says ok" % NS[arm])
+            self.get_logger().info("skill move_pose on %s -> %s (%s)" % (arm, NS[arm], ticket))
+            return response
         if action["kind"] == "write":
             # The array has no names: the order IS the contract, so it comes from JOINT_ORDER and
             # never from sorted() — alphabetical would drive pan with the wrist's number.

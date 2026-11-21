@@ -72,5 +72,22 @@ check("arm 2's curve gives a different percentage for the same 40 mm",
 check("an arm with no curve cannot be asked for millimetres",
       sp.plan("open_jaw", "m1", '{"arm": "%s", "mm": 40}' % A1, dict(CTX, jaw={}))["accepted"], False)
 
+# ---- move_pose: the pose has to survive the solver before it becomes motion
+CTXP = dict(CTX, base_frame={A1: "arm1_base", A2: "arm2_base"})
+POSE = '{"arm": "%s", "pose": {"x": 0.2, "y": 0.0, "z": 0.15}}'
+r = sp.plan("move_pose", "m1", POSE % A1, CTXP)
+check("a pose is dispatched to IK", (r["accepted"], r["action"]["kind"]), (True, "solve"))
+check("with this arm's base frame", r["action"]["frame"], "arm1_base")
+check("and the default quaternion", r["action"]["pose"][3:], [0.0, 0.0, 0.0, 1.0])
+check("a pose in another frame is refused",
+      sp.plan("move_pose", "m1", POSE.replace('"arm"', '"frame": "base", "arm"') % A1, CTXP)["accepted"], False)
+check("an unnormalised quaternion is refused",
+      sp.plan("move_pose", "m1",
+              '{"arm": "%s", "pose": {"x":0.2,"y":0,"z":0.15,"qw":2.0}}' % A1, CTXP)["accepted"], False)
+check("a pose without x/y/z is refused",
+      sp.plan("move_pose", "m1", '{"arm": "%s", "pose": {"x":0.2}}' % A1, CTXP)["accepted"], False)
+check("an unowned arm cannot be posed",
+      sp.plan("move_pose", "m1", POSE % A2, CTXP)["accepted"], False)
+
 print("\n%s" % ("all checks pass" if not fails else "%d check(s) FAILED" % len(fails)))
 sys.exit(1 if fails else 0)
