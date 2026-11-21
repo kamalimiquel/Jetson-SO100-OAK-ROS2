@@ -473,8 +473,7 @@ consistent with 1.000 at 0.1° readings), about **1° of backlash** showed up on
 −10° command was achieved as −6.9° on the shoulder and −4.8° on the elbow under load. That last one is why
 the owner re-reads the encoders instead of trusting a write.
 
-**Status after the 2026-11-19 session (arm 1, unloaded).** Five of the six joints and the jaw now have a
-number; one does not, and the table says why rather than rounding it away:
+**Status after the 2026-11-19 session (arm 1, unloaded).** All six joints and the jaw now have a number, each with the caveat that limits it:
 
 | joint | scale | how it was measured | caveat |
 |---|---|---|---|
@@ -482,7 +481,7 @@ number; one does not, and the table says why rather than rounding it away:
 | `elbow_flex` | **0.976** | same instrument on the forearm, fit on shoulder+elbow | absolute inclination, not the joint alone |
 | `shoulder_pan` | **1.059** | printed 190 mm sheet on the table, pointer on the link | useful travel ends at **116°**, not ±170 |
 | `wrist_flex` | **0.94** | inclinometer taped to the link, 23.3° span | an out-of-plane tilt looks identical; two mountings agreeing (0.96 / 0.937) is what makes it a joint number |
-| `wrist_roll` | **—** | two attempts, both invalid | a hand-read angle on a cylinder or a tilted card is distorted by the viewpoint; needs a photo taken along the axis |
+| `wrist_roll` | **0.88** | marker lines on collar and forearm, read **along** the axis | two earlier attempts read obliquely gave 1.09 / 1.14 / 1.24 with the error growing; along the axis three segments agree to 0.04. A commanded 90° turns ~79° |
 | `gripper` | **curve, 0–50 %** | caliper at the grasp plane, six poses, both directions | `J(0 %) ≈ 16 mm`; 4 mm hysteresis at 25 %; above ~50 % it is an angle, not a width |
 
 Two method rules came out of it and cost more than the numbers: an instrument that is **placed by hand**

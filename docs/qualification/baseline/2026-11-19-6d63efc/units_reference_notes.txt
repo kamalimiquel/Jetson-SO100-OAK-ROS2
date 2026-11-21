@@ -133,3 +133,22 @@ much less likely than a joint that is about 5 % short.
 
 Verdict: wrist_flex = **0.94 +- 0.02**, signed off with that caveat written down (single mounting would
 not have been enough). What is still missing: a longer arc, a repeat, and a loaded point.
+
+wrist_roll, third attempt — read along the axis
+-----------------------------------------------
+Same two permanent-marker lines as the second attempt; only the viewing direction changed: this time the
+operator looked **along the forearm axis** (the cylinder projects as a circle, so the angle between the
+marks is undistorted). R0 -85.67 (tick 1073) 7.0; +30 steps to 32.0, 58.0, 85.0; back to -85.23 (1078) 7.0.
+
+Measured deltas 25.0 / 51.0 / 78.0 against SDK 29.84 / 59.69 / 88.88: least squares gives
+**external = 0.877 . SDK - 0.61 deg**, residual at most 0.73 deg, segment slopes 0.838 / 0.854 / 0.878.
+(The hand fit between the two ends gives 0.898; the four-point least squares is the one quoted.) Return reproduces the zero exactly, and the
+tick is 5 apart (about 0.4 deg), so nothing slipped and no steps were lost.
+
+Contrast with the first two attempts: the card read obliquely gave 1.09, then 1.14, then 1.24 — the error
+growing with the turn — and the hand-read collar without a fixed viewpoint gave 1.24 as well. Reading along
+the axis gives three slopes that agree to 0.04. **The viewpoint was the instrument error, and the joint is
+about 12 % short**: a commanded 90 deg turns the wrist about 79.
+
+Caveat kept on the record: one mounting, one direction of travel for the sweep, 1 deg readings. The number
+is signed at 0.88 +- 0.03, which is enough to put it in the margin and not enough to call it exact.
