@@ -512,6 +512,42 @@ that cost the most: the instrument is **taped**, not held, and every series **re
 so the instrument can be checked against itself. Raw files live in
 `docs/qualification/baseline/2026-11-21-arm2/`.
 
+#### How the fit works, and what each sum is
+
+Every series ends in one number and the same arithmetic, so it is worth spelling out once. The fit is a
+**least-squares slope through the origin**, which is the standard way to get a gain when you own the zero.
+
+Take the `shoulder_lift` series below as the example. Each pair is *the same movement measured by two
+instruments*:
+
+| symbol | value | what it is |
+|---|---|---|
+| `x₁` | 14.86 | SDK change from T0 to T1: −63.34 → −48.48 (deg) |
+| `y₁` | 14.6 | inclinometer change over the same step: 26.7° → 41.3° |
+| `x₂` | 30.15 | SDK change from T0 to T2: −63.34 → −33.19 |
+| `y₂` | 29.4 | inclinometer change there: 26.7° → 56.1° |
+
+`Σxy` multiplies, pose by pose, what the SDK said by what the instrument said, and adds:
+`14.86 · 14.6 + 30.15 · 29.4 = 216.96 + 886.41 = 1103.4` — it measures how much the two grow **together**.
+
+`Σxx` multiplies each SDK change by itself and adds:
+`14.86² + 30.15² = 220.8 + 909.0 = 1129.8` — it is the scale of the horizontal axis, so the quotient comes
+out dimensionless.
+
+`scale = Σxy / Σxx = 1103.4 / 1129.8 = 0.977` is the slope that minimises the sum of squared errors, and it
+means exactly this: **for every 1° the SDK reports, the link turns 0.977°.** The other way round is what the
+contract uses: to turn 90° on the bench you command 92.1°.
+
+**Why through the origin.** The inclinometer does not say "the shoulder is 26.7° from the robot's zero"; it
+says "this face is 26.7° from the floor", and that depends on **where it was taped**. 26.7° is a mounting
+offset, not a property of the joint. Subtracting T0 from everything means the fit never has to guess it.
+Left free, the same three points give slope **0.975** with an offset of 0.03° — the same to within 0.002,
+which is the check that the offset is not leaking into the scale.
+
+**And the segments.** 0.983 is T1 over T0 (`14.6 / 14.86`) and 0.968 is T2 over T1 (`14.8 / 15.29`). Two
+similar segments say the relation is linear; one at 1.4 and the other at 0.7 would mean the single slope is
+averaging two different behaviours and should not be trusted.
+
 #### `shoulder_lift` — **0.977**
 
 | pose | step | SDK | tick | inclinometer |
