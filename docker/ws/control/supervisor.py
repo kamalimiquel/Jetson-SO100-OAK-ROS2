@@ -66,9 +66,20 @@ class Supervisor(Node):
         self.owned = []
         self.tickets = 0
         self.create_service(SkillRequest, "/cell/skill", self.on_skill)
-        self.create_timer(TTL / 3.0, self.renew)
+        # A thread, not an rclpy timer: this image's Timer rejects the clock it is handed
+        # ("'function' object has no attribute 'handle'"), and a lease renewal does not need a clock —
+        # it needs to happen every TTL/3 seconds whether or not anything is spinning.
         self.renew()
+        threading.Thread(target=self._renew_forever, daemon=True).start()
         self.get_logger().info("supervisor: owns %s (ttl %.0fs)" % (self.owned, TTL))
+
+    def _renew_forever(self):
+        while True:
+            time.sleep(TTL / 3.0)
+            try:
+                self.renew()
+            except Exception as exc:                                     # noqa: BLE001
+                self.get_logger().warn("supervisor: renewal failed: %s" % exc)
 
     # -- ownership ---------------------------------------------------------------------------------
     def renew(self):
