@@ -60,6 +60,7 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [2.5 A second arm — what USB can and cannot take](#25-a-second-arm--what-usb-can-and-cannot-take)
 - **[3. The joints — one name for every layer](#3-the-joints--one-name-for-every-layer)**
   - [3.1 How a joint is calibrated, and what proves it](#31-how-a-joint-is-calibrated-and-what-proves-it)
+  - [3.2 Arm 2 — the same procedure, its own numbers](#32-arm-2--the-same-procedure-its-own-numbers)
 - **[4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)](#4-arms-bring-up--uv--lerobot-sdk-arm-1-then-arm-2)**
   - [4.1 Re-calibrating the arm (with pose pictures)](#41-re-calibrating-the-arm-with-pose-pictures)
 - **[5. Second arm, live — calibration and the one-model RViz](#5-second-arm-live--calibration-and-the-one-model-rviz)**
@@ -498,6 +499,61 @@ must be taped or clamped (the hand-held series read 60.5° where the taped one r
 tick), and a check is only a check if the **pose is revisited** at the end — the return is what exposes the
 instrument, not the joint. Repeatability and any loaded point are still open, and `shoulder_pan`'s 6 %
 means a commanded 90° lands near 95°: that belongs in the margin, not in a footnote.
+
+### 3.2 Arm 2 — the same procedure, its own numbers
+
+Arm 2 is a different robot to the server: `SO100_ID=so100_cell_b`, its own calibration file
+(`so100_cell_b.json`, sha `d9cccea7`), its own servos and its own mounting. So its scales have to be
+measured, and `joint_scale.py` **refuses to apply arm 1's table to it** rather than borrowing numbers that
+belong to another arm.
+
+The procedure is the one in [§3.1](#31-how-a-joint-is-calibrated-and-what-proves-it), with the two rules
+that cost the most: the instrument is **taped**, not held, and every series **returns to its first pose**
+so the instrument can be checked against itself. Raw files live in
+`docs/qualification/baseline/2026-11-21-arm2/`.
+
+#### `shoulder_lift` — **0.977**
+
+| pose | step | SDK | tick | inclinometer |
+|---|---|---|---|---|
+| T0 | — | −63.34 | 1328 | 26.7° |
+| T1 | +14.86 | −48.48 | 1497 | 41.3° |
+| T2 | +15.29 | −33.19 | 1671 | 56.1° |
+| T3 | −29.32 | −62.37 | 1339 | 27.4° (return) |
+
+The instrument measures **absolute inclination**, so what is fitted is the change, not the value: the
+offset is where the instrument was taped on. From the three opening poses, with `x` the SDK change and `y`
+the instrument change:
+
+```
+Σxy = 14.86·14.6 + 30.15·29.4 = 1103.4
+Σxx = 14.86²   + 30.15²   = 1129.8
+scale = Σxy / Σxx = 0.977          (segments: 0.983 then 0.968)
+```
+
+```python
+import csv
+rows = list(csv.DictReader(open("docs/qualification/baseline/2026-11-21-arm2/ref_shoulder_lift_arm2.csv")))
+x = [float(r["sdk_deg"]) - float(rows[0]["sdk_deg"]) for r in rows[:3]]     # change, not value
+y = [float(r["external_deg"]) - float(rows[0]["external_deg"]) for r in rows[:3]]
+scale = sum(a * b for a, b in zip(x, y)) / sum(a * a for a in x)            # through the origin
+assert abs(scale - 0.977) < 0.005
+```
+
+```json
+"shoulder_lift": {"scale": 0.977, "uncertainty": 0.01,
+                  "csv": "ref_shoulder_lift_arm2.csv",
+                  "note": "taped inclinometer, 30.15 deg span, return within 0.7 deg"}
+```
+
+```python
+# what the server does with it, when JOINT_SCALE_APPLY=1 (docker/ws/lib/joint_scale.py)
+sdk = physical / table["joints"]["shoulder_lift"]["scale"]     # 40 physical -> 40.94 sdk
+physical = sdk * table["joints"]["shoulder_lift"]["scale"]     # -33.19 sdk -> -32.43 physical
+```
+
+Arm 1 came out at **0.990** on the same link with the same instrument, so the two arms are within 1.3 % of
+each other here — but that is a thing to check per arm, not to assume.
 
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.

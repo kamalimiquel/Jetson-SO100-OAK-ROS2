@@ -1,0 +1,5 @@
+point,step_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note
+T0,-,-63.34,1328,26.7,deg,digital inclinometer taped to the shoulder link,
+T1,+14.86,-48.48,1497,41.3,deg,digital inclinometer taped to the shoulder link,
+T2,+14.71,-33.19,1671,56.1,deg,digital inclinometer taped to the shoulder link,
+T3,-29.32,-62.37,1339,27.4,deg,digital inclinometer taped to the shoulder link,"return: 27.4 vs 26.7 at T0, tick 1339 vs 1328"
