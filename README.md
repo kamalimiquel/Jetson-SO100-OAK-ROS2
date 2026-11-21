@@ -512,6 +512,41 @@ that cost the most: the instrument is **taped**, not held, and every series **re
 so the instrument can be checked against itself. Raw files live in
 `docs/qualification/baseline/2026-11-21-arm2/`.
 
+#### The instruments, as they were actually used
+
+Four photographs of the bench on 2026-11-21, because "measured with an instrument" hides the part that
+decides whether the number is worth anything.
+
+![A 3D-printed pointer arm bolted at the centre of the printed sheet, a marker at a fixed radius drawing the swept angle](docs/arm2-instrument-sheet-pointer.jpg)
+
+*The table sheet from `tools/make_protractor.py` with a pointer arm clamped at its centre: the pen sits at a
+fixed radius, so the mark it leaves **is** the angle the joint swept. This is the only instrument here whose
+reading cannot be argued with — a mark on paper at a known radius. It is what `shoulder_pan` was measured
+with; the earlier attempt, reading a moving mark by eye on the link, is what gave the 7° spread.*
+
+![A smartphone rubber-banded to the SO-100 gripper showing a bubble-level app reading X 0.6 and Y 39.8 degrees](docs/arm2-instrument-phone.jpg)
+
+*A phone strapped to the gripper with rubber bands, running a bubble-level app: X = 0.6°, Y = 39.8° at this
+pose. This is the inclinometer used for `shoulder_lift`, `elbow_flex` and `wrist_flex` — and the reason the
+series always records the shoulder and elbow beside the reading: the phone measures **absolute** inclination,
+so the upstream joints have to be subtracted, and they drift while the arm is held.*
+
+![The same arm holding a board with a digital caliper clamped across it, phone still attached](docs/arm2-instrument-caliper.jpg)
+
+*The caliper on the grasp plane with the phone still logging the pose (X = 3.4°, Y = 41.3°): the two
+instruments read at the same instant, so a pose is never measured twice at two different poses. Without
+this, the jaw curve and the joint scale drift apart.*
+
+![The same phone in a printed mount on the wrist, app showing X 1.7 and Y 27.4 degrees](docs/arm2-instrument-phone-mount.jpg)
+
+*The phone in a printed mount instead of rubber bands (X = 1.7°, Y = 27.4°). A mount is what the wrist
+series needed: the same pose read 60.5° where the taped instrument read 57.0°, and 3.5° of hand-placement
+error is larger than the effects being measured.*
+
+Three of these are the same idea in different clothes: **fix the instrument, read the same pose twice, and
+distrust anything read by eye at an angle.** That is the whole difference between the series that went into
+the tables above and the ones that were thrown away.
+
 #### How the fit works, and what each sum is
 
 Every series ends in one number and the same arithmetic, so it is worth spelling out once. The fit is a
