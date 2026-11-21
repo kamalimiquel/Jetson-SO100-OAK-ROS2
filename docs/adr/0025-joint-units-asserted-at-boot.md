@@ -75,6 +75,13 @@ motor id, and a package that drops the `normalize` keyword that the raw-tick aud
   shas (`0051a9d8…`, `d9cccea7…`). The audit table (`docs/qualification/baseline/2026-11-19-6d63efc/`)
   reproduces, for all 12 motors, `SDK value == DEGREES/RANGE formula(raw tick)` with **delta 0.000**,
   and `ROS value == SDK value` with **delta 0.000**.
-- Not measured: the external reference per joint (inclinometer, marked disk, gauge at the grasp plane)
-  and the jaw curve in millimetres. Until those columns are filled the table is a form, not evidence,
-  and phase 1 is not signed off.
+- **External reference, 2026-11-19**: `shoulder_lift` slope **0.990** over 15.2 deg, `elbow_flex`
+  **0.976** over 7.5 deg (fit on shoulder+elbow: the instrument on the forearm measures absolute
+  inclination), about **1 deg of backlash** on reversal, and a joint that does not reach its command
+  under load (-10 deg commanded arrived as -6.9 on the shoulder and -4.8 on the elbow).
+- **Jaw, 2026-11-19**: `J(0 %) = 16 mm`, `1.346 mm/%` opening and `1.384 mm/%` closing over **0-50 %**,
+  hysteresis **4 mm at 25 %**. Above ~50 % the fingers cross (the SO-100 jaw **rotates**, it is not
+  parallel), so no millimetre aperture is claimed there — which also means `deg2rad`'s per-percent
+  proxy is wrong in *structure*, not only in scale.
+- Still not measured: `shoulder_pan`, `wrist_flex`, `wrist_roll`, repeatability, and any point under
+  load. Until those are filled phase 1 is not signed off.

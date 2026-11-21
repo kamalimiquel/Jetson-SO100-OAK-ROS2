@@ -1,0 +1,8 @@
+direction,command_pct,sdk_pct,raw_ticks,aperture_mm,instrument,note
+opening,0.65,0.649,1750,17.0,caliper at the grasp plane,
+opening,25.0,24.481,2117,46.0,caliper at the grasp plane,
+opening,50.0,49.74,2506,83.0,caliper at the grasp plane,
+closing,50.0,50.519,2518,84.0,caliper at the grasp plane,
+closing,25.0,25.455,2132,50.0,caliper at the grasp plane,
+closing,0.0,1.039,1756,15.5,caliper at the grasp plane,
+not measurable,75.0,75.065,2896,,caliper at the grasp plane,"faces no longer parallel: % between the fingers, not a caliper gap"

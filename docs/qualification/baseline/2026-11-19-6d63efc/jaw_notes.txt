@@ -1,0 +1,59 @@
+Phase 1 — jaw aperture, session of 2026-11-19 (late evening)
+============================================================
+Arm: arm1 (so100_cell). Held pose: shoulder_lift -15.7, elbow 91.6. Torque ON only while holding,
+released at the end. Instrument: caliper at the grasp plane (between the inner faces), one reading
+per pose. Data: jaw_curve_arm1.csv.
+
+The mechanism is not a parallel jaw
+-----------------------------------
+One finger is fixed and the other **rotates** on the gripper servo. The two gripping faces are
+parallel only in the first half of the travel; at 75 % the operator reports the fingers at about
+90 degrees to each other, so there is no interchangeable gap to measure with a caliper. The row for
+75 % is kept with the aperture empty and the reason written down: **beyond ~50 % the command sets an
+angle between fingers, not a width.**
+
+This is consistent with the model: the URDF treats the jaw as a REVOLUTE joint (-10..+100 deg), not a
+prismatic one, and `deg2rad.JAW_RAD_PER_PERCENT` is therefore wrong in structure, not only in scale.
+
+Measurements (arm1, unloaded)
+-----------------------------
+| command % | achieved % | raw tick | J (mm) | direction |
+|---|---|---|---|---|
+| 0    | 0.649  | 1750 | 17.0 | opening |
+| 25   | 24.481 | 2117 | 46.0 | opening |
+| 50   | 49.740 | 2506 | 83.0 | opening |
+| 50   | 50.519 | 2518 | 84.0 | closing |
+| 25   | 25.455 | 2132 | 50.0 | closing |
+| 0    | 1.039  | 1756 | 15.5 | closing |
+| 75   | 75.065 | 2896 |  —   | not measurable (faces crossed) |
+
+Fit in the valid range (0..50 %)
+--------------------------------
+opening: J = 1.346 mm/% + 15.08      closing: J = 1.384 mm/% + 14.30
+inverse (for a requested aperture): % = 0.741 mm - 11.11      % = 0.722 mm - 10.32
+
+A quadratic can be fitted exactly to three points; that is interpolation, not evidence of curvature.
+What the data does show is that the per-segment slope **rises** (1.22 mm/% from 0 to 25, 1.47 from 25
+to 50), so the linear form above is a summary for the whole range, not a local truth. More points
+(every 10 %) would settle it.
+
+Three numbers a controller needs
+--------------------------------
+- **J(0 %) is about 16 mm, not zero.** The fingers do not touch when the command says closed. A request
+  for an aperture below ~16 mm is not satisfiable and must be refused, not approximated.
+- **Hysteresis**: 1.0 mm at 50 %, **4.0 mm at 25 %**, 1.5 mm near closed. The worst case is in the
+  middle of the range, which is exactly where a block grasp happens.
+- **Resolution**: one caliper reading per pose, 0.5 mm; nothing was repeated, so reading noise and
+  mechanism noise are not separated.
+
+What this replaces, and what it does not
+----------------------------------------
+`deg2rad` can now carry a table for % -> mm in 0..50 %, with the inverse used by `set_gripper_aperture`
+and the closed-aperture floor enforced. It must **not** claim a millimetre aperture above 50 %: there
+the honest representation is the finger angle, and the URDF's revolute joint is the right model.
+
+Still missing
+-------------
+- points every 10 % in 0..50 %, and a repeat of the whole sweep to separate noise from hysteresis;
+- a loaded grasp (block held) at the same percentages, to see the curve move under force;
+- the jaw angle calibration itself, if we want the model to be right at large openings.

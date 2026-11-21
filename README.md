@@ -473,10 +473,15 @@ consistent with 1.000 at 0.1° readings), about **1° of backlash** showed up on
 −10° command was achieved as −6.9° on the shoulder and −4.8° on the elbow under load. That last one is why
 the owner re-reads the encoders instead of trusting a write.
 
-**Status:** `shoulder_lift` and `elbow_flex` have an external reference; `shoulder_pan` (protractor on the
-table), `wrist_flex`, `wrist_roll` (marked disk) and the **jaw curve in millimetres** are still open, and no
-point has been taken loaded. A joint without its instrument column filled is not signed off, and the CSV
-keeps that column empty on purpose.
+**Status:** `shoulder_lift` and `elbow_flex` have an external reference, and the jaw has a curve in the
+range where it means anything. Measured on 2026-11-19, arm 1, unloaded: **J(0 %) ≈ 16 mm** (the fingers do
+not touch when the command says closed), `J = 1.346 · % + 15.1` opening and `1.384 · % + 14.3` closing over
+**0–50 %**, with hysteresis of **4 mm at 25 %** and 1 mm at 50 %. Above ~50 % the gripper stops being a
+parallel jaw — the moving finger rotates until the faces cross, so there is **no millimetre aperture to
+declare** and the row is kept empty on purpose: there the command sets an angle, and the URDF models it as
+a revolute joint. `shoulder_pan` (protractor on the table), `wrist_flex` and `wrist_roll` (marked disk) are
+still open, and no point has been taken loaded. A joint without its instrument column filled is not
+signed off.
 
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
