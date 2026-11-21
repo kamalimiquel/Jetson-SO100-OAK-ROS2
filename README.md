@@ -484,6 +484,15 @@ the owner re-reads the encoders instead of trusting a write.
 | `wrist_roll` | **0.88** | marker lines on collar and forearm, read **along** the axis | two earlier attempts read obliquely gave 1.09 / 1.14 / 1.24 with the error growing; along the axis three segments agree to 0.04. A commanded 90° turns ~79° |
 | `gripper` | **curve, 0–50 %** | caliper at the grasp plane, six poses, both directions | `J(0 %) ≈ 16 mm`; 4 mm hysteresis at 25 %; above ~50 % it is an angle, not a width |
 
+**Applying them.** The table is `docker/ws/lib/joint_scale.json` — scale, uncertainty, session and the
+CSV each number came from — and it is applied only when asked: `JOINT_SCALE_APPLY=1` makes `POST /write`
+read degrees as **physical** and divide by each joint's scale before the packet, `{"units": "sdk"}` opts
+one request back out, and `GET /scale` serves the table with its sha256. Off (the default) nothing
+changes: every number is SDK degrees, and asking for physical ones is a 400 that explains the flag.
+`GET /read_raw` always reports both, so a loop can use either as long as it names which. The reasoning
+is [ADR-0026](docs/adr/0026-measured-scale-on-the-write-path.md); `tools/test_joint_scale.py` re-derives
+two of the scales from their CSVs and fails if the table has drifted from its evidence.
+
 Two method rules came out of it and cost more than the numbers: an instrument that is **placed by hand**
 must be taped or clamped (the hand-held series read 60.5° where the taped one read 57.0° at the *same*
 tick), and a check is only a check if the **pose is revisited** at the end — the return is what exposes the

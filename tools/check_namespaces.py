@@ -222,7 +222,9 @@ def check_command_surface():
         ('"/manifest"', "and the resolved manifest is reportable", True),
         ('bus.sync_write("Goal_Position", driven)', "one packet for all six motors", True),
         ("for name, value in zip(names, angles)", "not one write per motor (partial poses)", False),
-        ("cc.validate_body(body)", "the command contract is enforced at the port", True),
+        ("cc.validate_body(", "the command contract is enforced at the port", True),
+        ("js.load()", "the measured joint scale comes from data, not from a constant in the code", True),
+        ("JOINT_SCALE_APPLY", "and applying it is opt-in and named as such", True),
         ('"/claim"', "and ownership is taken at the port, not on the topic", True),
     ):
         got = needle in server

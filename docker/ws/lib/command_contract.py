@@ -77,8 +77,13 @@ def _in_range(name, value, clamp):
     return lo if value < lo else hi
 
 
-def validate_body(body):
+def validate_body(body, transform=None):
     """`POST /write` body -> {joint: value} for the joints to drive, plus the held names.
+
+    `transform(name, value)` is applied to each value before the range check. The joint server uses it
+    to turn a command given in *physical* degrees into the number the SDK wants (`joint_scale.py`), and
+    because it happens before `_in_range` the limits keep their meaning: they are the fuse, and the
+    value on the wire is what the fuse protects.
 
     Raises CommandError(code=400) for anything the caller can fix, so the joint server answers
     400 instead of the 500 an uncaught ValueError used to produce.
@@ -117,6 +122,11 @@ def validate_body(body):
     out, notes = {}, []
     for name, raw in zip(driving, angles):
         value = _finite(name, raw)
+        if transform is not None:
+            sent = _finite(name, transform(name, value))
+            if abs(sent - value) > 0.05:
+                notes.append("%s %.1f physical -> %.1f sdk" % (name, value, sent))
+            value = sent
         clipped = _in_range(name, value, clamp)
         if clipped != value:
             notes.append(f"{name} clamped {value:.1f} -> {clipped:.1f}")

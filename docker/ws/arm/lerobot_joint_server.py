@@ -25,7 +25,10 @@ rclpy is built for py3.8 and LeRobot needs >=3.10.
                      and pad-B are the two ways in).
 
 Env: SO100_PORT (default /dev/ttyACM0), SO100_ID (default so100_cell),
-     PORT (default 8002, bound to 127.0.0.1).
+     PORT (default 8002, bound to 127.0.0.1),
+     JOINT_SCALE_APPLY (default 0). With it on, /write reads degrees as PHYSICAL and divides by the
+     measured scale of each joint (docker/ws/lib/joint_scale.json) before the packet; a body may still
+     say {"units": "sdk"} to bypass. Off, every number is SDK degrees, as before.
 """
 
 import json
@@ -40,6 +43,7 @@ from lerobot.robots.so_follower import SO100Follower, SO100FollowerConfig
 # things for the same reasons (/opt/ws/lib in the container, docker/ws/lib in the repo).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 import command_contract as cc  # noqa: E402
+import joint_scale as js  # noqa: E402
 import units_manifest as um  # noqa: E402
 
 PORT = int(os.environ.get("PORT", "8002"))
@@ -125,6 +129,22 @@ def main() -> None:
             calib_sha = hashlib.sha256(fh.read()).hexdigest()
     except Exception:  # noqa: BLE001
         pass
+    # The measured scale of each joint: what a commanded degree actually turns. Data, next to the
+    # unit table, because it changes a command's meaning — so it is opt-in and it is announced.
+    scale_apply = str(os.environ.get("JOINT_SCALE_APPLY", "0")).strip().lower() in ("1", "true", "yes")
+    try:
+        scale = js.load()
+    except js.ScaleError as exc:
+        if scale_apply:
+            print(f"[joint_server] refusing to start: JOINT_SCALE_APPLY=1 but {exc}", flush=True)
+            return 1
+        scale, scale_apply = None, False
+        print(f"[joint_server] joint scale NOT applied ({exc})", flush=True)
+    if scale:
+        print(f"[joint_server] joint scale {js.describe(scale)}"
+              f" — {'APPLIED: /write takes physical degrees' if scale_apply else 'loaded, not applied'}"
+              f" (JOINT_SCALE_APPLY={'1' if scale_apply else '0'})", flush=True)
+
     units = {j["name"]: um.UNIT_OF.get(j["norm"], "?") for j in manifest["joints"]}
     print(f"[joint_server] units OK — sdk {manifest['sdk_version']}, degrees={manifest['use_degrees']}, "
           f"calibration={calib} sha256={str(calib_sha)[:12]}", flush=True)
@@ -192,8 +212,13 @@ def main() -> None:
                 try:
                     ticks = {n: int(bus.read("Present_Position", n, normalize=False)) for n in names}
                     norm = {n: float(bus.read("Present_Position", n)) for n in names}
-                    self._json({"names": names, "ticks": ticks, "normalized": norm, "unit": units,
-                                "torque": bool(torque_on)})
+                    body = {"names": names, "ticks": ticks, "normalized": norm, "unit": units,
+                            "torque": bool(torque_on)}
+                    if scale:
+                        # What the SDK number is worth on the bench. The raw fields stay: a client
+                        # that wants the encoder's opinion keeps it, and nothing is silently rescaled.
+                        body["physical"] = {n: round(js.to_physical(scale, n, norm[n]), 2) for n in names}
+                    self._json(body)
                 except Exception as exc:  # noqa: BLE001
                     self._json({"error": str(exc)}, 500)
             elif self.path == "/manifest":
@@ -203,11 +228,20 @@ def main() -> None:
                             "use_degrees": manifest["use_degrees"], "joints": manifest["joints"],
                             "unit": units, "calibration": str(calib) if calib else None,
                             "calibration_sha256": calib_sha,
+                            "joint_scale": ({"sha256": scale["sha256"], "applied": scale_apply,
+                                             "session": scale.get("session")} if scale else None),
                             "limits": {n: cc.LIMITS[n] for n in cc.JOINT_ORDER}})
             elif self.path == "/torque":
                 self._json({"torque": bool(torque_on)})
             elif self.path == "/owner":
                 self._json({"owner": lease["owner"], "seconds_left": round(lease_left(), 1)})
+            elif self.path == "/scale":
+                if not scale:
+                    self._json({"error": "no joint_scale.json next to this server"}, 404)
+                    return
+                self._json({"applied": scale_apply, "sha256": scale["sha256"],
+                            "session": scale.get("session"), "evidence": scale.get("evidence"),
+                            "definition": scale["definition"], "joints": scale["joints"]})
             elif self.path == "/status":
                 self._json({"connected": True, "calibrated": arm.is_calibrated})
             else:
@@ -317,8 +351,18 @@ def main() -> None:
             if self.path != "/write":
                 self._json({"error": "not found"}, 404)
                 return
+            units_in = str(body.get("units") or "").strip().lower()
+            if units_in not in ("", "sdk", "physical"):
+                self._json({"error": "units must be 'sdk' or 'physical', got %r" % body.get("units")}, 400)
+                return
+            if units_in == "physical" and not scale_apply:
+                self._json({"error": "this server takes SDK degrees: JOINT_SCALE_APPLY=0, so there is no "
+                                     "measured scale in the path (start it with JOINT_SCALE_APPLY=1 to "
+                                     "command physical degrees)"}, 400)
+                return
+            transform = (lambda n, v: js.to_sdk(scale, n, v)) if units_in == "physical" else None
             try:
-                driven, held, notes = cc.validate_body(body)
+                driven, held, notes = cc.validate_body(body, transform=transform)
             except cc.CommandError as exc:
                 # 400, not the old 500: the caller can fix this, and the sentence says how.
                 print(f"[joint_server] write rejected: {exc}", flush=True)
