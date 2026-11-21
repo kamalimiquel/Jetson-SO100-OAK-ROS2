@@ -35,6 +35,8 @@ HTTP_SERVERS = {
     "docker/web/wrist_focus.py", "docker/web/shutdown_server.py",
     "docker/web/wrist_pair.py", "docker/web/xavier_temp.py",
     "docker/ws/arm/arm_bridge.py", "tools/camfocus.py",
+    # HTTP clients for the joint server: their literals are routes, not ROS topics
+    "tools/joint_units.py", "tools/jaw_curve.py",
     # The arbiter's literals are HTTP routes on the loopback ports (/write, /claim, /owner); its
     # ROS topics are asserted explicitly in check_command_surface() below, the same way the
     # bridge's are.
@@ -213,6 +215,11 @@ def check_command_surface():
         (ok if got == want else lambda m: bad(m))(why)
     server = open(os.path.join(ROOT, "docker/ws/arm/lerobot_joint_server.py"), encoding="utf-8").read()
     for needle, why, want in (
+        ("use_degrees=True", "the unit system is stated, not inherited", True),
+        ("um.check(manifest)", "and checked against the manifest at boot", True),
+        ("raise SystemExit(2)", "and the arm refuses to come up on a mismatch", True),
+        ('"/read_raw"', "raw ticks are readable for the unit table", True),
+        ('"/manifest"', "and the resolved manifest is reportable", True),
         ('bus.sync_write("Goal_Position", driven)', "one packet for all six motors", True),
         ("for name, value in zip(names, angles)", "not one write per motor (partial poses)", False),
         ("cc.validate_body(body)", "the command contract is enforced at the port", True),

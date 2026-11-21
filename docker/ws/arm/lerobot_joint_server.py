@@ -40,6 +40,7 @@ from lerobot.robots.so_follower import SO100Follower, SO100FollowerConfig
 # things for the same reasons (/opt/ws/lib in the container, docker/ws/lib in the repo).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 import command_contract as cc  # noqa: E402
+import units_manifest as um  # noqa: E402
 
 PORT = int(os.environ.get("PORT", "8002"))
 SERIAL = os.environ.get("SO100_PORT", "/dev/ttyACM0")
@@ -82,12 +83,51 @@ def connect_with_retry(arm, tries=30, delay=2.0):
             time.sleep(delay)
 
 
+def sdk_version():
+    try:
+        import importlib.metadata as md
+        return md.version("lerobot")
+    except Exception:  # noqa: BLE001 — a missing distribution is a warning, not a crash
+        return None
+
+
 def main() -> None:
     print(f"[joint_server] connecting SO100Follower id={ARM_ID} port={SERIAL}", flush=True)
-    arm = SO100Follower(SO100FollowerConfig(port=SERIAL, id=ARM_ID))
+    # use_degrees is stated, not inherited: the SDK default chooses between degrees and a -100..100
+    # fraction for the five body joints, and nothing raises if it changes.
+    config = SO100FollowerConfig(port=SERIAL, id=ARM_ID, use_degrees=True)
+    arm = SO100Follower(config)
     connect_with_retry(arm)  # calibrate=True by default; raises if the calib file is missing
     bus = arm.bus
     names = list(bus.motors.keys())
+
+    # Fail closed: the numbers mean what the manifest says, or the arm does not come up.
+    import inspect
+    signatures = {m: inspect.signature(getattr(bus, m)).parameters for m in ("read", "write", "sync_write")}
+    manifest = um.observed_from(arm, config=config, sdk_version=sdk_version(), signatures=signatures)
+    errors, warnings = um.check(manifest)
+    for line in um.describe(manifest):
+        print("[joint_server] units  " + line, flush=True)
+    for w in warnings:
+        print(f"[joint_server] units WARNING: {w}", flush=True)
+    if errors:
+        for e in errors:
+            print(f"[joint_server] units ERROR: {e}", flush=True)
+        print("[joint_server] refusing to start: the joint units do not match the manifest "
+              "(docker/ws/lib/units_manifest.py). Fix the SDK/config, then re-run "
+              "tools/joint_units.py.", flush=True)
+        raise SystemExit(2)
+    calib = getattr(arm, "calibration_fpath", None)
+    calib_sha = None
+    try:
+        import hashlib
+        with open(calib, "rb") as fh:
+            calib_sha = hashlib.sha256(fh.read()).hexdigest()
+    except Exception:  # noqa: BLE001
+        pass
+    units = {j["name"]: um.UNIT_OF.get(j["norm"], "?") for j in manifest["joints"]}
+    print(f"[joint_server] units OK — sdk {manifest['sdk_version']}, degrees={manifest['use_degrees']}, "
+          f"calibration={calib} sha256={str(calib_sha)[:12]}", flush=True)
     # Boot state is ALWAYS torque off: the arm must be free to move by hand until the
     # operator presses the button in the web page. Never inherit the servos' own state.
     try:
@@ -146,6 +186,24 @@ def main() -> None:
                     self._json({"angles": angles, "names": names})
                 except Exception as exc:  # noqa: BLE001
                     self._json({"error": str(exc)}, 500)
+            elif self.path == "/read_raw":
+                # Raw encoder ticks next to the SDK's value: the audit table of phase 1 needs both,
+                # and reading them here avoids a second serial connection (the port is exclusive).
+                try:
+                    ticks = {n: int(bus.read("Present_Position", n, normalize=False)) for n in names}
+                    norm = {n: float(bus.read("Present_Position", n)) for n in names}
+                    self._json({"names": names, "ticks": ticks, "normalized": norm, "unit": units,
+                                "torque": bool(torque_on)})
+                except Exception as exc:  # noqa: BLE001
+                    self._json({"error": str(exc)}, 500)
+            elif self.path == "/manifest":
+                # What this process believes it is running: the ledger records it, and a mismatch
+                # with the deployed image is visible without reading the source.
+                self._json({"arm_id": ARM_ID, "port": SERIAL, "sdk_version": manifest["sdk_version"],
+                            "use_degrees": manifest["use_degrees"], "joints": manifest["joints"],
+                            "unit": units, "calibration": str(calib) if calib else None,
+                            "calibration_sha256": calib_sha,
+                            "limits": {n: cc.LIMITS[n] for n in cc.JOINT_ORDER}})
             elif self.path == "/torque":
                 self._json({"torque": bool(torque_on)})
             elif self.path == "/owner":
