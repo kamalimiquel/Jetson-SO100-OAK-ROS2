@@ -2798,6 +2798,65 @@ they need a survey, a capture, a commission. And row 1's interface package is th
 MCP work — a correlated request needs a message type with a field to put the id in, which is why row 5 is
 half-done rather than done.
 
+### 17.5 Chapter 2, number by number — what each proposal is
+
+The table above says *where* each proposal stands; this says *what it is*, with the file and the evidence, so
+the next audit does not have to read the source to find out.
+
+**1. Closing the back door.** Before, anything inside the container could move an arm through the old topic or
+a plain `curl`. There is now an `autonomy` mode in which that path moves nothing: to write, you must have
+claimed the arm first. Claiming goes to that arm's own server on its loopback port — `POST /claim` on **8002**
+for arm 1 and **8003** for arm 2, with `{"owner": "<who>", "ttl_s": <seconds>}`, and from then on every write
+carries the **`X-Owner`** header. If someone else holds it, the answer is **423**. In practice you do not
+claim it yourself: the supervisor does, at start-up. Verified on the bench — unclaimed, a `/write` gets a 423
+with a sentence, not silence.
+
+**2. Labelling the camera measurements.** A stored calculation of where the camera sits did not say *which*
+camera it was made with, nor on which bracket — a recipe without the oven. A transform must now carry, field
+by field: `parent` and `child` (what frame it hangs from and which one it defines), `translation` in metres,
+`rotation_row0/1/2`, `camera_serial` (the real serial), `camera_model`, `mount_id` (which physical bracket,
+which is the thing that changes when something is moved), `method`, `date`, `solver`, `dataset` and a
+residual — the error, without which it is not evidence. They live in `docs/calibration/`; the one there today
+is `docs/calibration/scene_cam_extrinsic.yaml`, retired with its reason written down, because the 2026-11-09
+capture does not close. `tools/check_transforms.py` checks them: if the serial, the mount or the error is
+missing, it fails and the file is not used. And `handeye_bundle.py` refuses to write one without
+`--camera-serial` and `--mount-id`, stamping `NOT USABLE` on its first line instead.
+
+**3. Recording which version of the software is running.** One file with the exact picture of which Docker
+image each container has — **by digest, not by name** — and which device each one uses. `tools/pin_images.py`
+writes it to `docs/qualification/images.lock`, with a `--check` that detects when something has changed since.
+That is how you know what was running when something worked.
+
+**4. Giving every request an identity card.** The calculation of *where to put the arm* answered on a channel
+where nothing said which question it was answering. That calculation is `ik_node.py` — inverse kinematics with
+damped least squares and the URDF limits — but that is not what the graph shows: it registers as **`arm1_ik`**
+and **`arm2_ik`**, one per arm. Each request now carries a number and the answer brings the same one back: it
+is published on `/armN/ik/solve` and answered on `/armN/ik/result`, paired by that number. Ask three things and
+each answer joins its own question; a stranger's result is ignored, and one with a different number of joints
+is refused rather than padded.
+
+**5. Not moving if the path collides.** Before, only *where the hand ends up* was checked, never what it passes
+through. The path is now sampled in **24 steps** and refused if any point leaves the allowed space. That space
+is declared in `cell_geometry.json`, in the `sweep_volume` field (six numbers in metres), and the gate is
+switched on with `IK_SWEEP=1`. It is **off**, because that space is not surveyed: switched on with an invented
+limit it either refuses everything or blesses the crash. And if someone turns it on without the numbers the
+program **does not start** — checked in the container.
+
+**6. One gatekeeper.** Before, every program wrote to the arm on its own. There is now a node that claims both
+arms for itself, receives requests (*"move to this pose"*), examines them, passes them to the solver, and
+writes only if the solver says yes. It is `cell_supervisor` (executable `supervisor.py`) and it serves
+`/cell/skill`, answering `accepted`, `reason` and a ticket. Inside, it has three roles depending on who it is
+talking to: a **server** to an agent, a **client and subscriber** to the solver, and an **HTTP client** to the
+arms (`/claim`, `/read_raw`, `/write`, `/release`) — because each servo's port is the only boundary a
+topic-level guard cannot reach. It computes no kinematics and drives no motor: it claims, asks, decides and
+writes, and the decision lives in `skill_plan.py`, which imports neither ROS nor sockets. Verified on the
+bench: it reached the operator's torque switch and stopped there, which is where it should stop.
+
+**What it adds up to.** Before, an agent could ask for a movement with nothing checking it, and the outcome
+was *"the arm moved"*. Now there is a single gatekeeper that knows **who** is asking, **with which number**,
+whether the arm is **free**, whether the movement **fits**, and that does **not write** if the solver does not
+agree. What is left on that list is not code: the box, where the mounts really are, and a new camera capture.
+
 ## 18. How we work
 
 Every architecture decision is proposed with 3 alternatives (pros, cons, recommended), chosen by the user, and recorded as an ADR in `docs/adr/`. The full workflow lives in `docs/PROMPT.md`.
