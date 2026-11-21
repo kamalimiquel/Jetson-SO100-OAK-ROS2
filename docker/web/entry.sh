@@ -47,6 +47,8 @@ python3 /srv/web/wrist_focus.py --csv /srv/state/wristcam-focus.csv &
 # board temperatures for the "Xavier NX Temp" tab (:8094). Thirteen sysfs reads a second:
 # it costs nothing, so unlike the focus test it simply always runs.
 python3 /srv/web/xavier_temp.py &
+# The Cell tab: who owns each arm and which scale table is loaded (reads the container loopback).
+python3 /srv/web/cell_status.py --port 8096 >> /tmp/cell_status.log 2>&1 &
 # both wrist cameras composed into one image for RViz (:no port). It is always up because
 # starting and stopping it with RViz raced with SIGTERM and left a dead node behind; instead
 # it composes only when something is subscribed, so a closed RViz costs exactly nothing.
