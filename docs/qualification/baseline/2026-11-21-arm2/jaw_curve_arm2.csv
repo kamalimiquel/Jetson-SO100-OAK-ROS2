@@ -1,0 +1,7 @@
+point,step_pct,sdk_pct,raw_ticks,aperture_mm,direction,instrument
+J0,-,6.15,1299,17.0,opening,caliper between the inner faces at the grasp plane
+J25,+18.85,25.60,1454,31.0,opening,caliper between the inner faces at the grasp plane
+J50,+24.21,49.81,1647,49.0,opening,caliper between the inner faces at the grasp plane
+J50c,-0.00,49.81,1647,49.0,closing,caliper between the inner faces at the grasp plane
+J25c,-24.97,24.84,1448,31.0,closing,caliper between the inner faces at the grasp plane
+J0c,-23.08,1.76,1264,13.0,closing,caliper between the inner faces at the grasp plane

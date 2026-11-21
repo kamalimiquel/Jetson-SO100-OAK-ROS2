@@ -718,6 +718,36 @@ scale, hysteresis = ls(pos + neg), ls(pos) - ls(neg)   # 0.825, 0.027
 Arm 1 measured 0.877 on the same joint, so the two arms differ by 6 % here — the largest disagreement of the
 six joints, and the reason the table is per arm.
 
+#### The jaw — a caliper curve, and not the same jaw as arm 1
+
+| pose | jaw % | tick | aperture | direction |
+|---|---|---|---|---|
+| J0 | 6.15 | 1299 | **17 mm** | opening |
+| J25 | 25.60 | 1454 | **31 mm** | opening |
+| J50 | 49.81 | 1647 | **49 mm** | opening |
+| J50c | 49.81 | 1647 | 49 mm | closing |
+| J25c | 24.84 | 1448 | **31 mm** | closing |
+| J0c | 1.76 | 1264 | **13 mm** | closing |
+
+```
+J(mm) = 0.733 · % + 12.4      over 0-50 %      (residual <= 0.2 mm; segments 0.720 and 0.743)
+```
+
+**Half the slope of arm 1** (1.35 mm/%) with a smaller closed gap (12.5 mm against 16), so the same
+percentage is a different aperture on each arm — 25 % is 31 mm here and 46 mm there. And the hysteresis that
+arm 1 shows (4 mm at 25 %) does not appear: 31 mm both ways. Two jaws, two curves, and no reason to assume
+either from the other.
+
+```python
+op = [(6.15, 17.0), (25.60, 31.0), (49.81, 49.0)]          # least squares, offset free
+k, c = 0.733, 12.4                                           # J = k * pct + c
+```
+
+```json
+"gripper": {"scale": null, "csv": "jaw_curve_arm2.csv",
+            "note": "J(mm) = 0.733*pct + 12.4 over 0-50 %; 12.4 mm at 0 %, no hysteresis at 25 %"}
+```
+
 #### Arm 2, in one table
 
 | joint | scale | how | confidence |
@@ -727,7 +757,7 @@ six joints, and the reason the table is per arm.
 | `shoulder_pan` | **1.050** | printed sheet, 87° sweep, return 1° | ±0.02 |
 | `wrist_flex` | **0.967** | taped inclinometer, 47° sweep | ±0.02 |
 | `wrist_roll` | **0.825** | six points, three each side, read along the axis | ±0.02 (backlash 0.027 between directions) |
-| `gripper` | — | not measured: its servo was unplugged for the roll sweep | — |
+| `gripper` | **0.733 mm/% + 12.4 mm** | caliper at the grasp plane, six poses, both directions | ±0.6 mm, 0–50 % |
 
 Two of these (pan, wrist_flex) are within 1–3 % of arm 1; `elbow_flex` differs by 2.4 % and the roll is the
 one that cannot be called. Which is the point of measuring each arm instead of copying a table.
