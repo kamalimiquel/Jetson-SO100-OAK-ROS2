@@ -64,6 +64,17 @@ def fresh(stamp, now=None, limit=STALE_S):
     return (now - stamp) <= limit
 
 
+def should_report(sig, last_sig, last_print, now, period=2.0):
+    """Print now if the command changed, or if enough time passed to repeat it.
+
+    A `--once` publisher sends a single message: with a periodic-only print the command arrives and goes
+    stale between two looks, and a working twin looks broken.
+    """
+    if sig != last_sig:
+        return True
+    return (now - last_print) >= period
+
+
 CSV_HEADER = "t,arm,joint,commanded_deg,actual_deg,err_deg"
 
 

@@ -228,8 +228,16 @@ def main():
         if log.tell() == 0:
             log.write(tc.CSV_HEADER + "\n")
 
-    def report(now):
-        """One line per arm, only for joints with both a fresh command and a reading."""
+    last_sig = [None, None]
+    last_print = [0.0, 0.0]
+
+    def report(now, force_period=2.0):
+        """One line per arm, only for joints with both a fresh command and a reading.
+
+        A `--once` publisher sends exactly one message, so a 2 s report cadence with a 0.5 s freshness
+        window would almost never see it: the command arrives and expires between two looks. A new command
+        is therefore reported at the next tick, and the periodic line is only for streaming publishers.
+        """
         out = []
         for arm, m in enumerate(mappings):
             if not commanded[arm] or not tc.fresh(cmd_stamp[arm], now):
@@ -239,6 +247,11 @@ def main():
             if not err:
                 continue
             worst = max(err, key=lambda k: abs(err[k]))
+            sig = tuple(round(commanded[arm].get(j, 0.0), 2) for j in tc.JOINT_ORDER)
+            if not tc.should_report(sig, last_sig[arm], last_print[arm], now, force_period):
+                continue                      # same command, not time to repeat it
+            last_sig[arm] = sig
+            last_print[arm] = now
             out.append("%s worst %.3f deg on %s%s"
                        % (["arm1", "arm2"][arm], err[worst], worst,
                           "  (all: %s)" % ", ".join("%s %.1f" % (k, err[k]) for k in tc.JOINT_ORDER if k in err)))
@@ -257,7 +270,7 @@ def main():
             while True:
                 time.sleep(period)
                 n0 += 1
-                if args.commands and time.time() - t_cmd >= 2.0:
+                if args.commands and time.time() - t_cmd >= 0.2:
                     report(time.time()); t_cmd = time.time()
                 if time.time() - t0 >= 5.0:                      # a heartbeat, so silence means dead
                     print("  %.1f Hz drawing, %d of %d joints seen"
@@ -286,7 +299,7 @@ def main():
             mujoco.mj_forward(model, data)
             handle.sync()
             frames += 1
-            if args.commands and time.time() - t_cmd >= 2.0:
+            if args.commands and time.time() - t_cmd >= 0.2:
                 report(time.time()); t_cmd = time.time()
             if time.time() - t_report >= 5.0:                     # if this line stops, the loop is stuck
                 print("  %.0f fps, %d of %d joints seen"
