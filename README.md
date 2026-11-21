@@ -635,6 +635,46 @@ scale = abs(sum(a * b for a, b in zip(x, y)) / sum(a * a for a in x))   # 0.953
                "note": "magnitude; positive elbow lowers the forearm, so the fit is negative"}
 ```
 
+#### `wrist_flex` — **0.967**
+
+| pose | step | wrist SDK | tick | shoulder | elbow | instrument |
+|---|---|---|---|---|---|---|
+| W0 | — | 81.36 | 2892 | −62.73 | 59.16 | 63.8° |
+| W1 | −23.38 | 57.98 | 2626 | −61.58 | 62.95 | 46.1° |
+| W2 | −23.47 | 34.51 | 2359 | −61.14 | 65.76 | 26.7° |
+| W3 | +46.59 | 81.10 | 2889 | −60.53 | 68.84 | 71.8° (return) |
+
+The instrument reads the absolute inclination of the wrist link, so the upstream joints have to come out
+of it. They did not sit still: while the wrist swept 47°, `elbow_flex` drifted **+6.6°** and the shoulder
++1.6°, and the corrections are what turn the raw changes into a scale:
+
+```
+segment W0→W1: (−17.7 − 4.94) / −23.38 = 0.968
+segment W0→W2: (−37.1 − 8.19) / −46.85 = 0.967
+```
+
+```python
+import csv
+rows = list(csv.DictReader(open("docs/qualification/baseline/2026-11-21-arm2/ref_wrist_flex_arm2.csv")))
+w = [float(r["sdk_deg"]) - float(rows[0]["sdk_deg"]) for r in rows[:3]]
+s = [(float(r["shoulder_deg"]) + float(r["elbow_deg"])) -
+     (float(rows[0]["shoulder_deg"]) + float(rows[0]["elbow_deg"])) for r in rows[:3]]
+e = [float(r["external_deg"]) - float(rows[0]["external_deg"]) for r in rows[:3]]
+scale = sum(-(a) * -(b - c) for a, b, c in zip(w, e, s)) / sum(a * a for a in w)   # 0.967
+```
+
+**The return is the weak point, and it is written down rather than smoothed over.** By W3 the upstream
+joints had drifted 11.88°, so a 1:1 coupling predicts 75.3°; the instrument read 71.8°. Either the elbow's
+drift does not couple fully into the wrist link, or the drift is partly in the encoder rather than in the
+arm. The two *segments*, which do not depend on that, agree to 0.001 — so the scale is 0.967 ± 0.02 and the
+coupling question stays open instead of being absorbed into the number.
+
+```json
+"wrist_flex": {"scale": 0.967, "uncertainty": 0.02,
+               "csv": "ref_wrist_flex_arm2.csv",
+               "note": "two segments agree to 0.001; the return is 3.5 deg off a 1:1 upstream-drift correction"}
+```
+
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
 

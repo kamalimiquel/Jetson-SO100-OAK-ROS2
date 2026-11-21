@@ -1,0 +1,6 @@
+point,step_deg,sdk_deg,raw_ticks,external_deg,external_unit,instrument,note
+P0,-,0.00,2005,0.0,deg,"printed 190 mm sheet, pointer on the link",
+P1,+29.01,29.01,2331,31.0,deg,"printed 190 mm sheet, pointer on the link",
+P2,+29.19,58.20,2663,62.0,deg,"printed 190 mm sheet, pointer on the link",
+P3,+29.18,87.38,2995,91.0,deg,"printed 190 mm sheet, pointer on the link",
+P4,-86.85,0.53,2007,1.0,deg,"printed 190 mm sheet, pointer on the link","return: 1 deg vs 0 at P0, tick 2007 vs 2005"

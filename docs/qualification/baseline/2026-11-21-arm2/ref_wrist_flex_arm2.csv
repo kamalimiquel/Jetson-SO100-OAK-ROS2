@@ -1,0 +1,5 @@
+point,step_deg,sdk_deg,raw_ticks,shoulder_deg,elbow_deg,external_deg,note
+W0,-,81.36,2892,-62.73,59.16,63.8,
+W1,-23.38,57.98,2626,-61.58,62.95,46.1,
+W2,-23.47,34.51,2359,-61.14,65.76,26.7,
+W3,+46.59,81.10,2889,-60.53,68.84,71.8,upstream drift 11.88 deg by the return
