@@ -11,13 +11,15 @@
   "session": "2026-11-19",
   "arm": "so100_cell",
   "evidence": "docs/qualification/baseline/2026-11-19-6d63efc/",
-  "why": "Each servo's degrees are the encoder times a constant; on this bench the constant is off by a different amount on every joint, and the largest error is 12 %. The numbers come from an instrument outside the robot, not from the SDK.",
+  "why": "Each servo's degrees are the encoder times a constant; on this bench the constant is off by a different amount on every joint, and the largest error is 12 %. The numbers come from an instrument outside the robot, not from the SDK. A joint also has a deadband: below it the servo does not move and says nothing, which is why one of them is recorded here next to the scale.",
   "joints": {
     "shoulder_pan": {
       "scale": 1.059,
       "uncertainty": 0.02,
       "csv": "ref_shoulder_pan_arm1.csv",
-      "note": "5.9 % fast; useful travel ends at 116 deg, not the +-170 clamp"
+      "note": "5.9 % fast; useful travel ends at 116 deg, not the +-170 clamp",
+      "deadband_deg": 1.0,
+      "deadband_basis": "measured 2026-11-21: two 0.5 deg steps from the same pose moved nothing, 1.0 deg moved 1.231. The threshold is therefore between 0.5 and 1.0; 1.0 is used as the number a command has to reach. Tick resolution is 0.088 deg, so this is a deadband, not quantisation. Evidence: docs/qualification/baseline/2026-11-21-deadband/"
     },
     "shoulder_lift": {
       "scale": 0.99,

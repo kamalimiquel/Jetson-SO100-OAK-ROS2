@@ -109,6 +109,30 @@ def check_arm(table, arm_id):
                          "sweeps on this arm, or run with JOINT_SCALE_APPLY=0" % (owner, arm_id))
 
 
+DEADBAND_MAX_DEG = 5.0
+
+
+def deadband(table, joint):
+    """The step below which this joint does not move, in degrees, or None if it was never measured.
+
+    Not a limit and not a refusal: the servo ignores a small step silently, so a planner that cannot see
+    this will believe it commanded a move that never happened. None means "not measured", which is not the
+    same as zero.
+    """
+    if joint not in JOINTS:
+        raise ScaleError("unknown joint %r" % (joint,))
+    entry = table["joints"][joint]
+    value = entry.get("deadband_deg")
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ScaleError("%s: deadband_deg must be a number, got %r" % (joint, value))
+    if not math.isfinite(float(value)) or not (0.0 < float(value) <= DEADBAND_MAX_DEG):
+        raise ScaleError("%s: deadband_deg %r is not a plausible deadband (0 < d <= %g)"
+                         % (joint, value, DEADBAND_MAX_DEG))
+    return float(value)
+
+
 def to_sdk(table, joint, physical):
     """A number the caller means physically -> the number the SDK wants. Gripper: unchanged."""
     if joint not in JOINTS:

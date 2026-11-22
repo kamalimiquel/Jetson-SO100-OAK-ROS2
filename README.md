@@ -847,6 +847,38 @@ What this table is for:
   joint, and a loaded point per joint, before any of these numbers is quoted as a benchmark rather than a
   calibration of this bench on this day.
 
+#### 3.2b The other half of the same idea: how far you must ask before it moves
+
+The scale says *how much* a commanded degree turns. The deadband says *how far you must ask at all*: below it
+the servo does not move and reports no error, so a planner believes it commanded a motion that never happened.
+
+Measured on arm 1, `shoulder_pan`, 2026-11-21, one publication per step with torque on and 3 s to settle:
+
+| step | commanded | read | achieved | error |
+|---|---|---|---|---|
+| 0.5° | 17.335 | 16.835 | **0.000** | 0.500 |
+| 0.5° again | 17.335 | 16.835 | **0.000** | 0.500 |
+| 1.0° | 17.835 | 18.066 | 1.231 | −0.231 |
+| 2.0° | 20.066 | 19.912 | 1.846 | 0.154 |
+| 5.0° | 24.912 | 24.923 | 5.011 | −0.011 |
+
+So the threshold lies **between 0.5° and 1.0°** on this joint, and the table records `deadband_deg: 1.0` with
+that basis written beside it: the number a command has to reach, not a claim that the servo switches exactly
+there. The encoder is 4096 counts per turn (0.088°/count), so a 0.5° step is nearly six counts and is still
+ignored — this is a **deadband, not quantisation**.
+
+It lives in `docker/ws/lib/joint_scale.json` next to each joint's scale, `joint_scale.deadband(table, joint)`
+returns it (`None` where it was never measured, which is not the same as zero), and `tools/test_deadband.py`
+checks both the number and the refusal of implausible ones. Deliberately **not** a hard limit: refusing a
+0.5° command would be wrong in the other direction, because whether it moves depends on pose and on the
+hysteresis before it. Warn, do not forbid.
+
+What this explains: a 1° step that "did not move" earlier in the same session was not a protocol error — the
+write was accepted and the servo ignored it, at the threshold, from that pose.
+
+What it does not say: whether the other five joints share this threshold, whether it grows under load, and
+whether it is the servo's deadband or stiction in the printed joint. None of those are measured.
+
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
 
@@ -2775,6 +2807,9 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
 - [x] **IK node (ADR-0009)** — `so100-control` runs `ik`: a pose on `/ik/target` (in `base`) becomes joint angles on `/ik/solution`, and on `/arm1/joint_targets` only when `IK_APPLY=1`. Damped least squares with the geometric Jacobian and the URDF limits, ~30 ms per solve. Verified 2026-11-11: round trip over 200 random poses — median **0.00 mm**, p95 **0.46 mm**, worst 0.49 mm; a 2 m target is correctly refused; live test returns the arm's own pose in 1 iteration. The jaw is held, never solved
 
 ### 17.3 Next
+
+- **Deadband on the other five joints** (arm 1 has one measurement, on `shoulder_pan`, between 0.5° and 1.0°),
+  and whether it grows under load — §3.2b.
 
 - [ ] **Survey the sweep volume** — `IK_SWEEP` cannot be switched on until `cell_geometry.json` carries a `sweep_volume` box (metres, arm 1's base frame). Measure it with the two arms parked and the table open, then turn the gate on and watch it refuse one pose on purpose
 - [ ] **Repeatability — three passes per joint** — every scale in [§3.1](#31-how-a-joint-is-calibrated-and-what-proves-it) and [§3.2](#32-arm-2--the-same-procedure-its-own-numbers) is one series per joint. Three passes, three fits, and the spread between them is the error bar this bench actually has; today the quoted ±0.02 is the *fitting* error of one series, not repeatability
