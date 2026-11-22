@@ -1,0 +1,17 @@
+Deadband of shoulder_pan, arm 2 (so100_cell_b), 2026-11-21.
+
+Method: the same one used on arm 1, unchanged: torque on, one step per publication to /arm2/joint_targets
+(six values, jaw held), settle 3 s, read /read on the arm's own port. Each target is the last reading plus
+the step, so the steps are consecutive and the arm walks forward. Torque off at the end.
+
+Result: 0.5 deg moved nothing, twice; 1.0 deg moved nothing; 2.0 deg moved 1.495; 5.0 deg moved 4.308.
+The threshold therefore lies between 1.0 and 2.0 deg, double arm 1's, and every step overshoots on the
+short side — 0.505 and 0.692 deg of error where arm 1 hit 5.011 of 5.
+
+What this rules out: that the deadband is a property of the model. Same model, same firmware, same
+procedure, twice the threshold; and the two arms do not share their scales or their jaw curves either.
+
+What it does not say: whether the other five joints of this arm behave the same, whether the threshold or
+the undershoot grows under load, and whether the extra friction is the servo or the printed joint. A 1 deg
+step is ~11 counts of the 4096-per-turn encoder, so the servo is being asked clearly and not moving: it is a
+deadband, not quantisation, on this arm too.

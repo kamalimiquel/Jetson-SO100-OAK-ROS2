@@ -847,6 +847,10 @@ What this table is for:
   joint, and a loaded point per joint, before any of these numbers is quoted as a benchmark rather than a
   calibration of this bench on this day.
 
+**How far you must ask before it moves** is measured on both arms as well, and the two differ by a factor of
+two — arm 1 between 0.5° and 1.0°, arm 2 between 1.0° and 2.0°. It is in §3.2b, with the step tables, because
+it belongs with the scales and not in a troubleshooting note.
+
 #### 3.2b The other half of the same idea: how far you must ask before it moves
 
 The scale says *how much* a commanded degree turns. The deadband says *how far you must ask at all*: below it
