@@ -1598,6 +1598,33 @@ Four things about the generator, each of which breaks it if ignored:
   offscreen render needs `MUJOCO_GL=egl` plus a widened buffer
   (`model.vis.global_.offwidth/offheight`, the default EGL framebuffer is 640 wide).
 
+#### 10.2b The twin commanded, not just mirrored
+
+A mirror can show a lagging arm but never says how far behind it is, nor separates "the servo cannot reach
+that" from "the command never arrived". `--commands` subscribes `/armN/joint_targets` as well, and
+`--log-commands twin.csv` writes what was asked against what happened:
+
+```
+t,arm,joint,commanded_deg,actual_deg,err_deg
+1795305722.468,arm1,shoulder_pan,26.835,16.835,10.000
+1795305722.468,arm1,elbow_flex,96.439,97.055,-0.616
+1795305722.468,arm1,wrist_flex,81.582,81.582,-0.000
+```
+
+Those rows are one publication of a 10° pan step with torque off: the arm could not move (the write answers
+409) and the twin says exactly that, **10.000° on `shoulder_pan`**, while the elbow shows −0.616° of its own
+accord — the sag it has under its own weight, measured rather than assumed.
+
+The arithmetic lives in `windows/twin_commands.py`, with no model and no ROS, and `tools/test_twin_commands.py`
+checks it (34 checks): the array carries **no names** so position is the contract and the order is
+`JOINT_ORDER`; five values hold the jaw and six include it; `NaN`, `inf` and anything past 180° are refused
+**by index**; and a command older than `STALE_S` (0.5 s) is history, not intent — comparing a stale target
+with a moving arm invents a fault the operator then chases.
+
+One timing trap, found on the bench: a `--once` publisher sends a single message, so a 2 s report cadence
+against a 0.5 s freshness window reports nothing at all and a working twin looks broken. The report now runs
+every 0.2 s and prints immediately when the command changes (`should_report()`).
+
 ### 10.3 F710 teleop — the pad (ADR-0017, amended by ADR-0020)
 
 **Recommended path — Python over rosbridge (no ROS2 on Windows).** Two pip packages, same WebSocket the MuJoCo twin already uses:
