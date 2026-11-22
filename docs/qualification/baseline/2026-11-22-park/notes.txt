@@ -28,3 +28,16 @@ other joint lands within 0.8 deg. Two candidate explanations, neither proved:
 Until this is explained, the park skill must not be trusted for autonomy: park.check_arm compares /read with
 PARKED, so a commanded park currently reads as "not parked" — which is the guard working, not a bug in the guard.
 Next measurement: write a single +1 deg step to wrist_roll and read it back, as the deadband test did for the pan.
+
+CORRECTION, same day. The two rows previously marked UNEXPLAINED (wrist_roll 14 and 18 deg off) were a fault
+in my probe script, not in the arm or in the skill: the script converted the pose with joint_scale before
+writing, so wrist_roll was sent to -123 instead of -108. Driving the pose through skill_plan and writing what it
+returns puts every joint within 0.47 deg, wrist_roll included (arm 1: -108.00 -> -108.09).
+
+Check that ruled the conversion out: a 10 deg step on wrist_roll comes back as 0.976 of the step on both arms
+(0.703 and 0.791 for a 1 deg step, which is the deadband, not a scale). A units round trip would have returned
+0.877 and 0.825 — the two roll scales. It did not.
+
+So: the park skill is correct, the parked pose is reachable under torque to within half a degree, and the
+spread of two commanded parks is 0.00 deg. What is still unmeasured is the spread of folding BY HAND, which the
+skill makes unnecessary.
