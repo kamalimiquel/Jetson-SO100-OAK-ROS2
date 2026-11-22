@@ -2527,6 +2527,23 @@ authentication**, so it belongs on a trusted network.
 | `cancel_goal` | drops that mission's pending work | effect |
 | `stop` | the latch; nothing is written until `/resume` | effect |
 
+#### Where a snapshot goes
+
+`camera_snapshot` answers with a path like `/state/snapshots/arm1_wrist-6.jpg`, and that path is **inside the
+`so100-cams` container**, not on the host: `owner_rpc.py` writes to `SNAPSHOT_DIR` (default
+`/state/snapshots`) and creates it on demand, and the compose file mounts nothing there. Three consequences
+worth knowing before treating a picture as evidence:
+
+- **It is not visible from the Xavier** — there is no `~/so100/state/snapshots`.
+- **It disappears** when the container is recreated (`docker compose up -d --force-recreate cams`) or pruned.
+- **The name is reusable**: `arm1_wrist-6` is a circular index, so a later capture overwrites an earlier one
+  under the same id.
+
+So the durable part of a snapshot response is the **`sha256`**, the `stamp` and the `observation_id` — not the
+file. To make the file durable: mount `./state:/state` on the `cams` service, keep the last N captures per camera
+with distinct names instead of a circular index, and record the hash in the journal next to the skill call that
+used it. Until then, copy it out (`docker cp`) if a particular frame matters.
+
 A Bruno collection with one request per tool, and the five supervisor routes, lives in `mcp/bruno/` — open the
 folder, pick the `local` environment, and each `.bru` is one call with the body the endpoint expects.
 
