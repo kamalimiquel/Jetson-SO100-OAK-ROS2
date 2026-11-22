@@ -89,5 +89,28 @@ check("a pose without x/y/z is refused",
 check("an unowned arm cannot be posed",
       sp.plan("move_pose", "m1", POSE % A2, CTXP)["accepted"], False)
 
+# ---- a step below the deadband is accepted, but said out loud
+CTX2 = dict(CTX, owned=list(CTX["owned"]) + [A2],       # arm 2 is owned and reporting only here
+            present=dict(CTX["present"], **{A2: dict(CTX["present"][A1])}))
+
+
+def warn_of(arm, pan, ctx=None):
+    body = '{"arm": "%s", "angles": [%s, 0, 0, 0, 0, 0]}' % (arm, pan)
+    r = sp.plan("move_joint", "m1", body, ctx or CTX)
+    return r["accepted"], (r.get("action") or {}).get("warnings", [])
+
+acc, w = warn_of(A1, 0.5)
+check("a 0.5 deg step on arm 1 is still accepted", acc, True)
+check("but it warns: below arm 1's deadband", bool(w) and "deadband (1.0 deg)" in w[0], True)
+acc, w = warn_of(A1, 5.0)
+check("a 5 deg step on arm 1 does not warn", w, [])
+acc, w = warn_of(A2, 1.5, CTX2)
+check("a 1.5 deg step on arm 2 warns: its deadband is 2.0", bool(w) and "deadband (2.0 deg)" in w[0], True)
+acc, w = warn_of(A2, 5.0, CTX2)
+check("the same 5 deg step on arm 2 does not", w, [])
+check("the warning names the joint", "shoulder_pan" in warn_of(A1, 0.5)[1][0], True)
+check("a refusal still refuses (no warning path)", sp.plan(
+    "move_joint", "m1", '{"arm": "%s", "angles": [999, 0, 0, 0, 0, 0]}' % A1, CTX)["accepted"], False)
+
 print("\n%s" % ("all checks pass" if not fails else "%d check(s) FAILED" % len(fails)))
 sys.exit(1 if fails else 0)

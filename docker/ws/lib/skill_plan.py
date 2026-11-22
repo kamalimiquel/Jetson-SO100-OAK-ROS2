@@ -109,9 +109,32 @@ def plan(skill, mission_id, args, ctx):
             if name not in ctx["present"].get(arm, {}):
                 return _refuse("%s: the arm is not reporting this joint, so its present angle is unknown"
                                % name)
-        return {"accepted": True, "reason": "ok", "action": {
-            "kind": "write", "arm": arm, "driven": driven, "held": sorted(held),
-            "notes": notes, "units_in": units}}
+        # A step smaller than this joint's measured deadband is accepted, but said out loud: the servo
+        # ignores it silently, so the mission would record "commanded" for a motion that never happened.
+        # Warning, never a refusal — whether it moves depends on the pose and on the hysteresis before it.
+        warnings = []
+        if units == "physical" and table:
+            by_name = dict(zip(cc.JOINT_ORDER, angles))
+            for name in driven:
+                try:
+                    band = js.deadband(table, name)
+                except js.ScaleError:
+                    band = None
+                if band is None:
+                    continue
+                present = ctx["present"][arm].get(name)
+                try:
+                    step = abs(float(by_name[name]) - float(present))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if step < band:
+                    warnings.append(
+                        "%s: a step of %.2f deg is below this arm's measured deadband (%.1f deg) — the servo "
+                        "may not move and will not report an error" % (name, step, band))
+        return {"accepted": True,
+                "reason": "ok" if not warnings else "ok, with warnings", "action": {
+                    "kind": "write", "arm": arm, "driven": driven, "held": sorted(held),
+                    "notes": notes + warnings, "warnings": warnings, "units_in": units}}
 
     # jaw skills: an aperture in millimetres, resolved against THIS arm's curve
     limits = jaw_limits(ctx["jaw"].get(arm))
