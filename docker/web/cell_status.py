@@ -80,12 +80,20 @@ PAGE = """<!doctype html><meta charset="utf-8">
  .no { color:#ff7b72; } .on { color:#7ee787; } .off { color:#98a2b3; }
  .note { margin-top:12px; color:#98a2b3; font-size:12.5px; }
  code { color:#d2a8ff; }
+ .sup { margin-top:14px; border-top:1px solid #24272e; padding-top:10px; }
+ .sup h2 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#98a2b3; margin:0 0 6px; font-weight:600; }
+ .sup dl { display:grid; grid-template-columns:max-content 1fr; gap:3px 14px; margin:0; }
+ .sup dt { color:#98a2b3; }
+ .sup dd { margin:0; font-variant-numeric:tabular-nums; }
 </style>
 <h1>Cell — arms, ownership and scale</h1>
 <table id="t"><thead><tr>
  <th>arm</th><th>port</th><th>state</th><th>lease</th><th>torque</th><th>scale</th><th>session</th>
 </tr></thead><tbody></tbody></table>
-<p class="note" id="sup"></p>
+<div class="sup">
+ <h2>Supervisor</h2>
+ <dl id="supdl"></dl>
+</div>
 <script>
 const fmt = (d) => {
   const rows = d.arms.map((a) => {
@@ -98,11 +106,27 @@ const fmt = (d) => {
   }).join("");
   document.querySelector("#t tbody").innerHTML = rows;
   const sup = d.supervisor;
-  document.querySelector("#sup").innerHTML = sup.listening
-    ? `supervisor: <span class="on">up</span> — holds ${(sup.detail.owned||[]).join(", ") || "nothing"}`
-      + ` · mission ${sup.detail.mission || "—"} · ${sup.detail.served} skills · ${Math.round(sup.detail.uptime_s)}s up`
-      + (sup.detail.last && sup.detail.last.skill ? ` · last ${sup.detail.last.skill} (${sup.detail.last.mission || "no mission"})` : "")
-    : `supervisor: <span class="off">not running</span> — normal unless a mission is up`;
+  const dl = document.querySelector("#supdl");
+  if (!sup.listening) {
+    dl.innerHTML = `<dt>state</dt><dd><span class="off">not running</span> — normal unless a mission is up</dd>`
+      + (sup.error ? `<dt>why</dt><dd class="off">${sup.error}</dd>` : "");
+  } else {
+    const x = sup.detail;
+    const last = x.last && x.last.skill
+      ? `${x.last.skill}${x.last.mission ? " · " + x.last.mission : ""}`
+        + (x.last.at ? ` <span class="off">(${Math.round(Date.now()/1000 - x.last.at)}s ago)</span>` : "")
+      : "—";
+    dl.innerHTML = [
+      ["state", `<span class="on">up</span>`],
+      ["node", `<code>${x.node}</code> (${x.node_name})`],
+      ["holds", (x.owned || []).join(", ") || "<span class='off'>nothing</span>"],
+      ["lease ttl", `${x.ttl_s} s per arm`],
+      ["mission", x.mission || "—"],
+      ["skills served", x.served],
+      ["last skill", last],
+      ["uptime", `${Math.round(x.uptime_s)} s`],
+    ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  }
 };
 const tick = () => fetch("/status", {cache:"no-store"}).then(r => r.json()).then(fmt).catch(() => {});
 tick(); setInterval(tick, 2000);
