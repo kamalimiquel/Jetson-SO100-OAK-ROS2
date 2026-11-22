@@ -56,7 +56,7 @@ SELF = {"tools/check_namespaces.py", "tools/test_compat_bridge.py",
         # fake topics and fake HTTP answers on purpose: no cell publisher lives here
         "tools/test_arbiter.py", "tools/test_joint_merge.py",
         "tools/test_command_contract.py", "tools/test_episode_recorder.py",
-        "tools/test_joint_server.py",
+        "tools/test_joint_server.py", "tools/test_mcp_server.py", "tools/test_journal.py",
         # the fake rosbridge matches topic SUFFIXES ("/joint_states") for any namespace by design,
         # so it must contain those strings while never being a cell publisher itself
         "tools/fake_rosbridge.py"}

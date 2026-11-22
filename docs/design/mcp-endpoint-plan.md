@@ -20,7 +20,7 @@ ownership model is gone.
 | 1 | Streamable HTTP transport, two profiles (`robot`, `sim`) | `sim` with no simulator refuses to start instead of falling back to the physical cell |
 | 2 | `move_joint_bounded`, `set_gripper_aperture` (over `/cell/skill`) | four negative tests before the positive one: foreign lease, stale epoch, expired deadline, wrong start pose |
 | 3 | `solve_ik` (report-only), `detect_objects`, `camera_snapshot` via owner RPC — **done 2026-11-22** | a snapshot names its camera, its stamp and its hash; an unknown camera is refused with the list |
-| 4 | `get_goal`, `cancel_goal`, `stop`, journal | killing the endpoint mid-mission leaves the arm stopped and the journal honest; a retry does not move twice |
+| 4 | `get_goal`, `cancel_goal`, `stop`, journal — **done 2026-11-22** | killing the endpoint mid-mission leaves the arm stopped and the journal honest; a retry does not move twice |
 | 5 | **physics in the loop**, then the whole thing against it | a mission that has not passed with contact and gravity never runs on hardware |
 
 ## What each tool may do
@@ -103,6 +103,31 @@ contract is a second integration, and the thing we would be validating would no 
   snapshot came back with its stamp, age 0.03 s and sha256; `camera_snapshot("nope")` was refused with
   `["arm1_wrist","arm2_wrist","scene"]`; `solve_ik` returned the solver's own answer
   (`ok=false, pos_err=…, iters=140`) for poses the arm could not reach, which is the honest report.
-- **Not shown yet:** an `ok=true` solve. Every pose tried was unreachable with an identity
-  orientation on the current model; a pose derived from the arm's own FK would close that, and it is a
-  test fixture, not a code change.
+- **The positive case, closed:** `tools/ik_pose_fixture.py` turns a joint vector into the pose the
+  tool actually reaches (FK + quaternion). Fed back, `solve_ik` answered `ok=true, pos_err=0.0 mm,
+  ori_err=0.0 deg, iters=7` — the report-only path is proven in both directions.
+
+## Phase 4, as built
+
+- **Journal** (`docker/ws/lib/journal.py`): append-only JSONL at `/episodes/journal.jsonl` (mounted
+  from the host, so it outlives the container), one line per `/skill` call with mission, skill,
+  ticket, verdict, reason, args and epoch. `read`, `last_for` and `find_accepted` are pure functions.
+- **Idempotence** is scoped to the skills that write (`move_joint`, `move_pose`, `hold`, `open_jaw`,
+  `close_jaw`). A retried `mission_id` that already wrote is answered with its original ticket and
+  the note "nothing was written twice"; a report-only `solve_ik` is deliberately *not* in that set,
+  because a report changes nothing and may legitimately be repeated.
+- **Stop is local.** `POST /stop` latches and drops anything pending; the latch is checked twice —
+  when the skill arrives and again immediately before `/write` — so a request that was already on its
+  way cannot slip through. `/resume` is an operator action (POST), not an agent tool: an agent that
+  stopped a cell should not be the one to un-stop it. `/cancel` drops the pending tickets of one
+  mission and refuses it from then on; `/goal` and `/journal` read the file.
+- **Tools**: `get_goal`, `cancel_goal`, `stop` (ten in total now), each a direct HTTP call to the
+  supervisor — `stop` never queues behind the agent, it is one POST with a 3 s timeout.
+- **Verified on the Xavier** (2026-11-22): `/stop` → `{"stopped": true}`, the next `move_joint`
+  refused with "stop is engaged", `/resume` → `{"stopped": false}` and the next one back to the
+  ordinary 409 torque-off; a retry of a mission already accepted returned `seed-2` with "nothing
+  written twice"; `get_goal` returned that entry, an unknown mission `null`; all three tools through
+  `/mcp`.
+- **Not exercised with torque on:** no real write was accepted during this pass (the arms were left
+  with torque off), so idempotence was proven against a seeded journal entry rather than against a
+  motion that actually happened. The code path is the same; the honest label is "seeded".

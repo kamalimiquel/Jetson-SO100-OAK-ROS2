@@ -24,6 +24,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import urllib.parse
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 TOOLS = {
@@ -61,11 +63,24 @@ TOOLS = {
                         "carries its camera, stamp, sha256 and observation id."),
         "inputSchema": {"type": "object", "required": ["camera"], "properties": {
             "camera": {"type": "string"}}, "additionalProperties": False}},
+    "get_goal": {
+        "description": "The last journal entry for a mission: what was asked, what was decided, its ticket.",
+        "inputSchema": {"type": "object", "required": ["mission_id"], "properties": {
+            "mission_id": {"type": "string"}}, "additionalProperties": False}},
+    "cancel_goal": {
+        "description": "Cancel a mission: drop what is still pending for it and refuse it from now on.",
+        "inputSchema": {"type": "object", "required": ["mission_id"], "properties": {
+            "mission_id": {"type": "string"}}, "additionalProperties": False}},
+    "stop": {
+        "description": ("Local stop: latch the cell so nothing is written until an operator resumes it. "
+                        "It is never queued behind the agent."),
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
 }
 
 MOVING = ("move_joint_bounded", "set_gripper_aperture")
 REPORTING = ("solve_ik",)                       # goes to the supervisor, never writes
 OWNER = ("detect_objects", "camera_snapshot")   # owner RPC; images never enter this process
+GUIDANCE = ("get_goal", "cancel_goal", "stop")  # journal + the local stop path (Phase 4)
 
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND = -32700, -32600, -32601
 INVALID_PARAMS, INTERNAL_ERROR = -32602, -32603
@@ -117,6 +132,26 @@ class Endpoint:
                 if key not in TOOLS[name]["inputSchema"]["properties"]:
                     raise ValueError("%s does not take %r" % (name, key))
             answer = self.provider.owner_rpc(name, arguments)
+            return {"content": [{"type": "text", "text": json.dumps(answer, indent=2)}],
+                    "isError": bool(answer.get("error"))}
+        if name in GUIDANCE:
+            arguments = dict(arguments or {})
+            if name == "stop":
+                if arguments:
+                    raise ValueError("stop takes no arguments")
+                answer = self.provider.supervisor_http("/stop", {})
+            else:
+                extra = [k for k in arguments if k != "mission_id"]
+                if extra:
+                    raise ValueError("%s does not take %r" % (name, extra[0]))
+                mid = arguments.get("mission_id")
+                if not mid:
+                    raise ValueError("%s needs mission_id" % name)
+                if name == "get_goal":
+                    answer = self.provider.supervisor_http(
+                        "/goal?mission_id=" + urllib.parse.quote(str(mid)), None)
+                else:
+                    answer = self.provider.supervisor_http("/cancel", {"mission_id": mid})
             return {"content": [{"type": "text", "text": json.dumps(answer, indent=2)}],
                     "isError": bool(answer.get("error"))}
         if arguments not in (None, {}):
@@ -230,6 +265,25 @@ class PortProvider:
                 return json.loads(r.read().decode())
         except Exception as exc:                                      # noqa: BLE001
             return {"accepted": False, "reason": "supervisor unreachable: %s" % exc, "ticket": ""}
+
+    def supervisor_http(self, path, body=None):
+        """Talk to the supervisor's HTTP surface: /goal, /cancel, /stop. No ROS here either."""
+        import urllib.error
+        data = None if body is None else json.dumps(body).encode()
+        req = urllib.request.Request("http://127.0.0.1:8097" + path, data=data,
+                                     method="POST" if data is not None else "GET")
+        if data is not None:
+            req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=3) as r:
+                return json.loads(r.read().decode())
+        except urllib.error.HTTPError as exc:
+            try:
+                return json.loads(exc.read().decode())
+            except ValueError:
+                return {"error": "supervisor answered HTTP %d" % exc.code}
+        except Exception as exc:                                     # noqa: BLE001
+            return {"error": "supervisor unreachable: %s" % exc}
 
     def owner_rpc(self, tool, arguments, url="http://127.0.0.1:8098"):
         """Ask the owner — perception/cams on the robot. Images never enter this process."""

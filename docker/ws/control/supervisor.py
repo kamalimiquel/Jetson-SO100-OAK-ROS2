@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 import command_contract as cc  # noqa: E402
 import cell_epoch              # noqa: E402
 import joint_scale as js      # noqa: E402
+import journal as jr          # noqa: E402
 import skill_plan as sp       # noqa: E402
 
 import rclpy                  # noqa: E402
@@ -84,6 +85,10 @@ class Supervisor(Node):
                           for ns in NS.values()}
         self.pending = {}
         self.report = {}          # solve_ik report-only: ticket -> {event, result}; never written
+        # Phase 4: the local stop path and the mission bookkeeping that makes a retry idempotent.
+        self.stopped = threading.Event()   # when set, nothing is written until /resume
+        self.cancelled = set()             # mission ids that were cancelled
+        self.ticket_mission = {}           # ticket -> mission, so cancel drops the right pending
         for ns in NS.values():
             self.create_subscription(SolveResult, "/%s/ik/result" % ns,
                                      lambda m, n=ns: self.on_result(n, m), 10)
@@ -114,29 +119,39 @@ class Supervisor(Node):
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
-                body = json.dumps({
+                path, _, query = self.path.partition("?")
+                mission = ""
+                for part in query.split("&"):
+                    if part.startswith("mission_id="):
+                        mission = part.split("=", 1)[1]
+                if path.rstrip("/") == "/journal":
+                    return self._send(200, {"entries": node.journal_rows(mission)})
+                if path.rstrip("/") == "/goal":
+                    return self._send(200, {"mission_id": mission, "goal": node.goal(mission)})
+                return self._send(200, {
                     "node": "cell_supervisor", "owner": OWNER, "ttl_s": TTL,
                     "owned": list(node.owned), "served": node.served,
                     "mission": node.mission, "last": node.last,
-                    "uptime_s": round(time.time() - node.t0, 1),
+                    "stopped": node.stopped.is_set(), "uptime_s": round(time.time() - node.t0, 1),
                     "node_name": node.get_name(),
-                }).encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(body)
+                })
 
             def do_POST(self):
-                if self.path.rstrip("/") != "/skill":
-                    return self._send(404, {"error": "not found — POST /skill"})
+                path = self.path.rstrip("/")
+                if path not in ("/skill", "/stop", "/resume", "/cancel"):
+                    return self._send(404, {"error": "POST /skill, /stop, /resume or /cancel"})
                 n = int(self.headers.get("Content-Length") or 0)
                 try:
                     body = json.loads(self.rfile.read(n).decode() or "{}")
                 except ValueError:
-                    return self._send(200, {"accepted": False, "error": "body is not JSON"})
+                    return self._send(400, {"error": "body is not JSON"})
+                # The stop path is here, not behind the queue: one latch, no skill asked first.
+                if path == "/stop":
+                    return self._send(200, node.stop("http"))
+                if path == "/resume":
+                    return self._send(200, node.resume())
+                if path == "/cancel":
+                    return self._send(200, node.cancel(str(body.get("mission_id") or "")))
                 req = SkillRequest.Request()
                 req.skill = str(body.get("skill") or "")
                 req.mission_id = str(body.get("mission_id") or "")
@@ -149,6 +164,7 @@ class Supervisor(Node):
                     # Errors are data: a handler that dies silently looks like a network fault.
                     return self._send(200, {"accepted": False, "ticket": "",
                                             "reason": "%s: %s" % (type(exc).__name__, exc)})
+                node.journal_skill(req, resp)
                 return self._send(200, {"accepted": bool(resp.accepted), "reason": resp.reason,
                                         "ticket": resp.ticket})
 
@@ -168,6 +184,63 @@ class Supervisor(Node):
             ThreadingHTTPServer(("0.0.0.0", STATUS_PORT), Handler).serve_forever()
         except OSError as exc:
             self.get_logger().warn("supervisor: status port %d unavailable: %s" % (STATUS_PORT, exc))
+
+    # -- the journal and the local stop path (Phase 4) ---------------------------------------
+    def journal_skill(self, request, response):
+        """One line per /skill call: what was asked, what was decided, which ticket answered."""
+        try:
+            jr.append({"t": round(time.time(), 3), "mission_id": request.mission_id,
+                       "skill": request.skill, "ticket": response.ticket,
+                       "accepted": bool(response.accepted), "reason": str(response.reason)[:400],
+                       "args": str(request.args_json)[:400], "epoch": self.epoch})
+        except Exception as exc:                                     # noqa: BLE001
+            self.get_logger().warn("journal: %s" % exc)
+
+    def journal_rows(self, mission_id=""):
+        return jr.read(mission_id=mission_id or None, limit=100)
+
+    def goal(self, mission_id):
+        return jr.last_for(mission_id) if mission_id else None
+
+    def stop(self, why="mcp"):
+        """Local stop: latch, drop what is pending, and never queue behind the agent."""
+        self.stopped.set()
+        dropped = len(self.pending) + len(self.report)
+        self.pending.clear()
+        self.report.clear()
+        self.get_logger().warn("stop engaged (%s): %d pending dropped; no write until /resume"
+                               % (why, dropped))
+        self._event("stop", "", "stop engaged; %d pending dropped" % dropped)
+        return {"stopped": True, "dropped": dropped}
+
+    def resume(self):
+        self.stopped.clear()
+        self._event("resume", "", "stop cleared")
+        return {"stopped": False}
+
+    def cancel(self, mission_id):
+        if not mission_id:
+            return {"error": "cancel needs a mission_id"}
+        self.cancelled.add(mission_id)
+        dropped = 0
+        for ticket in list(self.pending):
+            if self.ticket_mission.get(ticket) == mission_id:
+                self.pending.pop(ticket, None)
+                dropped += 1
+        for ticket in list(self.report):
+            if self.ticket_mission.get(ticket) == mission_id:
+                self.report.pop(ticket, None)
+                dropped += 1
+        self._event("cancel", mission_id, "cancelled; %d pending dropped" % dropped)
+        return {"cancelled": mission_id, "dropped": dropped}
+
+    def _event(self, skill, mission_id, reason):
+        try:
+            jr.append({"t": round(time.time(), 3), "mission_id": mission_id, "skill": skill,
+                       "ticket": "", "accepted": True, "reason": reason, "args": "",
+                       "epoch": self.epoch})
+        except Exception as exc:                                     # noqa: BLE001
+            self.get_logger().warn("journal: %s" % exc)
 
     def _renew_forever(self):
         while True:
@@ -261,9 +334,28 @@ class Supervisor(Node):
             return response
         action = verdict["action"]
         arm, port = action["arm"], PORTS[action["arm"]]
+        # Phase 4: the stop is local and it is checked here, before anything is dispatched. Then a
+        # cancelled mission, then idempotence: a retry of a mission that already wrote gets its
+        # original ticket back instead of writing twice.
+        if self.stopped.is_set():
+            response.accepted, response.ticket = False, ""
+            response.reason = "stop is engaged — nothing is written until /resume"
+            return response
+        if request.mission_id in self.cancelled:
+            response.accepted, response.ticket = False, ""
+            response.reason = "mission %r was cancelled" % request.mission_id
+            return response
+        if action["kind"] in ("write", "jaw", "solve"):
+            prior = jr.find_accepted(request.mission_id)
+            if prior:
+                response.accepted, response.ticket = True, prior.get("ticket", "")
+                response.reason = ("idempotent: mission %r was already accepted as %s — nothing was "
+                                   "written twice" % (request.mission_id, prior.get("ticket")))
+                return response
         if action["kind"] in ("solve", "solve_report"):
             self.tickets += 1
             ticket = "m%d-%s-%d" % (self.tickets, arm, int(time.time()))
+            self.ticket_mission[ticket] = request.mission_id
             req = SolveRequest()
             req.request_id = ticket
             req.target.header.frame_id = action["frame"]
@@ -313,6 +405,10 @@ class Supervisor(Node):
             response.reason = ("deadline exceeded: %.0f ms elapsed of %.0f ms allowed — nothing was written"
                                % ((time.time() - t_recv) * 1000, budget * 1000))
             return response
+        if self.stopped.is_set():
+            response.accepted, response.ticket = False, ""
+            response.reason = "stop was engaged before the write — nothing was written"
+            return response
         if action["kind"] == "write":
             # The array has no names: the order IS the contract, so it comes from JOINT_ORDER and
             # never from sorted() — alphabetical would drive pan with the wrist's number.
@@ -329,6 +425,7 @@ class Supervisor(Node):
         response.accepted = bool(ok)
         response.reason = "ok" if ok else str(r)
         response.ticket = "m%d-%s-%d" % (self.tickets, arm, int(time.time()))
+        self.ticket_mission[response.ticket] = request.mission_id
         self.get_logger().info("skill %r on %s -> %s (%s)"
                                % (request.skill, arm, "ok" if ok else r, response.ticket))
         return response

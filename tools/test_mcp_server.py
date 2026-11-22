@@ -39,6 +39,18 @@ class Provider:
             return {"accepted": False, "reason": "arm must be one of ['so100_cell', 'so100_cell_b']", "ticket": ""}
         return {"accepted": True, "reason": "ok", "ticket": "m1-so100_cell-1"}
 
+    http = []
+
+    def supervisor_http(self, path, body=None):
+        self.http.append((path, body))
+        if path.startswith("/goal"):
+            return {"mission_id": "m1", "goal": {"skill": "move_joint", "accepted": True, "ticket": "t1"}}
+        if path == "/cancel":
+            return {"cancelled": (body or {}).get("mission_id"), "dropped": 0}
+        if path == "/stop":
+            return {"stopped": True, "dropped": 0}
+        return {"error": "unexpected %r" % path}
+
     def sim_available(self):
         return {"available": self.sim, "reason": "" if self.sim else "no simulator listening on 8004"}
 
@@ -60,11 +72,32 @@ def rpc(method, params=None, rid=1):
     return ep.handle(payload)
 
 
+# Phase 4: the journal and the local stop path.
+p = Provider()
+ep4 = srv.Endpoint(p, "robot")
+r4 = ep4.handle({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                 "params": {"name": "get_goal", "arguments": {"mission_id": "m1"}}})
+check("get_goal asks the supervisor for that mission",
+      json.loads(r4["result"]["content"][0]["text"])["goal"]["ticket"], "t1")
+r5 = ep4.handle({"jsonrpc": "2.0", "id": 10, "method": "tools/call",
+                 "params": {"name": "get_goal", "arguments": {}}})
+check("get_goal without a mission is refused", r5["error"]["code"], -32602)
+r6 = ep4.handle({"jsonrpc": "2.0", "id": 11, "method": "tools/call",
+                 "params": {"name": "cancel_goal", "arguments": {"mission_id": "m1"}}})
+check("cancel_goal reaches /cancel", json.loads(r6["result"]["content"][0]["text"])["cancelled"], "m1")
+r7 = ep4.handle({"jsonrpc": "2.0", "id": 12, "method": "tools/call",
+                 "params": {"name": "stop", "arguments": {}}})
+check("stop reaches /stop", json.loads(r7["result"]["content"][0]["text"])["stopped"], True)
+check("and is a POST, not a queued skill", p.http[-1][0], "/stop")
+check("stop takes no arguments",
+      ep4.handle({"jsonrpc": "2.0", "id": 13, "method": "tools/call",
+                  "params": {"name": "stop", "arguments": {"arm": "arm1"}}})["error"]["code"], -32602)
+
 r = rpc("tools/list")
 check("tools/list answers", r["result"]["tools"][0]["name"] in ("capabilities", "get_state"), True)
-check("the seven tools are listed", sorted(t["name"] for t in r["result"]["tools"]),
-      ["camera_snapshot", "capabilities", "detect_objects", "get_state",
-       "move_joint_bounded", "set_gripper_aperture", "solve_ik"])
+check("the ten tools are listed", sorted(t["name"] for t in r["result"]["tools"]),
+      ["camera_snapshot", "cancel_goal", "capabilities", "detect_objects", "get_goal", "get_state",
+       "move_joint_bounded", "set_gripper_aperture", "solve_ik", "stop"])
 check("the moving tools declare their required fields",
       r["result"]["tools"][2]["inputSchema"].get("required"), ["arm", "angles"])
 check("each tool declares an input schema", all("inputSchema" in t for t in r["result"]["tools"]), True)
