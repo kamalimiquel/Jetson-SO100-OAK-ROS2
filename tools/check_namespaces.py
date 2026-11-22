@@ -35,6 +35,9 @@ HTTP_SERVERS = {
     "docker/web/wrist_focus.py", "docker/web/shutdown_server.py",
     "docker/web/wrist_pair.py", "docker/web/xavier_temp.py",
     "docker/ws/arm/arm_bridge.py", "tools/camfocus.py",
+    # the simulated arms: /claim, /write, /read are HTTP routes on the model's own port, not ROS topics
+    "sim/arm_server.py", "sim/world_server.py", "docker/ws/mcp/server.py",
+    "docker/ws/cams/owner_rpc.py", "docker/web/cell_status.py",
     # HTTP clients for the joint server: their literals are routes, not ROS topics
     "tools/joint_units.py", "tools/jaw_curve.py", "tools/joint_reference.py",
     # The arbiter's literals are HTTP routes on the loopback ports (/write, /claim, /owner); its
