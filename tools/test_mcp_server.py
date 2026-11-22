@@ -31,6 +31,14 @@ class Provider:
     def __init__(self, sim=True):
         self.sim = sim
 
+    skills = []
+
+    def skill(self, tool, arguments):
+        self.skills.append((tool, dict(arguments)))
+        if arguments.get("arm") == "nope":
+            return {"accepted": False, "reason": "arm must be one of ['so100_cell', 'so100_cell_b']", "ticket": ""}
+        return {"accepted": True, "reason": "ok", "ticket": "m1-so100_cell-1"}
+
     def sim_available(self):
         return {"available": self.sim, "reason": "" if self.sim else "no simulator listening on 8004"}
 
@@ -54,7 +62,10 @@ def rpc(method, params=None, rid=1):
 
 r = rpc("tools/list")
 check("tools/list answers", r["result"]["tools"][0]["name"] in ("capabilities", "get_state"), True)
-check("both tools are listed", sorted(t["name"] for t in r["result"]["tools"]), ["capabilities", "get_state"])
+check("the four tools are listed", sorted(t["name"] for t in r["result"]["tools"]),
+      ["capabilities", "get_state", "move_joint_bounded", "set_gripper_aperture"])
+check("the moving tools declare their required fields",
+      r["result"]["tools"][2]["inputSchema"].get("required"), ["arm", "angles"])
 check("each tool declares an input schema", all("inputSchema" in t for t in r["result"]["tools"]), True)
 
 r = rpc("tools/call", {"name": "capabilities", "arguments": {}})
@@ -90,6 +101,30 @@ ep_sim_ok = srv.Endpoint(Provider(sim=True), "sim")
 r = ep_sim_ok.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                       "params": {"name": "capabilities", "arguments": {}}})
 check("sim with a simulator answers", "result" in r, True)
+
+# ---- phase 2: the endpoint hands the request over and reports what came back
+P = Provider()
+ep2 = srv.Endpoint(P, "robot")
+r = ep2.handle({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                "params": {"name": "move_joint_bounded", "arguments": {"arm": "so100_cell",
+                                                                      "angles": [1, 2, 3, 4, 5, 6]}}})
+check("a joint move is accepted when the cell says so", r["result"].get("isError"), False)
+check("the epoch was added by the endpoint, not the caller", "epoch" in P.skills[-1][1], True)
+check("...and a deadline too", P.skills[-1][1].get("deadline_s"), 1.0)
+r = ep2.handle({"jsonrpc": "2.0", "id": 10, "method": "tools/call",
+                "params": {"name": "move_joint_bounded", "arguments": {"arm": "nope", "angles": [0]}}})
+check("a refusal from the cell is an error result, not a silent ok", r["result"]["isError"], True)
+r = ep2.handle({"jsonrpc": "2.0", "id": 11, "method": "tools/call",
+                "params": {"name": "move_joint_bounded", "arguments": {"arm": "so100_cell"}}})
+check("missing angles are refused before the call", r["error"]["code"], srv.INVALID_PARAMS)
+r = ep2.handle({"jsonrpc": "2.0", "id": 12, "method": "tools/call",
+                "params": {"name": "set_gripper_aperture",
+                           "arguments": {"arm": "so100_cell", "mm": 40, "speeds": 2}}})
+check("an unknown argument is refused", r["error"]["code"], srv.INVALID_PARAMS)
+r = ep2.handle({"jsonrpc": "2.0", "id": 13, "method": "tools/call",
+                "params": {"name": "set_gripper_aperture", "arguments": {"arm": "so100_cell", "mm": 40}}})
+check("a jaw request reaches the cell", P.skills[-1][0], "set_gripper_aperture")
+check("...carrying the millimetres", P.skills[-1][1].get("mm"), 40)
 
 print("\n%s — %d checks, %d failed" % ("PASS" if not fail else "FAIL", ok + fail, fail))
 sys.exit(1 if fail else 0)

@@ -31,7 +31,23 @@ TOOLS = {
                      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
     "get_state": {"description": "Identity, epoch, per-joint scale and deadband, and each arm's real state.",
                   "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
+    "move_joint_bounded": {
+        "description": ("Ask the cell to move one arm to named joint angles in degrees. The supervisor decides: "
+                        "it refuses on a foreign lease, a stale epoch, an expired deadline or a wrong start pose."),
+        "inputSchema": {"type": "object", "required": ["arm", "angles"], "properties": {
+            "arm": {"type": "string"}, "angles": {"type": "array", "items": {"type": "number"}},
+            "hold": {"type": "array", "items": {"type": "string"}},
+            "mission_id": {"type": "string"}, "epoch": {"type": "string"},
+            "deadline_s": {"type": "number"}}, "additionalProperties": False}},
+    "set_gripper_aperture": {
+        "description": "Set the jaw aperture in millimetres, resolved by that arm's own measured curve.",
+        "inputSchema": {"type": "object", "required": ["arm", "mm"], "properties": {
+            "arm": {"type": "string"}, "mm": {"type": "number"},
+            "mission_id": {"type": "string"}, "epoch": {"type": "string"},
+            "deadline_s": {"type": "number"}}, "additionalProperties": False}},
 }
+
+MOVING = ("move_joint_bounded", "set_gripper_aperture")
 
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND = -32700, -32600, -32601
 INVALID_PARAMS, INTERNAL_ERROR = -32602, -32603
@@ -55,9 +71,24 @@ class Endpoint:
     def call(self, name, arguments):
         if name not in TOOLS:
             raise KeyError(name)
+        self._guard()
+        if name in MOVING:
+            arguments = dict(arguments or {})
+            required = TOOLS[name]["inputSchema"]["required"]
+            missing = [k for k in required if k not in arguments]
+            if missing:
+                raise ValueError("%s needs %s" % (name, ", ".join(missing)))
+            for key in arguments:
+                if key not in TOOLS[name]["inputSchema"]["properties"]:
+                    raise ValueError("%s does not take %r" % (name, key))
+            # The epoch travels with every moving request: the supervisor refuses one planned against another.
+            arguments.setdefault("epoch", self.provider.manifest()["identity"]["epoch"])
+            arguments.setdefault("deadline_s", 1.0)
+            answer = self.provider.skill(name, arguments)
+            return {"content": [{"type": "text", "text": json.dumps(answer, indent=2)}],
+                    "isError": not answer.get("accepted")}
         if arguments not in (None, {}):
             raise ValueError("%s takes no arguments" % name)
-        self._guard()
         manifest = self.provider.manifest()
         if arguments is None:
             arguments = {}
@@ -151,6 +182,21 @@ class PortProvider:
             return {"available": False, "reason": "no sim port configured"}
         _, err = self._get(port, "/status")
         return {"available": err is None, "reason": err or ""}
+
+    def skill(self, tool, arguments, url="http://127.0.0.1:8097/skill"):
+        """Hand the request to the supervisor and return its answer unchanged: the endpoint does not decide."""
+        import urllib.request
+        name = "move_joint" if tool == "move_joint_bounded" else "open_jaw"
+        args = {k: v for k, v in arguments.items() if k != "arm"}
+        body = json.dumps({"skill": name, "mission_id": args.pop("mission_id", "mcp"),
+                           "args": dict(args, arm=arguments.get("arm"))}).encode()
+        req = urllib.request.Request(url, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return json.loads(r.read().decode())
+        except Exception as exc:                                      # noqa: BLE001
+            return {"accepted": False, "reason": "supervisor unreachable: %s" % exc, "ticket": ""}
 
     def manifest(self):
         sys.path.insert(0, self.lib_dir)

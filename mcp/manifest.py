@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 
 SCHEMA = "so100.cell.manifest/1"
 PROFILES = ("robot", "sim")
@@ -36,14 +37,17 @@ class ManifestError(ValueError):
 
 
 def epoch(boot_id, tables):
-    """A fingerprint of (host boot, calibration revisions). Equal epochs mean the same robot and the same
-    calibration; anything else means a plan made earlier is now a guess."""
-    if not boot_id:
-        raise ManifestError("epoch needs the host boot id — without it a restart is invisible")
-    parts = [str(boot_id)]
-    for arm in sorted(tables):
-        parts.append("%s:%s" % (arm, tables[arm].get("sha256") or "no-sha"))
-    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+    """A fingerprint of (host boot, calibration revisions), computed by the cell's one implementation.
+
+    Imported rather than written again: it *was* written twice, the two copies disagreed, and every request the
+    endpoint sent was refused against a cell that had not changed.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docker", "ws", "lib"))
+    import cell_epoch
+    try:
+        return cell_epoch.epoch(boot_id, tables)
+    except ValueError as exc:
+        raise ManifestError(str(exc))
 
 
 def read_images_lock(path):

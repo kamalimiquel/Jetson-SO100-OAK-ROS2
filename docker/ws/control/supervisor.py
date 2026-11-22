@@ -27,6 +27,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 import command_contract as cc  # noqa: E402
+import cell_epoch              # noqa: E402
 import joint_scale as js      # noqa: E402
 import skill_plan as sp       # noqa: E402
 
@@ -75,6 +76,7 @@ class Supervisor(Node):
         self.mission = ""
         self.last = {}                  # the last answer, so a page can show it without re-asking
         self.t0 = time.time()
+        self.epoch = self._epoch()
         self.tickets = 0
         self.create_service(SkillRequest, "/cell/skill", self.on_skill)
         # A pose is dispatched to that arm's IK and only written when the correlated result says ok.
@@ -92,6 +94,16 @@ class Supervisor(Node):
         self.get_logger().info("supervisor: owns %s (ttl %.0fs)" % (self.owned, TTL))
         threading.Thread(target=self._serve_status, daemon=True).start()
         self.get_logger().info("supervisor: status on http://0.0.0.0:%d/" % STATUS_PORT)
+
+    def _epoch(self):
+        """The same function the MCP manifest uses. Two copies of a fingerprint are two fingerprints."""
+        tables = {}
+        for arm in PORTS:
+            try:
+                tables[arm] = js.load(js.path_for(arm))
+            except Exception:                                        # noqa: BLE001
+                tables[arm] = {"sha256": "no-sha"}
+        return cell_epoch.epoch(cell_epoch.boot_id(), tables)
 
     # -- the page's one question --------------------------------------------------------------
     def _serve_status(self):
@@ -115,6 +127,33 @@ class Supervisor(Node):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body)
+
+            def do_POST(self):
+                if self.path.rstrip("/") != "/skill":
+                    return self._send(404, {"error": "not found — POST /skill"})
+                n = int(self.headers.get("Content-Length") or 0)
+                try:
+                    body = json.loads(self.rfile.read(n).decode() or "{}")
+                except ValueError:
+                    return self._send(200, {"accepted": False, "error": "body is not JSON"})
+                req = SkillRequest.Request()
+                req.skill = str(body.get("skill") or "")
+                req.mission_id = str(body.get("mission_id") or "")
+                args = body.get("args")
+                req.args_json = args if isinstance(args, str) else json.dumps(args or {})
+                resp = SkillRequest.Response()
+                node.on_skill(req, resp)
+                return self._send(200, {"accepted": bool(resp.accepted), "reason": resp.reason,
+                                        "ticket": resp.ticket})
+
+            def _send(self, code, payload):
+                raw = json.dumps(payload).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(raw)
 
             def log_message(self, *a):
                 pass
@@ -189,6 +228,17 @@ class Supervisor(Node):
             self.mission = request.mission_id
         self.last = {"skill": request.skill, "mission": request.mission_id,
                      "at": round(time.time(), 1)}
+        try:
+            args_seen = json.loads(request.args_json or "{}")
+        except ValueError:
+            args_seen = None
+        if isinstance(args_seen, dict) and args_seen.get("epoch") not in (None, self.epoch):
+            self.served -= 1
+            response.accepted, response.ticket = False, ""
+            response.reason = ("epoch mismatch: the request was planned against %r and this cell is %r — "
+                               "re-plan against the current state" % (args_seen.get("epoch"), self.epoch))
+            self.get_logger().warn("skill %r refused: epoch mismatch" % request.skill)
+            return response
         verdict = sp.plan(request.skill, request.mission_id, request.args_json, self.context())
         if not verdict["accepted"]:
             response.accepted, response.reason, response.ticket = False, verdict["reason"], ""
