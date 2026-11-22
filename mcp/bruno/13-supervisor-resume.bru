@@ -1,0 +1,19 @@
+meta {
+  name: supervisor /resume
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{supervisorUrl}}/resume
+  body: json
+  auth: none
+}
+
+body:json {
+{}
+}
+
+docs {
+  Operator only: lifting the latch is not an agent decision.
+}

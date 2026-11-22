@@ -1,0 +1,33 @@
+meta {
+  name: 07-camera-snapshot
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/mcp
+  body: json
+  auth: none
+}
+
+body:json {
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "camera_snapshot",
+    "arguments": {
+      "camera": "arm1_wrist"
+    }
+  }
+}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+docs {
+  JPEG with observation_id, serial, stamp and hash. The image stays on the robot.
+}

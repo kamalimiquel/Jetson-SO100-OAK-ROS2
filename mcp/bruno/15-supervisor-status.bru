@@ -1,0 +1,15 @@
+meta {
+  name: supervisor /status
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{supervisorUrl}}/
+  body: none
+  auth: none
+}
+
+docs {
+  Who the supervisor is, what it holds, its mission, skills served and uptime.
+}

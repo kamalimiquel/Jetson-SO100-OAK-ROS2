@@ -1,0 +1,31 @@
+meta {
+  name: 11-stop
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/mcp
+  body: json
+  auth: none
+}
+
+body:json {
+{
+  "jsonrpc": "2.0",
+  "id": 11,
+  "method": "tools/call",
+  "params": {
+    "name": "stop",
+    "arguments": {}
+  }
+}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+docs {
+  Latch. Nothing is written until POST /resume, which is not an MCP tool.
+}

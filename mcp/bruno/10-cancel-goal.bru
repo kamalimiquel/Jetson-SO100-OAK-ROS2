@@ -1,0 +1,33 @@
+meta {
+  name: 10-cancel-goal
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/mcp
+  body: json
+  auth: none
+}
+
+body:json {
+{
+  "jsonrpc": "2.0",
+  "id": 10,
+  "method": "tools/call",
+  "params": {
+    "name": "cancel_goal",
+    "arguments": {
+      "mission_id": "{{mission}}"
+    }
+  }
+}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+docs {
+  Drops the pending work of that mission.
+}

@@ -1,0 +1,43 @@
+meta {
+  name: 04-move-joint-bounded
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/mcp
+  body: json
+  auth: none
+}
+
+body:json {
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "move_joint_bounded",
+    "arguments": {
+      "arm": "{{arm}}",
+      "angles": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        50
+      ],
+      "mission_id": "{{mission}}",
+      "deadline_s": 1.0
+    }
+  }
+}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+docs {
+  Degrees by name, jaw in percent here only as a legacy boundary. Refused if the cell is not parked.
+}

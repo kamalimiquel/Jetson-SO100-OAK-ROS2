@@ -1,0 +1,35 @@
+meta {
+  name: 05-set-gripper-aperture
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/mcp
+  body: json
+  auth: none
+}
+
+body:json {
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "set_gripper_aperture",
+    "arguments": {
+      "arm": "{{arm}}",
+      "mm": 40,
+      "mission_id": "{{mission}}"
+    }
+  }
+}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+docs {
+  Aperture in millimetres, resolved by THAT arm's curve (40 mm = 17.8 % arm 1, 37.7 % arm 2).
+}

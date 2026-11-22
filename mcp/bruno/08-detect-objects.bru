@@ -1,0 +1,33 @@
+meta {
+  name: 08-detect-objects
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/mcp
+  body: json
+  auth: none
+}
+
+body:json {
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tools/call",
+  "params": {
+    "name": "detect_objects",
+    "arguments": {
+      "camera": "scene"
+    }
+  }
+}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+docs {
+  MISSING while there is no tracker: the honest answer.
+}

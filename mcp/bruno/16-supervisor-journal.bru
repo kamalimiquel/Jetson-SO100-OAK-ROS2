@@ -1,0 +1,11 @@
+meta {
+  name: supervisor /journal
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{supervisorUrl}}/journal?mission_id={{mission}}
+  body: none
+  auth: none
+}

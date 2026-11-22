@@ -1,0 +1,17 @@
+meta {
+  name: supervisor /cancel
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{supervisorUrl}}/cancel
+  body: json
+  auth: none
+}
+
+body:json {
+{
+  "mission_id": "{{mission}}"
+}
+}

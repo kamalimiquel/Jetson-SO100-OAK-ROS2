@@ -1,0 +1,33 @@
+meta {
+  name: 09-get-goal
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/mcp
+  body: json
+  auth: none
+}
+
+body:json {
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "method": "tools/call",
+  "params": {
+    "name": "get_goal",
+    "arguments": {
+      "mission_id": "{{mission}}"
+    }
+  }
+}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+docs {
+  What the journal says about a mission.
+}
