@@ -45,9 +45,27 @@ TOOLS = {
             "arm": {"type": "string"}, "mm": {"type": "number"},
             "mission_id": {"type": "string"}, "epoch": {"type": "string"},
             "deadline_s": {"type": "number"}}, "additionalProperties": False}},
+    "solve_ik": {
+        "description": ("Report-only inverse kinematics: what joint angles a pose would need. It never "
+                        "moves the arm; the answer is advice."),
+        "inputSchema": {"type": "object", "required": ["arm", "pose"], "properties": {
+            "arm": {"type": "string"}, "pose": {"type": "object"}, "frame": {"type": "string"},
+            "max_pos_err_mm": {"type": "number"}, "max_ori_err_deg": {"type": "number"},
+            "epoch": {"type": "string"}, "deadline_s": {"type": "number"}}, "additionalProperties": False}},
+    "detect_objects": {
+        "description": "Objects one camera currently sees, read by the owner with an observation id.",
+        "inputSchema": {"type": "object", "required": ["camera"], "properties": {
+            "camera": {"type": "string"}}, "additionalProperties": False}},
+    "camera_snapshot": {
+        "description": ("One bounded JPEG from a named camera. The image stays on the robot; the answer "
+                        "carries its camera, stamp, sha256 and observation id."),
+        "inputSchema": {"type": "object", "required": ["camera"], "properties": {
+            "camera": {"type": "string"}}, "additionalProperties": False}},
 }
 
 MOVING = ("move_joint_bounded", "set_gripper_aperture")
+REPORTING = ("solve_ik",)                       # goes to the supervisor, never writes
+OWNER = ("detect_objects", "camera_snapshot")   # owner RPC; images never enter this process
 
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND = -32700, -32600, -32601
 INVALID_PARAMS, INTERNAL_ERROR = -32602, -32603
@@ -72,7 +90,7 @@ class Endpoint:
         if name not in TOOLS:
             raise KeyError(name)
         self._guard()
-        if name in MOVING:
+        if name in MOVING + REPORTING:
             arguments = dict(arguments or {})
             required = TOOLS[name]["inputSchema"]["required"]
             missing = [k for k in required if k not in arguments]
@@ -83,10 +101,24 @@ class Endpoint:
                     raise ValueError("%s does not take %r" % (name, key))
             # The epoch travels with every moving request: the supervisor refuses one planned against another.
             arguments.setdefault("epoch", self.provider.manifest()["identity"]["epoch"])
-            arguments.setdefault("deadline_s", 1.0)
+            # Report-only IK is slow on this CPU (~3 s for 140 iterations), so it may budget more;
+            # a motion still gets the 1 s that the write path is judged against.
+            arguments.setdefault("deadline_s", 5.0 if name == "solve_ik" else 1.0)
             answer = self.provider.skill(name, arguments)
             return {"content": [{"type": "text", "text": json.dumps(answer, indent=2)}],
                     "isError": not answer.get("accepted")}
+        if name in OWNER:
+            arguments = dict(arguments or {})
+            required = TOOLS[name]["inputSchema"]["required"]
+            missing = [k for k in required if k not in arguments]
+            if missing:
+                raise ValueError("%s needs %s" % (name, ", ".join(missing)))
+            for key in arguments:
+                if key not in TOOLS[name]["inputSchema"]["properties"]:
+                    raise ValueError("%s does not take %r" % (name, key))
+            answer = self.provider.owner_rpc(name, arguments)
+            return {"content": [{"type": "text", "text": json.dumps(answer, indent=2)}],
+                    "isError": bool(answer.get("error"))}
         if arguments not in (None, {}):
             raise ValueError("%s takes no arguments" % name)
         manifest = self.provider.manifest()
@@ -186,7 +218,8 @@ class PortProvider:
     def skill(self, tool, arguments, url="http://127.0.0.1:8097/skill"):
         """Hand the request to the supervisor and return its answer unchanged: the endpoint does not decide."""
         import urllib.request
-        name = "move_joint" if tool == "move_joint_bounded" else "open_jaw"
+        name = {"move_joint_bounded": "move_joint", "set_gripper_aperture": "open_jaw",
+                "solve_ik": "solve_ik"}[tool]
         args = {k: v for k, v in arguments.items() if k != "arm"}
         body = json.dumps({"skill": name, "mission_id": args.pop("mission_id", "mcp"),
                            "args": dict(args, arm=arguments.get("arm"))}).encode()
@@ -197,6 +230,25 @@ class PortProvider:
                 return json.loads(r.read().decode())
         except Exception as exc:                                      # noqa: BLE001
             return {"accepted": False, "reason": "supervisor unreachable: %s" % exc, "ticket": ""}
+
+    def owner_rpc(self, tool, arguments, url="http://127.0.0.1:8098"):
+        """Ask the owner — perception/cams on the robot. Images never enter this process."""
+        import urllib.error
+        import urllib.request
+        path = "/snapshot" if tool == "camera_snapshot" else "/detect"
+        body = json.dumps({"camera": str((arguments or {}).get("camera") or "")}).encode()
+        req = urllib.request.Request(url + path, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                return json.loads(r.read().decode())
+        except urllib.error.HTTPError as exc:
+            try:
+                return json.loads(exc.read().decode())
+            except ValueError:
+                return {"error": "owner answered HTTP %d" % exc.code}
+        except Exception as exc:                                     # noqa: BLE001
+            return {"error": "owner unreachable: %s" % exc}
 
     def manifest(self):
         sys.path.insert(0, self.lib_dir)

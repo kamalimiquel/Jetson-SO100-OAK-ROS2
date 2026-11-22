@@ -21,7 +21,7 @@ import math
 import command_contract as cc
 import joint_scale as js
 
-SKILLS = ("move_joint", "move_pose", "hold", "open_jaw", "close_jaw")
+SKILLS = ("move_joint", "move_pose", "solve_ik", "hold", "open_jaw", "close_jaw")
 
 
 def _refuse(reason):
@@ -53,13 +53,17 @@ def plan(skill, mission_id, args, ctx):
     if not isinstance(payload, dict):
         return _refuse("args_json must be an object")
 
+    # The endpoint and the spec name arms canonically (arm1/arm2); the supervisor's ports are keyed by
+    # the arm's serial. Accept both here so neither caller has to know the other's vocabulary.
+    ARM_ALIASES = {"arm1": "so100_cell", "arm2": "so100_cell_b"}
     arm = payload.get("arm")
+    arm = ARM_ALIASES.get(arm, arm)
     if arm not in ctx["arms"]:
         return _refuse("arm must be one of %s, got %r" % (ctx["arms"], arm))
     if arm not in ctx["owned"]:
         return _refuse("arm %r is not owned by this supervisor — claim it before asking it to move" % arm)
 
-    if skill == "move_pose":
+    if skill in ("move_pose", "solve_ik"):
         # A pose goes through the typed IK, not through a straight line of joint numbers: the solver is
         # the only thing that knows whether the arm can reach it, and its answer is the one that decides
         # whether anything is written.
@@ -68,23 +72,25 @@ def plan(skill, mission_id, args, ctx):
             xyz = [float(pose[k]) for k in ("x", "y", "z")]
             quat = [float(pose.get(k, d)) for k, d in (("qx", 0.0), ("qy", 0.0), ("qz", 0.0), ("qw", 1.0))]
         except (KeyError, TypeError, ValueError) as exc:
-            return _refuse("move_pose needs 'pose' as {x,y,z} plus optional qx,qy,qz,qw: %s" % exc)
+            return _refuse("%s needs 'pose' as {x,y,z} plus optional qx,qy,qz,qw: %s" % (skill, exc))
         if not all(math.isfinite(v) for v in xyz + quat):
-            return _refuse("move_pose: pose contains a non-finite number")
+            return _refuse("%s: pose contains a non-finite number" % skill)
         if abs(sum(q * q for q in quat) - 1.0) > 0.01:
-            return _refuse("move_pose: the quaternion is not normalised (norm^2 = %.3f)"
-                           % sum(q * q for q in quat))
+            return _refuse("%s: the quaternion is not normalised (norm^2 = %.3f)"
+                           % (skill, sum(q * q for q in quat)))
         frame = str(payload.get("frame") or ctx["base_frame"][arm])
         if frame != ctx["base_frame"][arm]:
-            return _refuse("move_pose: frame %r is not this cell's base frame for %r (%r); no extrinsics "
-                           "are applied here" % (frame, arm, ctx["base_frame"][arm]))
+            return _refuse("%s: frame %r is not this cell's base frame for %r (%r); no extrinsics "
+                           "are applied here" % (skill, frame, arm, ctx["base_frame"][arm]))
         try:
             max_pos = float(payload.get("max_pos_err_mm", 2.0))
             max_ori = float(payload.get("max_ori_err_deg", 3.0))
         except (TypeError, ValueError):
-            return _refuse("move_pose: the tolerances must be numbers")
-        return {"accepted": True, "reason": "dispatched to IK",
-                "action": {"kind": "solve", "arm": arm, "frame": frame,
+            return _refuse("%s: the tolerances must be numbers" % skill)
+        return {"accepted": True,
+                "reason": "dispatched to IK" if skill == "move_pose" else "report only",
+                "action": {"kind": "solve" if skill == "move_pose" else "solve_report",
+                           "arm": arm, "frame": frame,
                            "pose": xyz + quat, "max_pos": max_pos, "max_ori": max_ori,
                            "deadline_s": float(payload.get("deadline_s", 1.0))}}
 

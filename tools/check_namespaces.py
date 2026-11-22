@@ -44,6 +44,12 @@ HTTP_SERVERS = {
     # The supervisor's /claim, /release, /read_raw and /write are routes on the same ports; its one
     # real topic is /cell/skill, which is inside a prefix and needs no exemption.
     "docker/ws/control/supervisor.py",
+    # HTTP clients/servers whose literals are routes: /status, /owner, /scale, /snapshot, /detect,
+    # /mcp. Their ROS names (if any) are asserted explicitly below.
+    "tools/cell_status.py", "docker/web/cell_status.py", "tools/test_sim_arm.py",
+    "mcp/server.py", "docker/ws/cams/owner_rpc.py",
+    # The virtual arm server (Phase 5) speaks the same HTTP port contract as a real arm.
+    "sim/arm_server.py",
 }
 # The invariant's own fixtures, and the figure that draws the chain for the docs.
 SELF = {"tools/check_namespaces.py", "tools/test_compat_bridge.py",

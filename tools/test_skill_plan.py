@@ -124,5 +124,21 @@ check("a deadline of zero is refused", dl('{"arm": "%s", "angles": [5,0,0,0,0,0]
 check("five seconds is the ceiling", dl('{"arm": "%s", "angles": [5,0,0,0,0,0], "deadline_s": 9}' % A1)["accepted"], False)
 check("a non-numeric deadline is refused", dl('{"arm": "%s", "angles": [5,0,0,0,0,0], "deadline_s": "soon"}' % A1)["accepted"], False)
 
+# ---- solve_ik (MCP Phase 3): report only, canonical arm names, the arm's own base frame
+CTX2 = dict(CTX, base_frame={A1: "arm1_base", A2: "arm2_base"})
+def ik(body):
+    return sp.plan("solve_ik", "m1", body, CTX2)
+
+r = ik('{"arm": "arm1", "pose": {"x": 0.2, "y": 0.0, "z": 0.18}}')
+check("solve_ik is accepted (report only)", r["accepted"], True)
+check("...and its action is solve_report, not solve", r.get("action", {}).get("kind"), "solve_report")
+check("...the canonical arm1 maps to so100_cell", r.get("action", {}).get("arm"), A1)
+check("...the default frame is the arm's own", r.get("action", {}).get("frame"), "arm1_base")
+check("a pose in the old bare `base` is refused", ik('{"arm": "arm1", "pose": {"x": 0, "y": 0, "z": 0}, "frame": "base"}')["accepted"], False)
+check("...and says which frame it wanted", "arm1_base" in ik('{"arm": "arm1", "pose": {"x": 0, "y": 0, "z": 0}, "frame": "base"}')["reason"], True)
+check("a non-normalised quaternion is refused", ik('{"arm": "arm1", "pose": {"x": 0, "y": 0, "z": 0, "qw": 0.5}}')["accepted"], False)
+check("an unowned arm is refused even for a report", ik('{"arm": "arm2", "pose": {"x": 0, "y": 0, "z": 0}}')["accepted"], False)
+check("a pose without xyz is refused", ik('{"arm": "arm1", "pose": {"x": 0}}')["accepted"], False)
+
 print("\n%s" % ("all checks pass" if not fails else "%d check(s) FAILED" % len(fails)))
 sys.exit(1 if fails else 0)

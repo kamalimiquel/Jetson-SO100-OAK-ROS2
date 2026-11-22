@@ -83,6 +83,7 @@ class Supervisor(Node):
         self.pub_solve = {ns: self.create_publisher(SolveRequest, "/%s/ik/solve" % ns, 10)
                           for ns in NS.values()}
         self.pending = {}
+        self.report = {}          # solve_ik report-only: ticket -> {event, result}; never written
         for ns in NS.values():
             self.create_subscription(SolveResult, "/%s/ik/result" % ns,
                                      lambda m, n=ns: self.on_result(n, m), 10)
@@ -142,7 +143,12 @@ class Supervisor(Node):
                 args = body.get("args")
                 req.args_json = args if isinstance(args, str) else json.dumps(args or {})
                 resp = SkillRequest.Response()
-                node.on_skill(req, resp)
+                try:
+                    node.on_skill(req, resp)
+                except Exception as exc:                             # noqa: BLE001
+                    # Errors are data: a handler that dies silently looks like a network fault.
+                    return self._send(200, {"accepted": False, "ticket": "",
+                                            "reason": "%s: %s" % (type(exc).__name__, exc)})
                 return self._send(200, {"accepted": bool(resp.accepted), "reason": resp.reason,
                                         "ticket": resp.ticket})
 
@@ -195,11 +201,20 @@ class Supervisor(Node):
             curve = table["joints"]["gripper"].get("curve")
             if curve:
                 jaw[arm] = curve
+        # ADR-0023: one base frame per arm, and no bare `base` anywhere. skill_plan refuses a pose whose
+        # frame is not the arm's own.
+        base_frame = {arm: ("%s_base" % NS[arm]) for arm in self.arms}
         return {"arms": self.arms, "owned": list(self.owned), "scales": scales,
-                "jaw": jaw, "present": present}
+                "jaw": jaw, "present": present, "base_frame": base_frame}
 
     # -- the answer from IK --------------------------------------------------------------
     def on_result(self, ns, msg):
+        slot = self.report.pop(msg.request_id, None)
+        if slot is not None:            # a report-only solve: hand the answer back, never write
+            slot["result"] = {"ok": bool(msg.ok), "detail": msg.detail,
+                              "q_deg": [float(v) for v in msg.q_deg]}
+            slot["event"].set()
+            return
         arm, due = self.pending.pop(msg.request_id, (None, 0.0))
         if arm is None:
             return                      # not ours (another client's request, or already handled)
@@ -246,7 +261,7 @@ class Supervisor(Node):
             return response
         action = verdict["action"]
         arm, port = action["arm"], PORTS[action["arm"]]
-        if action["kind"] == "solve":
+        if action["kind"] in ("solve", "solve_report"):
             self.tickets += 1
             ticket = "m%d-%s-%d" % (self.tickets, arm, int(time.time()))
             req = SolveRequest()
@@ -258,7 +273,29 @@ class Supervisor(Node):
             (req.target.pose.orientation.x, req.target.pose.orientation.y,
              req.target.pose.orientation.z, req.target.pose.orientation.w) = action["pose"][3:]
             req.max_pos_err_mm, req.max_ori_err_deg = action["max_pos"], action["max_ori"]
-            self.pending[ticket] = (arm, t_recv + float(action.get("deadline_s") or 1.0))
+            budget = float(action.get("deadline_s") or 1.0)
+            if action["kind"] == "solve_report":
+                # Report-only: publish and wait for the correlated answer, but never write. The wait keeps
+                # the /skill HTTP handler in step with the DDS round trip; the arm cannot be driven here.
+                slot = {"event": threading.Event(), "result": None}
+                self.report[ticket] = slot
+                self.pub_solve[NS[arm]].publish(req)
+                if not slot["event"].wait(timeout=budget + 0.3):
+                    self.report.pop(ticket, None)
+                    response.accepted, response.ticket = False, ticket
+                    response.reason = ("no IK answer within %.2f s — the solver may be down; nothing was "
+                                       "written" % (budget + 0.3))
+                    return response
+                # on_result pops the slot, so read the reference this call kept — popping again here
+                # would return {} and lose the solver's answer (it did).
+                res = slot["result"] or {}
+                self.report.pop(ticket, None)
+                response.accepted, response.ticket = bool(res.get("ok")), ticket
+                response.reason = json.dumps(res)
+                self.get_logger().info("solve_ik %s on %s -> %s"
+                                       % (ticket, arm, "ok" if res.get("ok") else res.get("detail")))
+                return response
+            self.pending[ticket] = (arm, t_recv + budget)
             self.pub_solve[NS[arm]].publish(req)
             response.accepted, response.ticket = True, ticket
             response.reason = ("dispatched to %s/ik/solve; the write happens only when the correlated "

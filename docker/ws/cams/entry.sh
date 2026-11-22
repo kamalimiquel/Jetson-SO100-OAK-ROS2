@@ -16,5 +16,8 @@ python3 /opt/ws/cams/wrist_cam_node.py &
 WRIST_DEVICE=/dev/arm2_wrist WRIST_TOPIC_NS=/arm2/gripper \
 WRIST_FRAME=arm2_gripper_color_optical_frame WRIST_NODE_NAME=arm2_wrist_cam \
 python3 /opt/ws/cams/wrist_cam_node.py &
+# Owner read surface for the agent (MCP Phase 3): GET /cameras, POST /snapshot, POST /detect on
+# :8098. Images never leave the robot — the endpoint only sees camera, stamp, sha256, observation id.
+OWNER_PORT=8098 python3 /opt/ws/cams/owner_rpc.py &
 # Focus test for that camera (ADR-0022), :8093 — idle until the tab asks for it (/start).
 python3 /opt/ws/cams/oak_ros_node.py

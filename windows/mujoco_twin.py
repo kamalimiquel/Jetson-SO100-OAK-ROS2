@@ -207,7 +207,7 @@ def main():
     inverse = [{q: want for want, q in m.items()} for m in mappings]
     if args.commands:
         for tname, arm in topics:
-            tgt = tname.replace("/joint_states", "/joint_targets")
+            tgt = tname.rsplit("/", 1)[0] + "/" + "joint_targets"
             tsub = roslibpy.Topic(client, tgt, "std_msgs/Float64MultiArray")
 
             def on_targets(msg, arm=arm, tgt=tgt):

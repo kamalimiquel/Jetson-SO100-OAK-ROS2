@@ -19,7 +19,7 @@ ownership model is gone.
 | 0 | identity and manifest: `capabilities`, `get_state` | a manifest that reports an unreachable arm as unreachable and a boot epoch that changes with the arm |
 | 1 | Streamable HTTP transport, two profiles (`robot`, `sim`) | `sim` with no simulator refuses to start instead of falling back to the physical cell |
 | 2 | `move_joint_bounded`, `set_gripper_aperture` (over `/cell/skill`) | four negative tests before the positive one: foreign lease, stale epoch, expired deadline, wrong start pose |
-| 3 | `solve_ik` (report-only), `detect_objects`, `camera_snapshot` via owner RPC | a snapshot names its camera, its stamp and its hash; an unknown camera is refused with the list |
+| 3 | `solve_ik` (report-only), `detect_objects`, `camera_snapshot` via owner RPC — **done 2026-11-22** | a snapshot names its camera, its stamp and its hash; an unknown camera is refused with the list |
 | 4 | `get_goal`, `cancel_goal`, `stop`, journal | killing the endpoint mid-mission leaves the arm stopped and the journal honest; a retry does not move twice |
 | 5 | **physics in the loop**, then the whole thing against it | a mission that has not passed with contact and gravity never runs on hardware |
 
@@ -84,3 +84,25 @@ Give the endpoint the ability to claim an arm. Each of those is one line of code
 
 It also refuses to put physics behind a ROS topic swap: a simulator that speaks topics but not the port
 contract is a second integration, and the thing we would be validating would no longer be the thing we fly.
+
+## Phase 3, as built
+
+- **`solve_ik`** is a `skill_plan` skill of kind `solve_report`: the supervisor publishes the same
+  `SolveRequest` it uses for `move_pose`, waits for the correlated `SolveResult` and returns it — and
+  never calls `/write`. The endpoint defaults its deadline to 5 s because the DLS solver takes ~3 s
+  on this CPU; a motion still gets the 1 s the write path is judged against. Canonical `arm1`/`arm2`
+  are mapped to the ports' serial names inside `skill_plan`, and a pose in any frame but the arm's own
+  (`arm1_base` / `arm2_base`) is refused with the frame it wanted.
+- **`camera_snapshot` / `detect_objects`** go to the owner: `docker/ws/cams/owner_rpc.py` serves
+  `GET /cameras`, `POST /snapshot` and `POST /detect` on :8098, keeps the freshest frame per camera
+  and writes the JPEG under `/state/snapshots`. The endpoint only ever sees `{camera, stamp, age_s,
+  sha256, bytes, path, observation_id}` — never the pixels. An unknown camera is refused with the
+  list; a frame older than 2 s is `STALE`; with no tracker installed `detect_objects` says `MISSING`
+  rather than inventing boxes.
+- **Verified on the Xavier** (2026-11-22): `tools/list` returns the seven tools; a real `arm1_wrist`
+  snapshot came back with its stamp, age 0.03 s and sha256; `camera_snapshot("nope")` was refused with
+  `["arm1_wrist","arm2_wrist","scene"]`; `solve_ik` returned the solver's own answer
+  (`ok=false, pos_err=…, iters=140`) for poses the arm could not reach, which is the honest report.
+- **Not shown yet:** an `ok=true` solve. Every pose tried was unreachable with an identity
+  orientation on the current model; a pose derived from the arm's own FK would close that, and it is a
+  test fixture, not a code change.

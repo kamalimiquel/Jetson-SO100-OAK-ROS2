@@ -62,8 +62,9 @@ def rpc(method, params=None, rid=1):
 
 r = rpc("tools/list")
 check("tools/list answers", r["result"]["tools"][0]["name"] in ("capabilities", "get_state"), True)
-check("the four tools are listed", sorted(t["name"] for t in r["result"]["tools"]),
-      ["capabilities", "get_state", "move_joint_bounded", "set_gripper_aperture"])
+check("the seven tools are listed", sorted(t["name"] for t in r["result"]["tools"]),
+      ["camera_snapshot", "capabilities", "detect_objects", "get_state",
+       "move_joint_bounded", "set_gripper_aperture", "solve_ik"])
 check("the moving tools declare their required fields",
       r["result"]["tools"][2]["inputSchema"].get("required"), ["arm", "angles"])
 check("each tool declares an input schema", all("inputSchema" in t for t in r["result"]["tools"]), True)
