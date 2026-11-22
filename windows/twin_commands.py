@@ -64,14 +64,16 @@ def fresh(stamp, now=None, limit=STALE_S):
     return (now - stamp) <= limit
 
 
-def should_report(sig, last_sig, last_print, now, period=2.0):
-    """Print now if the command changed, or if enough time passed to repeat it.
+def should_report(sig, last_sig, last_print, now, period=2.0, change_period=0.5):
+    """Print now if the command changed — but not more often than `change_period` — or to repeat it.
 
-    A `--once` publisher sends a single message: with a periodic-only print the command arrives and goes
-    stale between two looks, and a working twin looks broken.
+    Two publishers have to work with one rule. A `--once` command must appear at once, or it arrives and
+    goes stale between two periodic looks and a working twin looks broken. A 20 Hz pad stream changes the
+    command at every message, so "changed" alone would print five lines a second forever; the change is
+    therefore rate-limited, while an unchanged command still repeats every `period`.
     """
     if sig != last_sig:
-        return True
+        return (now - last_print) >= change_period
     return (now - last_print) >= period
 
 

@@ -86,11 +86,16 @@ check("the row parses as csv", len(rows[0].split(",")[0]), len("%.3f" % 12.5))
 
 # ---- reporting: a one-shot command must not be lost between two looks
 check("a new command reports at once", tc.should_report(("a",), None, 0.0, 100.0), True)
+check("a stream does not print faster than 2 Hz", tc.should_report(("b",), ("a",), 99.9, 100.0), False)
+check("...and does print half a second later", tc.should_report(("b",), ("a",), 99.5, 100.0), True)
+check("a one-shot after a quiet minute is not throttled",
+      tc.should_report(("c",), ("b",), 940.0, 1000.0), True)
 check("the same command does not repeat immediately", tc.should_report(("a",), ("a",), 99.9, 100.0), False)
 check("the same command repeats after the period", tc.should_report(("a",), ("a",), 97.9, 100.0), True)
-check("a changed command reports even inside the period", tc.should_report(("b",), ("a",), 100.0, 100.0), True)
-check("a one-shot inside the freshness window is reported",
-      tc.should_report(tuple(1.0 for _ in tc.JOINT_ORDER), None, 0.0, 0.2), True)
+check("a changed command inside the change period is held back", tc.should_report(("b",), ("a",), 100.0, 100.0), False)
+check("...but a changed command after it is not", tc.should_report(("b",), ("a",), 99.4, 100.0), True)
+check("a one-shot after a quiet minute is reported (last_print is epoch, not 0.2 s ago)",
+      tc.should_report(tuple(1.0 for _ in tc.JOINT_ORDER), None, 0.0, 1000.0), True)
 check("0.2 s tick is inside the 0.5 s freshness window", 0.2 < tc.STALE_S, True)
 
 print("\n%s — %d checks, %d failed" % ("PASS" if not fail else "FAIL", ok + fail, fail))
