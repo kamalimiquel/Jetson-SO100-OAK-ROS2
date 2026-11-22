@@ -21,7 +21,7 @@ import math
 import command_contract as cc
 import joint_scale as js
 
-SKILLS = ("move_joint", "move_pose", "solve_ik", "hold", "open_jaw", "close_jaw")
+SKILLS = ("move_joint", "move_pose", "solve_ik", "park", "hold", "open_jaw", "close_jaw")
 
 
 def _refuse(reason):
@@ -153,6 +153,33 @@ def plan(skill, mission_id, args, ctx):
                     "kind": "write", "arm": arm, "driven": driven, "held": sorted(held),
                     "notes": notes + warnings, "warnings": warnings, "units_in": units,
                     "deadline_s": deadline_s}}
+
+    if skill == "park":
+        # The parked pose stops being something a person does by hand: the arm goes there itself, in the same
+        # units and through the same checks as any other move, so "parked" is repeatable instead of a fold.
+        import park as park_mod
+        table = ctx["scales"].get(arm)
+        if not table:
+            return _refuse("arm %r has no measured scale table: the park pose is in physical degrees" % arm)
+        try:
+            target = park_mod.for_arm(arm)
+        except park_mod.ParkError as exc:
+            return _refuse(str(exc))
+        # PARKED was measured with /read, i.e. in the degrees the arm *reports* (sdk). Converting them again
+        # as if they were physical sent wrist_roll to -120 instead of -108: the pose is already in the units
+        # the wire takes, so it is written as sdk and the table is only used to check it exists.
+        body = {"angles": [target[j] for j in cc.JOINT_ORDER], "hold": []}
+        try:
+            driven, held, notes = cc.validate_body(body)
+        except cc.CommandError as exc:
+            return _refuse(str(exc))
+        for name in driven:
+            if name not in ctx["present"].get(arm, {}):
+                return _refuse("%s: the arm is not reporting this joint" % name)
+        return {"accepted": True, "reason": "ok", "action": {
+            "kind": "write", "arm": arm, "driven": driven, "held": sorted(held),
+            "notes": notes + ["park: %s" % ", ".join("%s %.1f" % (j, target[j]) for j in cc.JOINT_ORDER)],
+            "warnings": [], "units_in": "sdk", "deadline_s": 2.0}}
 
     # jaw skills: an aperture in millimetres, resolved against THIS arm's curve
     limits = jaw_limits(ctx["jaw"].get(arm))

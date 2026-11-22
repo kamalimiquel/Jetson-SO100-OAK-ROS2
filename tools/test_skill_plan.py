@@ -140,5 +140,17 @@ check("a non-normalised quaternion is refused", ik('{"arm": "arm1", "pose": {"x"
 check("an unowned arm is refused even for a report", ik('{"arm": "arm2", "pose": {"x": 0, "y": 0, "z": 0}}')["accepted"], False)
 check("a pose without xyz is refused", ik('{"arm": "arm1", "pose": {"x": 0}}')["accepted"], False)
 
+# ---- park: the pose is a skill now, so "parked" is repeatable instead of a fold
+import park as park_mod
+r = sp.plan("park", "m1", '{"arm": "%s"}' % A1, CTX)
+check("park is accepted on an owned arm", r["accepted"], True)
+check("park writes rather than asking the solver", r["action"]["kind"], "write")
+check("park drives all six joints", len(r["action"]["driven"]), 6)
+check("park writes the measured pose as reported, without converting it twice",
+      round(r["action"]["driven"]["shoulder_pan"], 2), round(park_mod.PARKED[A1]["shoulder_pan"], 2))
+check("park names the pose in its notes", "park:" in r["action"]["notes"][-1], True)
+check("an arm without a table cannot park",
+      sp.plan("park", "m1", '{"arm": "%s"}' % A2, dict(CTX, owned=[A1, A2]))["accepted"], False)
+
 print("\n%s" % ("all checks pass" if not fails else "%d check(s) FAILED" % len(fails)))
 sys.exit(1 if fails else 0)

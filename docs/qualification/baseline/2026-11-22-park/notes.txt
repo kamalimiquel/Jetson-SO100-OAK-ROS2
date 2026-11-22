@@ -13,3 +13,18 @@ What this rules out: that one pose can serve both arms. It cannot: one number wo
 What it does not say: the repeatability of the fold. This is ONE fold per arm; the tolerance is 6 deg, three
 times arm 2's measured pan deadband, which covers the deadband but has not been checked against the spread of
 folding by hand. Fold each arm twice more and compare before trusting the tolerance for autonomy.
+
+PARK AS A SKILL — spread, 2026-11-22.
+Commanded twice per arm from the folded pose, 2.5 s each, read after each. Spread is 0.00 deg on every joint of
+both arms: a commanded park is repeatable, unlike a fold by hand (never measured twice).
+
+But wrist_roll lands 14.2 deg (arm 1) and 17.8 deg (arm 2) away from the pose that was defined, while every
+other joint lands within 0.8 deg. Two candidate explanations, neither proved:
+  a) a units round trip: the pose was measured with /read and written back as sdk, and something between the
+     write and the reading scales it by ~1/0.877 (arm 1) and ~1/0.825 (arm 2) — both match that joint's
+     measured roll scale, which is suspicious;
+  b) the roll servo does not hold that angle under torque, or the cable limits it.
+(a) is more likely: the discrepancy tracks each arm's own roll scale.
+Until this is explained, the park skill must not be trusted for autonomy: park.check_arm compares /read with
+PARKED, so a commanded park currently reads as "not parked" — which is the guard working, not a bug in the guard.
+Next measurement: write a single +1 deg step to wrist_roll and read it back, as the deadband test did for the pan.

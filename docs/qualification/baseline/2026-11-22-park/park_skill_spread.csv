@@ -1,0 +1,13 @@
+arm,joint,command_note,park_run1_deg,park_run2_deg,spread_deg,delta_vs_folded_deg
+arm1,shoulder_pan,ok,-3.30,-3.30,0.00,0.2
+arm1,shoulder_lift,ok,-100.97,-100.97,0.00,0.07
+arm1,elbow_flex,ok,96.26,96.26,0.00,0.74
+arm1,wrist_flex,ok,80.62,80.62,0.00,0.22
+arm1,wrist_roll,UNEXPLAINED,-122.15,-122.15,0.00,14.15
+arm1,gripper,ok,0.00,0.00,0.00,0.0
+arm2,shoulder_pan,ok,2.02,2.02,0.00,0.32
+arm2,shoulder_lift,ok,-100.44,-100.44,0.00,0.44
+arm2,elbow_flex,ok,95.12,95.12,0.00,0.08
+arm2,wrist_flex,ok,81.36,81.36,0.00,0.56
+arm2,wrist_roll,UNEXPLAINED,-104.92,-104.92,0.00,17.82
+arm2,gripper,ok,1.63,1.63,0.00,0.03

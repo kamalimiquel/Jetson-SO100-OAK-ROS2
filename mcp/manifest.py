@@ -29,7 +29,7 @@ import sys
 
 SCHEMA = "so100.cell.manifest/1"
 PROFILES = ("robot", "sim")
-SKILLS = ("move_joint", "move_pose", "hold", "open_jaw", "close_jaw")
+SKILLS = ("move_joint", "move_pose", "park", "hold", "open_jaw", "close_jaw")
 
 
 class ManifestError(ValueError):
