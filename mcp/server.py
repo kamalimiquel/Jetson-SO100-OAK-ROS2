@@ -329,7 +329,10 @@ class PortProvider:
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--host", default="127.0.0.1")
+    # 0.0.0.0 by default: the endpoint exists to be reached from the operator's machine, and a loopback
+    # default made every Bruno request fail with ECONNREFUSED from the LAN. It has no authentication, so it
+    # belongs on a trusted network only — bind 127.0.0.1 explicitly if that is not the case.
+    ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--robot", default="bench-02")
     ap.add_argument("--serial", default="so100_cell")
