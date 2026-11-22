@@ -27,6 +27,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 import command_contract as cc  # noqa: E402
+import park                    # noqa: E402
 import cell_epoch              # noqa: E402
 import joint_scale as js      # noqa: E402
 import journal as jr          # noqa: E402
@@ -77,6 +78,7 @@ class Supervisor(Node):
         self.mission = ""
         self.last = {}                  # the last answer, so a page can show it without re-asking
         self.t0 = time.time()
+        self.last_park = (None, {})     # parked?, why — refreshed by context() for the page
         self.epoch = self._epoch()
         self.tickets = 0
         self.create_service(SkillRequest, "/cell/skill", self.on_skill)
@@ -327,7 +329,17 @@ class Supervisor(Node):
                                "re-plan against the current state" % (args_seen.get("epoch"), self.epoch))
             self.get_logger().warn("skill %r refused: epoch mismatch" % request.skill)
             return response
-        verdict = sp.plan(request.skill, request.mission_id, request.args_json, self.context())
+        ctx = self.context()
+        # Autonomy starts from a verified park. A mission that begins with an arm near the workspace is a
+        # collision waiting for the first trajectory, and the check is cheap: it is the same readings the
+        # planner already has.
+        if ctx.get("parked") is False and request.skill not in ("hold", "close_jaw"):
+            why = "; ".join("%s: %s" % (a, w) for a, w in (ctx.get("park_why") or {}).items())
+            self.get_logger().warn("skill %r refused: cell is not parked — %s" % (request.skill, why[:200]))
+            response.accepted, response.ticket = False, ""
+            response.reason = "cell is not parked: %s" % why[:500]
+            return response
+        verdict = sp.plan(request.skill, request.mission_id, request.args_json, ctx)
         if not verdict["accepted"]:
             response.accepted, response.reason, response.ticket = False, verdict["reason"], ""
             self.get_logger().warn("skill %r refused: %s" % (request.skill, verdict["reason"]))

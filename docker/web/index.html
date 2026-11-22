@@ -19,6 +19,12 @@
   nav button.torque.on { background: #e07b1f; border-color: #9c5413; }
   nav button.torque.unknown { background: #4a5568; border-color: #2d3748; color: #cbd5e0; }
   nav button.torque:disabled { opacity: 0.6; cursor: progress; }
+  /* parked indicator: filled green with a P when the arm is in its parked pose, an empty green ring when not */
+  nav span.park { width: 18px; height: 18px; border-radius: 50%; display: inline-block; vertical-align: middle;
+                  border: 2px solid #2ecc71; margin-right: 0.4em; box-sizing: border-box;
+                  font: 700 11px/14px system-ui, sans-serif; text-align: center; color: transparent; }
+  nav span.park.on { background: #2ecc71; color: #0b0e13; }
+  nav span.park.unknown { border-color: #4a5568; }
   nav span.sep { width: 1px; background: #3c4c60; margin: 0.15em 0.4em; }
   iframe { flex: 1; border: 0; background: #10151c; display: none; }
   iframe.active { display: block; }
@@ -26,8 +32,10 @@
 </head>
 <body>
 <nav>
+  <span class="park" id="park1" title="parked pose"></span>
   <button class="torque unknown" id="torque1" data-port="8092"
           title="Torque Arm 1 — energises the servos; the arm is free to move by hand until then">Torque Arm 1 · ?</button>
+  <span class="park" id="park2" title="parked pose"></span>
   <button class="torque unknown" id="torque2" data-port="8095" style="margin-right: 0.9em"
           title="Torque Arm 2 — energises the servos; the arm is free to move by hand until then">Torque Arm 2 · ?</button>
   <span class="sep"></span>
@@ -218,6 +226,23 @@
     read();
     return read;
   }
+
+  // The parked ring reads the Cell tab's own JSON: one place decides, and it is the same park.check_cell.
+  const PARK_API = `http://${HOST}:8096/status`;
+  function parkRing() {
+    fetch(PARK_API, { cache: "no-store" }).then((r) => r.json()).then((d) => {
+      (d.arms || []).forEach((a, i) => {
+        const el = document.getElementById(i === 0 ? "park1" : "park2");
+        if (!el) return;
+        const on = a.parked === true;
+        el.classList.toggle("on", on);
+        el.classList.toggle("unknown", a.parked === undefined || a.parked === null);
+        el.textContent = on ? "P" : "";
+        el.title = on ? "parked" : (a.park_reason || "not parked");
+      });
+    }).catch(() => {});
+  }
+  parkRing(); setInterval(parkRing, 2000);
 
   const torqueReaders = [
     torqueSwitch(document.getElementById("torque1"), 1),

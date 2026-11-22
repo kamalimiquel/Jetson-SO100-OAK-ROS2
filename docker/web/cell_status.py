@@ -17,11 +17,22 @@ from __future__ import annotations
 import argparse
 import json
 import socket
+import sys
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ARMS = [("so100_cell", 8002), ("so100_cell_b", 8003)]
+
+# park.py is the single source for the parked pose; it is copied next to this file at deploy time so the page
+# and the supervisor cannot disagree about what "parked" means.
+try:
+    import os as _os
+    sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    import park as park_mod
+except Exception as _exc:                                            # noqa: BLE001
+    print("cell_status: park check disabled (%s)" % _exc, flush=True)
+    park_mod = None
 SKILL_PORT = 8097        # supervisor HTTP status (read-only); see supervisor.py
 TIMEOUT_S = 1.5
 
@@ -56,6 +67,10 @@ def collect():
         else:
             row["connected"] = (st or {}).get("connected")
             row["calibrated"] = (st or {}).get("calibrated")
+        rd, err = get(port, "/read")
+        if not err and park_mod and isinstance(rd, dict):
+            present = dict(zip(rd.get("names") or [], rd.get("angles") or []))
+            row["parked"], row["park_reason"] = park_mod.check_arm(name, present)
         sc, err = get(port, "/scale")
         if not err and sc:
             row["scale"] = {"arm": sc.get("arm"), "applied": sc.get("applied"),
