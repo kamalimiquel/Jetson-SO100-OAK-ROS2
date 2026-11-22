@@ -24,3 +24,15 @@ what it sent.
 
 What it does not say: the lag at higher rates or larger amplitudes (not measured), and whether arm 2 behaves
 the same (not measured; its pan undershoots more at every step).
+
+Observed by the twin on the operator PC during the same stream (14 lines in 8 s, one per 0.5 s):
+
+  arm1 worst 2.546 deg on shoulder_pan (all: shoulder_pan 2.5, shoulder_lift 0.0, elbow_flex -0.0,
+                                        wrist_flex -0.7, wrist_roll 0.3, gripper 0.5)
+  arm1 worst -1.427 deg on shoulder_pan (all: shoulder_pan -1.4, ...)
+
+Two things this adds. The pan peaks agree with the readings taken inside the container (1.912 and 2.379
+here, 1.912 and 2.546 there) — two independent paths, same order, so the twin is not inventing numbers.
+And wrist_flex sits at exactly -0.704 deg on every line and never closes: that is the deadband in the wild,
+a command the servo simply does not act on, visible for the first time as a number that refuses to move
+while the pan errors open and close with the ramp.
