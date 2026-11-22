@@ -10,22 +10,22 @@ post {
   auth: none
 }
 
-body:json {
-{
-  "jsonrpc": "2.0",
-  "id": 8,
-  "method": "tools/call",
-  "params": {
-    "name": "detect_objects",
-    "arguments": {
-      "camera": "scene"
-    }
-  }
-}
-}
-
 headers {
   Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 8,
+    "method": "tools/call",
+    "params": {
+      "name": "detect_objects",
+      "arguments": {
+        "camera": "scene"
+      }
+    }
+  }
 }
 
 docs {

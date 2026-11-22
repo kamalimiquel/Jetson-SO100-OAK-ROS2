@@ -10,8 +10,16 @@ post {
   auth: none
 }
 
-body:json {
-{
-  "mission_id": "{{mission}}"
+headers {
+  content-type: application/json
 }
+
+body:json {
+  {
+    "mission_id": "{{mission}}"
+  }
+}
+
+docs {
+  Drops the pending work of that mission: in-flight solve requests and their results.
 }

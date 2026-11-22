@@ -10,20 +10,20 @@ post {
   auth: none
 }
 
-body:json {
-{
-  "jsonrpc": "2.0",
-  "id": 11,
-  "method": "tools/call",
-  "params": {
-    "name": "stop",
-    "arguments": {}
-  }
-}
-}
-
 headers {
   Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "method": "tools/call",
+    "params": {
+      "name": "stop",
+      "arguments": {}
+    }
+  }
 }
 
 docs {

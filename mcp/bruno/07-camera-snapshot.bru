@@ -10,22 +10,22 @@ post {
   auth: none
 }
 
-body:json {
-{
-  "jsonrpc": "2.0",
-  "id": 7,
-  "method": "tools/call",
-  "params": {
-    "name": "camera_snapshot",
-    "arguments": {
-      "camera": "arm1_wrist"
-    }
-  }
-}
-}
-
 headers {
   Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "method": "tools/call",
+    "params": {
+      "name": "camera_snapshot",
+      "arguments": {
+        "camera": "arm1_wrist"
+      }
+    }
+  }
 }
 
 docs {

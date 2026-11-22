@@ -10,24 +10,24 @@ post {
   auth: none
 }
 
-body:json {
-{
-  "jsonrpc": "2.0",
-  "id": 5,
-  "method": "tools/call",
-  "params": {
-    "name": "set_gripper_aperture",
-    "arguments": {
-      "arm": "{{arm}}",
-      "mm": 40,
-      "mission_id": "{{mission}}"
-    }
-  }
-}
-}
-
 headers {
   Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "method": "tools/call",
+    "params": {
+      "name": "set_gripper_aperture",
+      "arguments": {
+        "arm": "{{arm}}",
+        "mm": 40,
+        "mission_id": "{{mission}}"
+      }
+    }
+  }
 }
 
 docs {

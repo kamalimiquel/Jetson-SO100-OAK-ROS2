@@ -10,16 +10,16 @@ post {
   auth: none
 }
 
-body:json {
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list"
-}
-}
-
 headers {
   Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list"
+  }
 }
 
 docs {

@@ -10,32 +10,32 @@ post {
   auth: none
 }
 
-body:json {
-{
-  "jsonrpc": "2.0",
-  "id": 4,
-  "method": "tools/call",
-  "params": {
-    "name": "move_joint_bounded",
-    "arguments": {
-      "arm": "{{arm}}",
-      "angles": [
-        0,
-        0,
-        0,
-        0,
-        0,
-        50
-      ],
-      "mission_id": "{{mission}}",
-      "deadline_s": 1.0
-    }
-  }
-}
-}
-
 headers {
   Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "move_joint_bounded",
+      "arguments": {
+        "arm": "{{arm}}",
+        "angles": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          50
+        ],
+        "mission_id": "{{mission}}",
+        "deadline_s": 1.0
+      }
+    }
+  }
 }
 
 docs {
