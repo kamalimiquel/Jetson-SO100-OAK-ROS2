@@ -104,8 +104,8 @@ def plan(skill, mission_id, args, ctx):
             deadline_s = float(payload.get("deadline_s", 1.0))
         except (TypeError, ValueError):
             return _refuse("deadline_s must be a number of seconds")
-        if not (0.05 <= deadline_s <= 5.0):
-            return _refuse("deadline_s %r is outside 0.05..5.0 s" % deadline_s)
+        if not (0.15 <= deadline_s <= 5.0):
+            return _refuse("deadline_s %r is outside 0.15..5.0 s" % deadline_s)
         hold = payload.get("hold") or []
         body = {"angles": angles, "hold": hold}
         units = str(payload.get("units") or "physical").strip().lower()

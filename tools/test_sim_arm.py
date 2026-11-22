@@ -32,10 +32,14 @@ def check(label, got, want):
 
 class FakeModel:
     actuated = True
-    model = type("M", (), {"nq": 6})()
+    model = type("M", (), {"nq": 6, "opt": type("O", (), {"timestep": 0.002})()})()
 
     def __init__(self):
         self.last = {}
+        self.enabled = threading.Event()      # the sim keeps the torque gate in the model
+
+    def objects(self):
+        return []
 
     def present_deg(self):
         return {j: 0.0 for j in sim.JOINT_ORDER}
