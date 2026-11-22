@@ -17,7 +17,9 @@
       "scale": 1.05,
       "uncertainty": 0.02,
       "csv": "ref_shoulder_pan_arm2.csv",
-      "note": "five poses over 87 deg on the printed sheet; return to 1 deg"
+      "note": "five poses over 87 deg on the printed sheet; return to 1 deg",
+      "deadband_deg": 2.0,
+      "deadband_basis": "measured 2026-11-21 on so100_cell_b: two 0.5 deg steps and one 1.0 deg step moved nothing from the same pose; 2.0 deg moved 1.495 and 5.0 deg moved 4.308, both short. The threshold is between 1.0 and 2.0, double arm 1's, and this pan undershoots as well \u2014 arm 1 moved 1.231 of 1.0 deg where this one moved 0.0. Evidence: docs/qualification/baseline/2026-11-21-deadband/pan_steps_arm2.csv"
     },
     "shoulder_lift": {
       "scale": 0.977,

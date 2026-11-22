@@ -64,7 +64,8 @@ raises(bad3, "shoulder_pan", "a string is refused")
 # The other arm has no measurement, so the same helper must not answer for it.
 try:
     table_b = js.load(js.path_for("so100_cell_b"))
-    check("arm 2 pan is unmeasured so far", js.deadband(table_b, "shoulder_pan"), None)
+    check("arm 2 has its own, larger deadband", js.deadband(table_b, "shoulder_pan"), 2.0)
+    check("arm 1 did not inherit arm 2's number", js.deadband(table, "shoulder_pan"), 1.0)
 except js.ScaleError as exc:
     check("arm 2 table loads (%s)" % exc, False, True)
 

@@ -876,8 +876,24 @@ hysteresis before it. Warn, do not forbid.
 What this explains: a 1° step that "did not move" earlier in the same session was not a protocol error — the
 write was accepted and the servo ignored it, at the threshold, from that pose.
 
-What it does not say: whether the other five joints share this threshold, whether it grows under load, and
-whether it is the servo's deadband or stiction in the printed joint. None of those are measured.
+**Arm 2 is not the same robot here either.** The same steps on `so100_cell_b`, from its own pose:
+
+| step | commanded | read | achieved | error |
+|---|---|---|---|---|
+| 0.5° | 3.049 | 2.549 | **0.000** | 0.500 |
+| 0.5° again | 3.049 | 2.549 | **0.000** | 0.500 |
+| 1.0° | 3.549 | 2.549 | **0.000** | 1.000 |
+| 2.0° | 4.549 | 4.044 | 1.495 | 0.505 |
+| 5.0° | 9.044 | 8.352 | 4.308 | 0.692 |
+
+Its threshold is **between 1° and 2°** — double arm 1's — and it also **undershoots**: 1.495 of a 2° step and
+4.308 of 5°, where arm 1 moved 1.231 for a 1° step and 5.011 for 5°. So the deadband is per arm and the
+accuracy under motion is per arm too, which is the same lesson as the scales and the jaw curves: nothing here
+is inherited between the two.
+
+What it does not say: whether the other five joints share the threshold (on either arm), whether it grows
+under load, and whether it is the servo's deadband or stiction in the printed joint. None of those are
+measured.
 
 ## 4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)
 Exact commands to install and use the LeRobot stack on the Xavier NX (ADR-0006) — **SO-100 hardware, SO-101 models** (see [§17.3](#173-next)). Verified working; doubles as the record of the Jetson's current state.
@@ -2808,8 +2824,8 @@ then confirmed with the pad in the operator's hands); 7–8 are open.
 
 ### 17.3 Next
 
-- **Deadband on the other five joints** (arm 1 has one measurement, on `shoulder_pan`, between 0.5° and 1.0°),
-  and whether it grows under load — §3.2b.
+- **Deadband on the other five joints of each arm**: `shoulder_pan` is measured on both (arm 1 between 0.5°
+  and 1.0°, arm 2 between 1.0° and 2.0°), nothing else is, and whether it grows under load is unknown — §3.2b.
 
 - [ ] **Survey the sweep volume** — `IK_SWEEP` cannot be switched on until `cell_geometry.json` carries a `sweep_volume` box (metres, arm 1's base frame). Measure it with the two arms parked and the table open, then turn the gate on and watch it refuse one pose on purpose
 - [ ] **Repeatability — three passes per joint** — every scale in [§3.1](#31-how-a-joint-is-calibrated-and-what-proves-it) and [§3.2](#32-arm-2--the-same-procedure-its-own-numbers) is one series per joint. Three passes, three fits, and the spread between them is the error bar this bench actually has; today the quoted ±0.02 is the *fitting* error of one series, not repeatability
