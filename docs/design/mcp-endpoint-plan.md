@@ -18,17 +18,17 @@ ownership model is gone.
 |---|---|---|
 | 0 | identity and manifest: `capabilities`, `get_state` | a manifest that reports an unreachable arm as unreachable and a boot epoch that changes with the arm |
 | 1 | Streamable HTTP transport, two profiles (`robot`, `sim`) | `sim` with no simulator refuses to start instead of falling back to the physical cell |
-| 2 | `move_arm_bounded`, `set_gripper_aperture` (over `/cell/skill`) | four negative tests before the positive one: foreign lease, stale epoch, expired deadline, wrong start pose |
+| 2 | `move_joint_bounded`, `set_gripper_aperture` (over `/cell/skill`) | four negative tests before the positive one: foreign lease, stale epoch, expired deadline, wrong start pose |
 | 3 | `solve_ik` (report-only), `detect_objects`, `camera_snapshot` via owner RPC | a snapshot names its camera, its stamp and its hash; an unknown camera is refused with the list |
 | 4 | `get_goal`, `cancel_goal`, `stop`, journal | killing the endpoint mid-mission leaves the arm stopped and the journal honest; a retry does not move twice |
-| 5 | the whole thing against the twin first | a mission that has not passed in simulation never runs on hardware |
+| 5 | **physics in the loop**, then the whole thing against it | a mission that has not passed with contact and gravity never runs on hardware |
 
 ## What each tool may do
 
 | tool | backing | it may |
 |---|---|---|
 | `capabilities`, `get_state` | config, arms' `/owner`, `/status`, `/torque`, `/scale`, `images.lock` | read only |
-| `move_arm_bounded` | `SkillRequest` → supervisor → IK → `/write` | ask; the supervisor decides |
+| `move_joint_bounded` | `SkillRequest` in **joint space** → supervisor → `/write` | ask; the supervisor decides |
 | `set_gripper_aperture` | same, jaw mm resolved by that arm's curve | ask |
 | `solve_ik` | `SolveRequest` (report-only) | compute; never write |
 | `detect_objects`, `camera_snapshot` | owner RPC, images never enter this container | read with an observation id |
@@ -52,7 +52,35 @@ warning** (it is not an error; the servo simply may not move).
 | images cannot enter the container | owner RPC with hash and stamp |
 | a retried request moves twice | `mission_id` idempotence + epoch |
 
+## Two corrections that change the shape
+
+**Motion is joint space, not pose.** `move_pose` and the IK stay, but as *report-only*: an agent may ask what
+joint angles a pose would need, and the answer is advice. Motion itself is a named array of degrees —
+`shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll` plus the jaw in millimetres — which is what
+the scale table, the deadband and the per-arm calibration describe, and which needs no extrinsics, no TCP and
+no hand-eye. Pose-space motion would drag the retired hand-eye back in through the side door; joint space does
+not depend on it at all. The price is that the agent has to do the reasoning — and that price is worth paying
+while the calibration that would justify pose commands does not exist.
+
+**Physics has to be in the loop now.** A kinematic mirror was enough to prove that commands arrive and that the
+transient lag is ~1.3 deg at 20 Hz, and it says nothing about contact, gravity, the arm that cannot reach under
+its own load, or what happens when a jaw closes on a block that is 2 mm too wide. So the simulator stops being
+a viewer and becomes an arm.
+
+The way to do that without a rewrite is not a ROS-level swap: **the physics model is wrapped as a virtual arm
+server on its own port, with the same four endpoints the real arm exposes** — `POST /claim`, `POST /torque`,
+`POST /write`, `GET /read` — backed by MuJoCo (`mujoco` or `mujoco_ros2_control` for the model and the loop).
+Then the supervisor, the skill planner, the MCP endpoint and the tests are the *same code* against sim and
+against hardware, the profile switch is a port number, and the sim profile still fails closed: no simulator
+listening means no cell, never the real one by accident.
+
+Acceptance for that phase: a mission that fails on the real arm — a grasp that closes 2 mm short, an elbow
+that sags 6 deg under load — fails in the sim too, for a physical reason, and the twin reports the contact.
+
 ## What this plan refuses to do
 
 Expose `/write` or the arm port as a tool. Run inference in the MCP container. Open rosbridge to the agent.
 Give the endpoint the ability to claim an arm. Each of those is one line of code and the end of the model.
+
+It also refuses to put physics behind a ROS topic swap: a simulator that speaks topics but not the port
+contract is a second integration, and the thing we would be validating would no longer be the thing we fly.
