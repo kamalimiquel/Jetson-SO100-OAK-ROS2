@@ -1,0 +1,17 @@
+Deadband of shoulder_pan, arm 1 (so100_cell), 2026-11-21.
+
+Method: torque on, one step per publication to /arm1/joint_targets (six values, jaw held), settle 3 s,
+read /read. Each target is the last reading plus the step, so the steps are consecutive and the arm walks
+forward. Torque off at the end.
+
+Result: 0.5 deg produces no movement, twice, from the same starting pose. 1.0 deg moves (1.231 achieved),
+2.0 deg moves 1.846, 5.0 deg moves 5.011. The threshold therefore lies between 0.5 and 1.0 deg.
+
+What this rules out: that the earlier 1 deg step which "did not move" was a protocol error. It was below
+or at the threshold in that direction from that pose; the contract accepted the write, the servo did not
+move. Anything a policy commands below ~1 deg on this joint is a request the hardware may silently ignore.
+
+What it does not say: whether the threshold is the same on the other five joints (not measured), whether it
+is a servo deadband or stiction in the printed joint, and whether it changes with load (not measured).
+Tick resolution is 4096 per turn = 0.088 deg, so a 0.5 deg step is ~5.7 ticks and is still ignored: this is
+a deadband, not quantisation.
