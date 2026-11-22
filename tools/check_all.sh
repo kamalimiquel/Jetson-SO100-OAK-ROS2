@@ -57,6 +57,7 @@ run "parked pose"           "$PY" tools/test_park.py
 run "manifest"              "$PY" tools/test_manifest.py
 run "mcp endpoint"          "$PY" tools/test_mcp_server.py
 run "virtual arm (sim)"     "$PY" tools/test_sim_arm.py
+run "world server (2 arms)" "$PY" tools/test_world_server.py
 run "twin commands"         "$PY" tools/test_twin_commands.py
 run "units manifest"        "$PY" tools/test_units_manifest.py
 
