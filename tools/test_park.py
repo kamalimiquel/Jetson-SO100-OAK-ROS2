@@ -29,6 +29,7 @@ good2 = dict(park.PARKED[A2])
 
 check("the exact park is parked", park.check_arm(A1, good1)[0], True)
 check("and it says so with the worst joint", "parked (worst" in park.check_arm(A1, good1)[1], True)
+check("...naming a joint even when the deviation is zero", "worst None" in park.check_arm(A1, good1)[1], False)
 check("a missing joint is a refusal, not a pass",
       park.check_arm(A1, {k: v for k, v in good1.items() if k != "elbow_flex"})[0], False)
 check("...and names it", "elbow_flex" in park.check_arm(

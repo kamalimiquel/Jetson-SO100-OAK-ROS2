@@ -1,0 +1,7 @@
+joint,arm1_deg,arm2_deg,nominal_before_deg,arm1_off,arm2_off
+shoulder_pan,-3.1,1.7,0.0,3.1,1.7
+shoulder_lift,-100.9,-100.0,-95.0,5.9,5.0
+elbow_flex,97.0,95.2,95.0,2.0,0.2
+wrist_flex,80.4,80.8,60.0,20.4,20.8
+wrist_roll,-108.0,-87.1,0.0,108.0,87.1
+gripper,0.0,1.6,5.0,5.0,3.4

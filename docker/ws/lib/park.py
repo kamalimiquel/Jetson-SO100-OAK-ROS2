@@ -20,13 +20,16 @@ from __future__ import annotations
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 
-# Canonical park, in the physical degrees the arm reports. Arm 1 folds back and down, away from the bench
-# centre; arm 2 mirrors it around its own base so the two folded arms do not meet.
+# The parked pose is per arm, and not by taste: the two folded arms differ by 4.8 deg in the pan and 21 deg in
+# the roll, so one number for both would fail one of them.
 PARKED = {
-    "so100_cell": {"shoulder_pan": 0.0, "shoulder_lift": -95.0, "elbow_flex": 95.0,
-                   "wrist_flex": 60.0, "wrist_roll": 0.0, "gripper": 5.0},
-    "so100_cell_b": {"shoulder_pan": 0.0, "shoulder_lift": -95.0, "elbow_flex": 95.0,
-                     "wrist_flex": 60.0, "wrist_roll": 0.0, "gripper": 5.0},
+    # Measured 2026-11-22 with both arms folded by hand and torque off — not chosen. The nominal pose that
+    # preceded this had wrist_flex 20 deg and wrist_roll 87-108 deg away from where the arms actually park,
+    # which is why a folded arm read as "not parked": the supervisor was asking for a pose that did not exist.
+    "so100_cell": {"shoulder_pan": -3.1, "shoulder_lift": -100.9, "elbow_flex": 97.0,
+                   "wrist_flex": 80.4, "wrist_roll": -108.0, "gripper": 0.0},
+    "so100_cell_b": {"shoulder_pan": 1.7, "shoulder_lift": -100.0, "elbow_flex": 95.2,
+                     "wrist_flex": 80.8, "wrist_roll": -87.1, "gripper": 1.6},
 }
 # Wide enough for the deadband measured on both arms (1.0 and 2.0 deg on the pan) plus the settling seen at
 # the bench, and narrow enough that an arm pointing at the workspace cannot pass.
@@ -51,7 +54,7 @@ def check_arm(arm, present, tolerance=TOLERANCE_DEG):
     missing = [j for j in JOINTS if j not in present]
     if missing:
         return False, "%s is not reporting %s, so the park cannot be verified" % (arm, ", ".join(missing))
-    worst, worst_joint, worst_off = None, None, 0.0
+    worst, worst_joint, worst_off = None, JOINTS[0], 0.0
     for joint in JOINTS:
         try:
             off = abs(float(present[joint]) - float(target[joint]))

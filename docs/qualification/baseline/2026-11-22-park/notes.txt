@@ -1,0 +1,15 @@
+Parked pose, both arms, measured 2026-11-22.
+
+Method: torque off on both arms, folded by hand to a pose clear of the table, the other arm and the cables;
+then /read on each arm's own port. No motion commanded.
+
+Result (degrees, as reported): see parked_pose.csv. arm 1 wrist_roll -108.0 and arm 2 -87.1 differ by 21 deg;
+the pan differs by 4.8 deg. The pose that was in the code before this (lift -95, wrist_flex 60, roll 0) put
+wrist_flex 20 deg and wrist_roll 87-108 deg away from where the arms actually park, so a folded arm read as
+"not parked" and the supervisor would have refused every mission.
+
+What this rules out: that one pose can serve both arms. It cannot: one number would fail one of them.
+
+What it does not say: the repeatability of the fold. This is ONE fold per arm; the tolerance is 6 deg, three
+times arm 2's measured pan deadband, which covers the deadband but has not been checked against the spread of
+folding by hand. Fold each arm twice more and compare before trusting the tolerance for autonomy.
