@@ -2475,6 +2475,110 @@ the documented model; round trip over 200 random poses gives **median 0.00 mm / 
 **6.1 s** (~30 ms each); a target 2 m away is refused with a 1951 mm residual; and the live test
 returns `ok=True pos_err=0.0 mm ori_err=0.0 deg iters=1` with the arm's own angles.
 
+### 13.7 so100-control — the MCP endpoint
+
+An agent asks; it never drives. The endpoint runs in `so100-control` (host network, `python:3.10-slim`, no ROS)
+and everything it can cause goes through the supervisor, which owns the leases and answers with a sentence
+when it refuses. If the endpoint dies, the cell keeps working.
+
+```
+POST http://<xavier>:8000/mcp        JSON-RPC 2.0: "tools/list", "tools/call"
+```
+
+Start it by hand (it is deliberately **not** in `entry.sh` — the agent surface does not come up unasked):
+
+```
+docker exec -d so100-control python3 /opt/ws/mcp/server.py --host 0.0.0.0 --port 8000 --lib /opt/ws/lib
+```
+
+`--host 0.0.0.0` matters: a loopback default inside a host-network container is reachable only from the Xavier
+itself, which reads as ECONNREFUSED on every request from the operator's machine. The endpoint has **no
+authentication**, so it belongs on a trusted network.
+
+#### The ten tools
+
+| tool | what it does | writes |
+|---|---|---|
+| `capabilities` | identity, epoch, skills, profiles | no |
+| `get_state` | the manifest: per arm scale **and deadband per joint**, owner, torque | no |
+| `move_joint_bounded` | degrees by name, jaw in mm, `mission_id`, `deadline_s` | yes, if the supervisor accepts |
+| `set_gripper_aperture` | aperture in mm, resolved by **that** arm's curve (40 mm = 17.8 % arm 1, 37.7 % arm 2) | yes |
+| `solve_ik` | inverse kinematics, report only | **never** |
+| `camera_snapshot` | JPEG with `observation_id`, camera serial, stamp and hash | no |
+| `detect_objects` | current objects; `MISSING` while there is no tracker | no |
+| `get_goal` | what the journal says about a mission | no |
+| `cancel_goal` | drops that mission's pending work | effect |
+| `stop` | the latch; nothing is written until `/resume` | effect |
+
+A Bruno collection with one request per tool, and the five supervisor routes, lives in `mcp/bruno/` — open the
+folder, pick the `local` environment, and each `.bru` is one call with the body the endpoint expects.
+
+#### `solve_report` — the path `solve_ik` takes
+
+The planner returns `kind: "solve_report"` (against `solve`, which is the one `move_pose` uses and which writes
+if the solver agrees). The supervisor publishes a `SolveRequest` whose `request_id` is the ticket, **waits** for
+the correlated `SolveResult`, and returns the report: `ok`, `q_deg`, residual in mm and degrees, iterations and
+`detail`. There is no write on this path at all — with `ok=false` there is nothing to write, and with `ok=true`
+the answer is still advice. Its own deadline is **5 s** (damped least squares takes ~3 s on this CPU); motion
+uses 1 s.
+
+To get an `ok=true`, do not invent a pose: compute it with forward kinematics from the current angles, so the
+solver has to come back to where the arm already is.
+
+```
+docker cp tools/ik_pose_fixture.py so100-control:/tmp/
+docker exec so100-control bash -lc "source /opt/ros/humble/install/setup.bash; \
+  source /opt/ws/install/setup.bash; python3 /tmp/ik_pose_fixture.py --arm so100_cell --print"
+```
+
+That prints `{position, orientation, frame}`; post it as `pose` and expect `ok: true`, `pos_err` ≈ 0.0 mm, ~7
+iterations. Verified on the bench.
+
+#### `get_goal`, `cancel_goal`, `stop` and the journal
+
+- **`get_goal(mission_id)`** reads the journal and returns that mission's last entry: whether it was accepted,
+  with which ticket, and why. It exists so an agent can ask before retrying.
+- **`cancel_goal(mission_id)`** marks the mission cancelled and drops its pending work — the in-flight solve
+  requests and their results — answering `{cancelled, dropped}`.
+- **`stop`** is the local latch: checked twice (on arrival and immediately before `/write`), it empties the
+  pending set and no write passes until `/resume`. It is never queued behind the agent — a stop that waits its
+  turn is not a stop.
+- **the journal** is `docker/ws/lib/journal.py`: append-only JSONL at `/episodes/journal.jsonl` (on the host,
+  `docker/episodes/journal.jsonl`, so it survives the container). API: `append`, `read(mission_id)`,
+  `last_for`, `find_accepted(mission_id, epoch)`.
+
+#### What a journal entry is
+
+One line per skill call, written whether the answer was yes or no:
+
+```
+{"t": 1795361234.512, "mission_id": "real-1", "skill": "move_joint",
+ "ticket": "m1-so100_cell-1795361234", "accepted": true, "reason": "ok",
+ "args": "{\"arm\": \"so100_cell\", \"angles\": [...]}", "epoch": "8cbc932a519380ee"}
+```
+
+`skill` is what was asked, `mission_id` what for, `accepted` and `reason` the verdict with the contract's or the
+solver's sentence, `ticket` which request executed it, `args` the arguments as sent, and `epoch` the robot's
+fingerprint at that moment. It is the trace that answers *why did it move* and *why did it not* without reading
+logs.
+
+#### `POST /stop`, `/resume`, `/cancel`
+
+On the supervisor's HTTP status port (**8097**), not through MCP:
+
+| route | effect |
+|---|---|
+| `POST /stop` | latch on; empties pending; only `/resume` lifts it |
+| `POST /resume` | lifts the latch. Deliberately **not** an MCP tool: resuming is the operator's decision |
+| `POST /cancel` with `{"mission_id": …}` | cancels that mission and its pending work; without an id it returns an error |
+
+#### What a `mission_id` is
+
+The string the caller chooses, identifying **one intent**, not a connection. It is the key to three things:
+idempotency (repeating the same `mission_id` at the same epoch returns the **same ticket** instead of moving
+twice), cancellation (drop exactly that mission), and traceability (every journal line of it). A `mission_id`
+reused after a restart is **not** the same mission: the scope is `mission_id + epoch`.
+
 ## 14. Useful ROS 2 commands
 
 Everything below runs **inside a container** on domain 42 — `docker exec -it so100-arm bash` (ROS already
