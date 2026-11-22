@@ -276,6 +276,8 @@ def make_handler(state):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="MuJoCo scene or MJCF")
+    ap.add_argument("--host", default="0.0.0.0",
+                    help="0.0.0.0 so the Xavier's supervisor can reach this model over the network")
     ap.add_argument("--port", type=int, default=8004)
     ap.add_argument("--arm", default="so100_cell")
     ap.add_argument("--prefix", default="", help="joint name prefix in the scene, e.g. 'arm2_'")
@@ -285,7 +287,7 @@ def main(argv=None):
     mode = "actuated" if model.actuated else "qpos (kinematic — say so in /status)"
     model.start()
     state = State(args.arm, model, mode)
-    srv = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(state))
+    srv = ThreadingHTTPServer((args.host, args.port), make_handler(state))
     print("sim arm %r on 127.0.0.1:%d — %s, %d qpos" % (args.arm, args.port, mode, model.model.nq), flush=True)
     try:
         srv.serve_forever()

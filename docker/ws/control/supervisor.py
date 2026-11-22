@@ -48,7 +48,10 @@ OWNER = "supervisor"
 TTL = float(os.environ.get("SUPERVISOR_TTL_S", "15"))
 PORTS = dict(part.split("=") for part in
              os.environ.get("SUPERVISOR_PORT_MAP", "so100_cell=8002,so100_cell_b=8003").split(","))
-PORTS = {k.strip(): int(v) for k, v in PORTS.items()}
+# A target is "host:port" or just "port" (localhost). The host form exists because physics runs on the
+# operator's PC, not on the Xavier: the supervisor has to be able to reach an arm that is a MuJoCo model on
+# another machine, and pretending a remote sim is on 127.0.0.1 is how a bench quietly stops being a bench.
+PORTS = {k.strip(): (v.strip() if ":" in v else "127.0.0.1:%s" % v.strip()) for k, v in PORTS.items()}
 # The operator's page cannot see a ROS service, so the supervisor also answers one question over HTTP:
 # am I here, what do I hold, and what have I been asked. Read-only, localhost-facing, nothing to drive with.
 STATUS_PORT = int(os.environ.get("SUPERVISOR_HTTP_PORT", "8097"))
@@ -57,9 +60,10 @@ STATUS_PORT = int(os.environ.get("SUPERVISOR_HTTP_PORT", "8097"))
 NS = {"so100_cell": "arm1", "so100_cell_b": "arm2"}
 
 
-def http(port, path, body=None, timeout=8.0):
+def http(target, path, body=None, timeout=8.0):
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request("http://127.0.0.1:%d%s" % (port, path), data=data,
+    host = target if isinstance(target, str) else "127.0.0.1:%d" % target
+    req = urllib.request.Request("http://%s%s" % (host, path), data=data,
                                  headers={"Content-Type": "application/json",
                                           "X-Owner": OWNER} if data else {})
     try:

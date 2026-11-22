@@ -1677,6 +1677,23 @@ One timing trap, found on the bench: a `--once` publisher sends a single message
 against a 0.5 s freshness window reports nothing at all and a working twin looks broken. The report now runs
 every 0.2 s and prints immediately when the command changes (`should_report()`).
 
+#### 10.2c Where physics runs — and where it does not
+
+**MuJoCo runs on the operator's Windows PC, never on the Xavier.** It was installed in `so100-perception` for
+one afternoon of experiments and has been removed, with its dependencies (`glfw`) and the model copy at
+`/opt/menagerie`: the Xavier is the body — drivers, servo buses, cameras — and adding a physics engine to it
+buys nothing and costs RAM the perception stack needs.
+
+The consequence is architectural, not cosmetic: the simulated arm is a **remote** arm. `sim/arm_server.py`
+binds `0.0.0.0` by default for that reason, and the supervisor's port map accepts `host:port`, so
+
+```
+SUPERVISOR_PORT_MAP="so100_cell=192.168.1.50:8004,so100_cell_b=192.168.1.50:8005"
+```
+
+makes the real supervisor, unchanged, drive two MuJoCo models on the PC. Everything above it — skills, park,
+deadline, journal, MCP endpoint — is the same code against a simulator and against the servo bus.
+
 ### 10.3 F710 teleop — the pad (ADR-0017, amended by ADR-0020)
 
 **Recommended path — Python over rosbridge (no ROS2 on Windows).** Two pip packages, same WebSocket the MuJoCo twin already uses:
