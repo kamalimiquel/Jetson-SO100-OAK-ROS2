@@ -86,20 +86,35 @@ class MuJoCoModel:
         self._thread.start()
 
     def _loop(self):
+        """Step in batches to keep simulated time equal to wall time.
+
+        Sleeping one timestep per iteration looked right and ran ~20x slow: time.sleep(0.005) on this
+        kernel sleeps tens of milliseconds, so the loop was paced by the scheduler, not by the model.
+        A step costs ~0.22 ms here (22x real time), so the budget exists — it just has to be spent in
+        batches, catching up to real time instead of sleeping between single steps.
+        """
         dt = float(self.model.opt.timestep)
-        nxt = time.time()
+        t0, sim = time.time(), 0.0
+        self.realtime = 1.0
         while not self._stop.is_set():
-            if self.enabled.is_set():
-                with self.lock:
+            if not self.enabled.is_set():
+                t0, sim = time.time(), 0.0        # frozen while torque is off
+                time.sleep(0.01)
+                continue
+            target = time.time() - t0
+            n = int((target - sim) / dt)
+            if n > 200:                            # more than a second behind: drop it, do not spiral
+                t0, sim, n = time.time(), 0.0, 0
+            if n <= 0:
+                time.sleep(dt)
+                continue
+            with self.lock:
+                for _ in range(n):
                     if self.actuated:
                         self.data.ctrl[:len(JOINT_ORDER)] = [self.target[j] for j in JOINT_ORDER]
                     self.mujoco.mj_step(self.model, self.data)
-            nxt += dt
-            delay = nxt - time.time()
-            if delay > 0:
-                time.sleep(delay)
-            else:
-                nxt = time.time()
+            sim += n * dt
+            self.realtime = round(sim / max(1e-6, time.time() - t0), 3)
 
     def present_deg(self):
         with self.lock:
@@ -216,7 +231,9 @@ def make_handler(state):
                     return self._send(200, {"objects": state.model.objects()})
                 if self.path == "/status":
                     return self._send(200, {"connected": True, "calibrated": True,
-                                            "mode": state.mode, "writes": state.writes})
+                                            "mode": state.mode, "writes": state.writes,
+                                            "timestep": float(state.model.model.opt.timestep),
+                                            "realtime": getattr(state.model, "realtime", 0.0)})
                 if self.path in ("/read", "/read_raw"):
                     present = state.model.present_deg()
                     return self._send(200, {"angles": [present[j] for j in JOINT_ORDER],

@@ -145,11 +145,20 @@ contract is a second integration, and the thing we would be validating would no 
   `/torque`; the supervisor pointed at it with `SUPERVISOR_PORT_MAP=so100_cell=8004` and drove it
   through `/skill` unchanged. Commands settle to **≤0.05 deg** (pan 30, lift -60, elbow 40; then
   lift -95, elbow -75), and a block released at z = 0.35 m falls under gravity.
-- **The clock is slow, and it is not fixed:** the block fell 7 cm in ~4 s where free fall takes
-  ~0.2 s — the loop runs roughly 20x slower than real time on this CPU. A grasp that closes 2 mm
-  short needs the block inside the gripper's workspace *and* a clock close enough to real time that
-  the jaw closes while the block is still there; neither is done. Until then, physics is in the loop
-  but the mission regression is not.
+- **The clock is fixed.** It was pacing itself with `time.sleep(timestep)`, and on this kernel that
+  sleeps tens of milliseconds, so the loop was scheduler-paced: the block fell 7 cm in ~4 s where
+  free fall takes ~0.2 s. A step costs ~0.22 ms (22x real time), so the loop now catches up in
+  batches against wall time instead of sleeping between single steps. `/status` reports
+  `realtime`: **0.999** measured on the Xavier.
+- **The grasp did not close short, and the reason matters.** With the block on a workbench pedestal
+  at the TCP, the jaw closed fully (gripper -0.0 deg) — the block was never between the fingers.
+  Placing a block by the TCP *point* is not enough: the fingers close along an axis attached to the
+  jaw's frame, which `/objects` does not expose (positions only). The next step is to publish the jaw
+  frame (or the gripper joint's world axis) and place the block along it; until then the
+  "closes 2 mm short" regression is open, and it is written here as open.
+- **What the mission regression did prove:** the real supervisor, unchanged, drove the sim through
+  `/skill` (`SUPERVISOR_PORT_MAP=so100_cell=8004`) and the commands settled to <=0.05 deg; the block
+  fell and came to rest on the arm and on the pedestal, which is contact, not a kinematic stand-in.
 
 ### A correction that came out of this phase
 
