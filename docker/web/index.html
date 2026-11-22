@@ -19,10 +19,15 @@
   nav button.torque.on { background: #e07b1f; border-color: #9c5413; }
   nav button.torque.unknown { background: #4a5568; border-color: #2d3748; color: #cbd5e0; }
   nav button.torque:disabled { opacity: 0.6; cursor: progress; }
-  /* parked indicator: filled green with a P when the arm is in its parked pose, an empty green ring when not */
-  nav span.park { width: 18px; height: 18px; border-radius: 50%; display: inline-block; vertical-align: middle;
-                  border: 2px solid #2ecc71; margin-right: 0.4em; box-sizing: border-box;
-                  font: 700 11px/14px system-ui, sans-serif; text-align: center; color: transparent; }
+  /* parked indicator: filled green with a P when the arm is in its parked pose, an empty green ring when not.
+     inline-flex + line-height:1 centres the letter in the circle; vertical-align:middle aligns the circle with
+     the button text rather than with its baseline. */
+  /* nav is a flex row, so the ring is a flex item: it must not shrink (it collapsed to 11 px) and it must
+     centre itself against the button's height rather than stretch to the top of the row. */
+  nav span.park { flex: 0 0 18px; align-self: center; width: 18px; height: 18px; border-radius: 50%;
+                  display: inline-flex; align-items: center; justify-content: center;
+                  border: 2px solid #2ecc71; margin-right: 0.35em; margin-left: 0.15em; box-sizing: border-box;
+                  font: 700 11px/1 system-ui, sans-serif; color: transparent; text-align: center; }
   nav span.park.on { background: #2ecc71; color: #0b0e13; }
   nav span.park.unknown { border-color: #4a5568; }
   nav span.sep { width: 1px; background: #3c4c60; margin: 0.15em 0.4em; }
