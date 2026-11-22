@@ -1,0 +1,26 @@
+shoulder_pan following a 20 Hz stream, arm 1 (so100_cell), 2026-11-21.
+
+Method: a probe node inside so100-control publishes /arm1/joint_targets at ~20 Hz for 8 s with
+pan = 16.835 + 5*(1-cos(2*pi*t/8)), i.e. 0 -> 10 -> 0 deg and back; every second it reads /read on
+8002 and records commanded vs actual. Torque on for the run, off afterwards.
+
+t(s)   commanded  read     error
+0.1    16.835     17.363   -0.528
+1.2    18.639     17.363    1.276
+2.2    22.518     22.022    0.496
+3.3    25.965     25.099    0.866
+4.4    26.684     26.505    0.178
+5.4    24.194     25.099   -0.905
+6.5    20.168     21.319   -1.151
+7.5    17.228     17.890   -0.662
+
+150 messages, 18.8 Hz, worst error 1.276 deg.
+
+What it says: the stream is accepted and followed; the error changes sign with the direction, which is lag
+(the arm is behind the ramp), not the deadband — a deadband would show as a step that never closes, and
+these all close as the ramp turns around. 1.3 deg of lag at 0.6 deg/s of commanded motion is the number a
+policy has to live with when it streams, and it is why a closed loop needs to look at the reading and not at
+what it sent.
+
+What it does not say: the lag at higher rates or larger amplitudes (not measured), and whether arm 2 behaves
+the same (not measured; its pan undershoots more at every step).
