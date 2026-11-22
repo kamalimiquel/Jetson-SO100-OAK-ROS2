@@ -85,10 +85,21 @@ def plan(skill, mission_id, args, ctx):
             return _refuse("move_pose: the tolerances must be numbers")
         return {"accepted": True, "reason": "dispatched to IK",
                 "action": {"kind": "solve", "arm": arm, "frame": frame,
-                           "pose": xyz + quat, "max_pos": max_pos, "max_ori": max_ori}}
+                           "pose": xyz + quat, "max_pos": max_pos, "max_ori": max_ori,
+                           "deadline_s": float(payload.get("deadline_s", 1.0))}}
 
     if skill in ("move_joint", "hold"):
         angles = payload.get("angles")
+        # A request carries its own deadline. Without one, a command that reaches the port a second late is
+        # indistinguishable from one that arrives on time, and the arm moves on a decision made for an older
+        # world. Range is deliberately narrow: a long deadline is not a deadline, a very short one cannot be
+        # met by the DDS round trip.
+        try:
+            deadline_s = float(payload.get("deadline_s", 1.0))
+        except (TypeError, ValueError):
+            return _refuse("deadline_s must be a number of seconds")
+        if not (0.05 <= deadline_s <= 5.0):
+            return _refuse("deadline_s %r is outside 0.05..5.0 s" % deadline_s)
         hold = payload.get("hold") or []
         body = {"angles": angles, "hold": hold}
         units = str(payload.get("units") or "physical").strip().lower()
@@ -134,7 +145,8 @@ def plan(skill, mission_id, args, ctx):
         return {"accepted": True,
                 "reason": "ok" if not warnings else "ok, with warnings", "action": {
                     "kind": "write", "arm": arm, "driven": driven, "held": sorted(held),
-                    "notes": notes + warnings, "warnings": warnings, "units_in": units}}
+                    "notes": notes + warnings, "warnings": warnings, "units_in": units,
+                    "deadline_s": deadline_s}}
 
     # jaw skills: an aperture in millimetres, resolved against THIS arm's curve
     limits = jaw_limits(ctx["jaw"].get(arm))

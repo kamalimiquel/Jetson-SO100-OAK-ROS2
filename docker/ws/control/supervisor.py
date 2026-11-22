@@ -161,9 +161,13 @@ class Supervisor(Node):
 
     # -- the answer from IK --------------------------------------------------------------
     def on_result(self, ns, msg):
-        arm = self.pending.pop(msg.request_id, None)
+        arm, due = self.pending.pop(msg.request_id, (None, 0.0))
         if arm is None:
             return                      # not ours (another client's request, or already handled)
+        if time.time() > due:
+            self.get_logger().warn("move_pose %s: solver answered after its deadline — not writing"
+                                   % msg.request_id)
+            return
         if not msg.ok:
             self.get_logger().warn("move_pose %s refused by IK: %s" % (msg.request_id, msg.detail))
             return
@@ -179,6 +183,7 @@ class Supervisor(Node):
 
     # -- the service -------------------------------------------------------------------------------
     def on_skill(self, request, response):
+        t_recv = time.time()                 # the deadline is measured from here, not from the write
         self.served += 1
         if request.mission_id:
             self.mission = request.mission_id
@@ -203,12 +208,23 @@ class Supervisor(Node):
             (req.target.pose.orientation.x, req.target.pose.orientation.y,
              req.target.pose.orientation.z, req.target.pose.orientation.w) = action["pose"][3:]
             req.max_pos_err_mm, req.max_ori_err_deg = action["max_pos"], action["max_ori"]
-            self.pending[ticket] = arm
+            self.pending[ticket] = (arm, t_recv + float(action.get("deadline_s") or 1.0))
             self.pub_solve[NS[arm]].publish(req)
             response.accepted, response.ticket = True, ticket
             response.reason = ("dispatched to %s/ik/solve; the write happens only when the correlated "
                                "result says ok" % NS[arm])
             self.get_logger().info("skill move_pose on %s -> %s (%s)" % (arm, NS[arm], ticket))
+            return response
+        # The deadline has to be effective, not decorative: a command that reaches the port after its own
+        # deadline moves the arm on a decision made for an older world, so it is refused here — after the
+        # judgement, before the packet.
+        budget = float(action.get("deadline_s") or 1.0)
+        if time.time() - t_recv > budget:
+            self.get_logger().warn("skill %r refused: %.0f ms spent deciding, deadline %.0f ms"
+                                   % (request.skill, (time.time() - t_recv) * 1000, budget * 1000))
+            response.accepted, response.ticket = False, ""
+            response.reason = ("deadline exceeded: %.0f ms elapsed of %.0f ms allowed — nothing was written"
+                               % ((time.time() - t_recv) * 1000, budget * 1000))
             return response
         if action["kind"] == "write":
             # The array has no names: the order IS the contract, so it comes from JOINT_ORDER and

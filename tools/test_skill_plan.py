@@ -112,5 +112,17 @@ check("the warning names the joint", "shoulder_pan" in warn_of(A1, 0.5)[1][0], T
 check("a refusal still refuses (no warning path)", sp.plan(
     "move_joint", "m1", '{"arm": "%s", "angles": [999, 0, 0, 0, 0, 0]}' % A1, CTX)["accepted"], False)
 
+# ---- the deadline is part of the request, and a bad one is refused before anything moves
+def dl(body):
+    return sp.plan("move_joint", "m1", body, CTX)
+
+check("a command without deadline gets one second", dl('{"arm": "%s", "angles": [5,0,0,0,0,0]}' % A1)
+      .get("action", {}).get("deadline_s"), 1.0)
+check("a command can ask for a shorter one", dl('{"arm": "%s", "angles": [5,0,0,0,0,0], "deadline_s": 0.2}'
+      % A1).get("action", {}).get("deadline_s"), 0.2)
+check("a deadline of zero is refused", dl('{"arm": "%s", "angles": [5,0,0,0,0,0], "deadline_s": 0}' % A1)["accepted"], False)
+check("five seconds is the ceiling", dl('{"arm": "%s", "angles": [5,0,0,0,0,0], "deadline_s": 9}' % A1)["accepted"], False)
+check("a non-numeric deadline is refused", dl('{"arm": "%s", "angles": [5,0,0,0,0,0], "deadline_s": "soon"}' % A1)["accepted"], False)
+
 print("\n%s" % ("all checks pass" if not fails else "%d check(s) FAILED" % len(fails)))
 sys.exit(1 if fails else 0)
