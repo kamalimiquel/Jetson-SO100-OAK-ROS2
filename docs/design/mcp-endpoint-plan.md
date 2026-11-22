@@ -21,7 +21,7 @@ ownership model is gone.
 | 2 | `move_joint_bounded`, `set_gripper_aperture` (over `/cell/skill`) | four negative tests before the positive one: foreign lease, stale epoch, expired deadline, wrong start pose |
 | 3 | `solve_ik` (report-only), `detect_objects`, `camera_snapshot` via owner RPC — **done 2026-11-22** | a snapshot names its camera, its stamp and its hash; an unknown camera is refused with the list |
 | 4 | `get_goal`, `cancel_goal`, `stop`, journal — **done 2026-11-22** | killing the endpoint mid-mission leaves the arm stopped and the journal honest; a retry does not move twice |
-| 5 | **physics in the loop**, then the whole thing against it | a mission that has not passed with contact and gravity never runs on hardware |
+| 5 | **physics in the loop**, then the whole thing against it — **started 2026-11-22** | a mission that has not passed with contact and gravity never runs on hardware |
 
 ## What each tool may do
 
@@ -131,3 +131,29 @@ contract is a second integration, and the thing we would be validating would no 
 - **Not exercised with torque on:** no real write was accepted during this pass (the arms were left
   with torque off), so idempotence was proven against a seeded journal entry rather than against a
   motion that actually happened. The code path is the same; the honest label is "seeded".
+
+## Phase 5, as built (partial)
+
+- `sim/arm_server.py` had a real defect: it stepped the physics only when a `/write` arrived — 20
+  substeps, 0.04 s of a settle that needs seconds, which measured `shoulder_lift` 49 deg short of the
+  command. It now runs its own loop at the model's timestep while torque is on, so a servo holds
+  against gravity *between* commands, which is the error this phase exists to see.
+- `GET /objects` is the sim-only observation surface: every body's world position, for watching a
+  free body fall and come to rest. `/read` stays the arm contract.
+- **Verified on the Xavier** (2026-11-22): MuJoCo 3.2.3 (aarch64 wheel) in `so100-perception`, the
+  menagerie `robotstudio_so101` model, `sim` on :8004 answering `/status`, `/read`, `/write`,
+  `/torque`; the supervisor pointed at it with `SUPERVISOR_PORT_MAP=so100_cell=8004` and drove it
+  through `/skill` unchanged. Commands settle to **≤0.05 deg** (pan 30, lift -60, elbow 40; then
+  lift -95, elbow -75), and a block released at z = 0.35 m falls under gravity.
+- **The clock is slow, and it is not fixed:** the block fell 7 cm in ~4 s where free fall takes
+  ~0.2 s — the loop runs roughly 20x slower than real time on this CPU. A grasp that closes 2 mm
+  short needs the block inside the gripper's workspace *and* a clock close enough to real time that
+  the jaw closes while the block is still there; neither is done. Until then, physics is in the loop
+  but the mission regression is not.
+
+### A correction that came out of this phase
+
+Idempotence is scoped by **epoch** as well as `mission_id` (`journal.find_accepted(mission_id,
+epoch)`), which is what the spec says and what the journal was not doing. Without it, a mission id
+reused after a restart — or against the sim after the hardware — was answered with a stale ticket,
+claiming a motion that happened to a different robot.

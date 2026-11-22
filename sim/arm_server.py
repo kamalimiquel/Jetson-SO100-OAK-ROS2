@@ -73,21 +73,61 @@ class MuJoCoModel:
         self.target = {j: 0.0 for j in JOINT_ORDER}       # radians
         for j, adr in self.idx.items():
             self.target[j] = float(self.data.qpos[adr])
+        # Physics has to run on its own clock, not only when a command arrives: a servo that is told a
+        # position holds it against gravity between commands, and that steady-state error is the whole
+        # point of this phase. Stepping only on /write measured 0.04 s of a 4 s settle.
+        self.lock = threading.Lock()
+        self.enabled = threading.Event()                  # torque on
+        self._stop = threading.Event()
+        self._thread = None
+
+    def start(self):
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def _loop(self):
+        dt = float(self.model.opt.timestep)
+        nxt = time.time()
+        while not self._stop.is_set():
+            if self.enabled.is_set():
+                with self.lock:
+                    if self.actuated:
+                        self.data.ctrl[:len(JOINT_ORDER)] = [self.target[j] for j in JOINT_ORDER]
+                    self.mujoco.mj_step(self.model, self.data)
+            nxt += dt
+            delay = nxt - time.time()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                nxt = time.time()
 
     def present_deg(self):
-        return {j: math.degrees(float(self.data.qpos[adr])) for j, adr in self.idx.items()}
+        with self.lock:
+            return {j: math.degrees(float(self.data.qpos[adr])) for j, adr in self.idx.items()}
+
+    def objects(self):
+        """Every named body's world position. Sim-only: it is how a free body (a block) is watched
+        falling and coming to rest, which the arm-side /read deliberately does not expose."""
+        with self.lock:
+            out = {}
+            for i in range(self.model.nbody):
+                name = self.mujoco.mj_id2name(self.model, self.mujoco.mjtObj.mjOBJ_BODY, i)
+                if name and name != "world":
+                    out[name] = [round(float(v), 4) for v in self.data.xpos[i]]
+            return out
 
     def command_deg(self, angles):
-        """angles: {joint: degrees}. Steps the physics toward them and returns what came back."""
-        for j, deg in angles.items():
-            self.target[j] = math.radians(deg)
-        for _ in range(20):                                # 20 substeps of the model's own timestep
-            if self.actuated:
-                self.data.ctrl[:len(JOINT_ORDER)] = [self.target[j] for j in JOINT_ORDER]
-            else:
+        """angles: {joint: degrees}. Sets the servo targets; the physics loop does the moving.
+
+        A kinematic (qpos-only) model has no servos, so there the pose is written directly and the
+        distinction is stated in /status — a controlled joint and a teleported one are not the same.
+        """
+        with self.lock:
+            for j, deg in angles.items():
+                self.target[j] = math.radians(deg)
+            if not self.actuated:
                 for j, adr in self.idx.items():
                     self.data.qpos[adr] = self.target[j]
-            self.mujoco.mj_step(self.model, self.data)
         return self.present_deg()
 
 
@@ -172,6 +212,8 @@ def make_handler(state):
                                             "seconds_left": round(state.lease_left(), 1)})
                 if self.path == "/torque":
                     return self._send(200, {"torque": state.torque})
+                if self.path == "/objects":
+                    return self._send(200, {"objects": state.model.objects()})
                 if self.path == "/status":
                     return self._send(200, {"connected": True, "calibrated": True,
                                             "mode": state.mode, "writes": state.writes})
@@ -193,6 +235,10 @@ def make_handler(state):
                         return self._send(200, {"owner": state.owner})
                     if self.path == "/torque":                      # the operator's switch: never leased
                         state.torque = bool(body.get("on"))
+                        if state.torque:
+                            state.model.enabled.set()
+                        else:
+                            state.model.enabled.clear()
                         return self._send(200, {"torque": state.torque, "failed": {}, "unreachable": {}})
                     if self.path == "/write":
                         state.check_writer(self.headers.get("X-Owner"))
@@ -220,6 +266,7 @@ def main(argv=None):
 
     model = MuJoCoModel(args.model, args.prefix)
     mode = "actuated" if model.actuated else "qpos (kinematic — say so in /status)"
+    model.start()
     state = State(args.arm, model, mode)
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(state))
     print("sim arm %r on 127.0.0.1:%d — %s, %d qpos" % (args.arm, args.port, mode, model.model.nq), flush=True)

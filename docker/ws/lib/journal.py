@@ -66,13 +66,21 @@ def read(p=None, mission_id=None, limit=50):
     return out[-max(1, int(limit)):]
 
 
-def find_accepted(mission_id, p=None):
-    """The entry that already wrote for this mission, so a retry does not write twice."""
+def find_accepted(mission_id, epoch=None, p=None):
+    """The entry that already wrote for this mission **in this epoch**, so a retry does not write twice.
+
+    Scoped by epoch on purpose (spec 6-8, "mission_id idempotence + epoch"): after the cell restarts
+    or is recalibrated, the same mission id is a new decision, not a replay of the old one. Answering
+    it with a stale ticket would claim a motion that happened to a different robot.
+    """
     if not mission_id:
         return None
     for entry in read(p, mission_id=mission_id, limit=200):
-        if entry.get("accepted") and entry.get("skill") in WRITING:
-            return entry
+        if not entry.get("accepted") or entry.get("skill") not in WRITING:
+            continue
+        if epoch is not None and entry.get("epoch") and entry.get("epoch") != epoch:
+            continue
+        return entry
     return None
 
 

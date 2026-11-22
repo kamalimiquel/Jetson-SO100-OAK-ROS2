@@ -346,7 +346,7 @@ class Supervisor(Node):
             response.reason = "mission %r was cancelled" % request.mission_id
             return response
         if action["kind"] in ("write", "jaw", "solve"):
-            prior = jr.find_accepted(request.mission_id)
+            prior = jr.find_accepted(request.mission_id, self.epoch)
             if prior:
                 response.accepted, response.ticket = True, prior.get("ticket", "")
                 response.reason = ("idempotent: mission %r was already accepted as %s — nothing was "
