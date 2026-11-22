@@ -46,6 +46,9 @@ TTL = float(os.environ.get("SUPERVISOR_TTL_S", "15"))
 PORTS = dict(part.split("=") for part in
              os.environ.get("SUPERVISOR_PORT_MAP", "so100_cell=8002,so100_cell_b=8003").split(","))
 PORTS = {k.strip(): int(v) for k, v in PORTS.items()}
+# The operator's page cannot see a ROS service, so the supervisor also answers one question over HTTP:
+# am I here, what do I hold, and what have I been asked. Read-only, localhost-facing, nothing to drive with.
+STATUS_PORT = int(os.environ.get("SUPERVISOR_HTTP_PORT", "8097"))
 # cell id -> ROS namespace. Two names for the same arm (the port is per serial, the topic per namespace),
 # so the map is written once here instead of being guessed at every use.
 NS = {"so100_cell": "arm1", "so100_cell_b": "arm2"}
@@ -68,6 +71,10 @@ class Supervisor(Node):
         super().__init__("cell_supervisor")
         self.arms = list(PORTS)
         self.owned = []
+        self.served = 0                 # skills answered, for the page
+        self.mission = ""
+        self.last = {}                  # the last answer, so a page can show it without re-asking
+        self.t0 = time.time()
         self.tickets = 0
         self.create_service(SkillRequest, "/cell/skill", self.on_skill)
         # A pose is dispatched to that arm's IK and only written when the correlated result says ok.
@@ -83,6 +90,39 @@ class Supervisor(Node):
         self.renew()
         threading.Thread(target=self._renew_forever, daemon=True).start()
         self.get_logger().info("supervisor: owns %s (ttl %.0fs)" % (self.owned, TTL))
+        threading.Thread(target=self._serve_status, daemon=True).start()
+        self.get_logger().info("supervisor: status on http://0.0.0.0:%d/" % STATUS_PORT)
+
+    # -- the page's one question --------------------------------------------------------------
+    def _serve_status(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        node = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = json.dumps({
+                    "node": "cell_supervisor", "owner": OWNER, "ttl_s": TTL,
+                    "owned": list(node.owned), "served": node.served,
+                    "mission": node.mission, "last": node.last,
+                    "uptime_s": round(time.time() - node.t0, 1),
+                    "node_name": node.get_name(),
+                }).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        try:
+            ThreadingHTTPServer(("0.0.0.0", STATUS_PORT), Handler).serve_forever()
+        except OSError as exc:
+            self.get_logger().warn("supervisor: status port %d unavailable: %s" % (STATUS_PORT, exc))
 
     def _renew_forever(self):
         while True:
@@ -139,6 +179,11 @@ class Supervisor(Node):
 
     # -- the service -------------------------------------------------------------------------------
     def on_skill(self, request, response):
+        self.served += 1
+        if request.mission_id:
+            self.mission = request.mission_id
+        self.last = {"skill": request.skill, "mission": request.mission_id,
+                     "at": round(time.time(), 1)}
         verdict = sp.plan(request.skill, request.mission_id, request.args_json, self.context())
         if not verdict["accepted"]:
             response.accepted, response.reason, response.ticket = False, verdict["reason"], ""

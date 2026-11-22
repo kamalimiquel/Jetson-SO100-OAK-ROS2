@@ -22,7 +22,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ARMS = [("so100_cell", 8002), ("so100_cell_b", 8003)]
-SKILL_PORT = 8000
+SKILL_PORT = 8097        # supervisor HTTP status (read-only); see supervisor.py
 TIMEOUT_S = 1.5
 
 
@@ -47,6 +47,7 @@ def collect():
             continue
         row["reachable"] = True
         row["owner"] = (owner or {}).get("owner")
+        row["lease_s"] = (owner or {}).get("seconds_left")
         tw, err = get(port, "/torque")
         row["torque"] = bool((tw or {}).get("torque")) if not err else None
         st, err = get(port, "/status")
@@ -60,9 +61,10 @@ def collect():
             row["scale"] = {"arm": sc.get("arm"), "applied": sc.get("applied"),
                             "sha256": (sc.get("sha256") or "")[:8], "session": sc.get("session")}
         arms.append(row)
-    sup, err = get(SKILL_PORT, "/status")
+    sup, err = get(SKILL_PORT, "/")
     return {"arms": arms,
-            "supervisor": {"listening": err is None, "detail": sup if err is None else None},
+            "supervisor": {"listening": err is None, "detail": sup if err is None else None,
+                           "error": err},
             "all_reachable": all(a["reachable"] for a in arms)}
 
 
@@ -81,7 +83,7 @@ PAGE = """<!doctype html><meta charset="utf-8">
 </style>
 <h1>Cell — arms, ownership and scale</h1>
 <table id="t"><thead><tr>
- <th>arm</th><th>port</th><th>state</th><th>owner</th><th>torque</th><th>scale</th><th>session</th>
+ <th>arm</th><th>port</th><th>state</th><th>lease</th><th>torque</th><th>scale</th><th>session</th>
 </tr></thead><tbody></tbody></table>
 <p class="note" id="sup"></p>
 <script>
@@ -91,13 +93,16 @@ const fmt = (d) => {
     const torque = (a.torque === null || a.torque === undefined) ? "—"
                  : a.torque ? `<span class="on">energised</span>` : `<span class="off">free</span>`;
     const sc = a.scale ? `<code>${a.scale.sha256}</code>${a.scale.applied ? "" : ` <span class="off">(not applied)</span>`}` : "—";
-    return `<tr><td>${a.arm}</td><td>${a.port}</td><td>${state}</td><td>${a.owner || "—"}</td>
+    return `<tr><td>${a.arm}</td><td>${a.port}</td><td>${state}</td><td>${a.owner ? `${a.owner} <span class="off">${Math.round(a.lease_s||0)}s</span>` : "—"}</td>
             <td>${torque}</td><td>${sc}</td><td>${a.scale ? a.scale.session : "—"}</td></tr>`;
   }).join("");
   document.querySelector("#t tbody").innerHTML = rows;
-  document.querySelector("#sup").textContent = d.supervisor.listening
-    ? "supervisor: up (it holds both arms while a mission runs)"
-    : "supervisor: not running — normal unless a mission is up";
+  const sup = d.supervisor;
+  document.querySelector("#sup").innerHTML = sup.listening
+    ? `supervisor: <span class="on">up</span> — holds ${(sup.detail.owned||[]).join(", ") || "nothing"}`
+      + ` · mission ${sup.detail.mission || "—"} · ${sup.detail.served} skills · ${Math.round(sup.detail.uptime_s)}s up`
+      + (sup.detail.last && sup.detail.last.skill ? ` · last ${sup.detail.last.skill} (${sup.detail.last.mission || "no mission"})` : "")
+    : `supervisor: <span class="off">not running</span> — normal unless a mission is up`;
 };
 const tick = () => fetch("/status", {cache:"no-store"}).then(r => r.json()).then(fmt).catch(() => {});
 tick(); setInterval(tick, 2000);
