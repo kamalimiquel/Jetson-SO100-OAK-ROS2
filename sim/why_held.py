@@ -40,6 +40,7 @@ def main(argv=None):
     print("\n%-16s %9s %9s %11s %11s %s" %
           ("joint", "qpos", "qvel", "gravity N.m", "friction", "verdict"))
     any_should_move = False
+    rows = 0
     for j in range(model.njnt):
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j)
         if not name or not name.startswith(args.prefix):
@@ -65,8 +66,14 @@ def main(argv=None):
         else:
             verdict = "SHOULD MOVE (|tau| > friction)"
             any_should_move = True
+        rows += 1
         print("%-16s %9.4f %9.4f %11.4f %11.4f %s%s" %
               (name[len(args.prefix):], qpos, qvel, bias, loss, verdict, gravcomp))
+
+    if rows == 0:
+        raise SystemExit("why_held: no joint name starts with %r — an empty table proves nothing. Drop "
+                         "--prefix to see all of them (arm 1 has no prefix; arm 2 uses arm2_)."
+                         % args.prefix)
 
     print("\n%s" % ("Verdict: at least one joint must sag under gravity — if the viewer shows it still, the "
                     "model is not the one being drawn or the world is not stepping." if any_should_move
