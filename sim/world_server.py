@@ -60,7 +60,7 @@ def parse_write(body):
 class World:
     """One model, one clock, N arms. The only place that steps."""
 
-    def __init__(self, path, arms, rate_hz=250.0):
+    def __init__(self, path, arms, rate_hz=250.0, start=True):
         try:
             import mujoco
         except Exception as exc:                                     # noqa: BLE001
@@ -85,7 +85,15 @@ class World:
                                "target": {j: float(self.data.qpos[a]) for j, a in idx.items()},
                                "torque": False, "owner": None, "due": 0.0, "writes": 0}
         self.rate = rate_hz
+        self._started = threading.Event()
+        if start:
+            self._started.set()
         threading.Thread(target=self._loop, daemon=True).start()
+
+    def start(self):
+        """Begin stepping. With a viewer this is called after the window exists, or a 20 cm fall is over
+        before the first frame is drawn and the drop is invisible."""
+        self._started.set()
 
     # -- the clock -------------------------------------------------------------------------------
     def _loop(self):
@@ -94,6 +102,9 @@ class World:
         t0 = time.time()
         steps = 0
         while True:
+            if not self._started.is_set():
+                time.sleep(0.005)
+                continue
             with self.lock:
                 for arm in self.arms.values():
                     if arm["torque"]:
@@ -255,7 +266,7 @@ def main(argv=None):
         prefixes = inline
     arms = {arm: (prefixes[i], int(port)) for i, (arm, port) in enumerate(pairs)}
 
-    world = World(args.model, arms, args.rate)
+    world = World(args.model, arms, args.rate, start=not args.viewer)
     servers = []
     for name in arms:
         srv = ThreadingHTTPServer(("0.0.0.0", arms[name][1]), make_handler(world, name))
@@ -286,6 +297,10 @@ def main(argv=None):
         print("sim: viewer open — close the window or Ctrl+C to stop", flush=True)
         print("sim: window is %s; if you cannot see it, look in the taskbar" %
               ("running" if handle.is_running() else "already closed"), flush=True)
+        with world.lock:
+            handle.sync()                          # draw the initial state before anything moves
+        world.start()
+        print("sim: physics started — anything that falls, falls now", flush=True)
         try:
             while handle.is_running():
                 with world.lock:                      # the stepping thread owns the data; draw between steps
