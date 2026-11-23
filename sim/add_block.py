@@ -16,6 +16,7 @@ name, because a silent duplicate is a scene that looks right and behaves twice.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 
 BLOCK = "block"
@@ -26,8 +27,20 @@ def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.
     text = scene_text
     lower = text.lower()
 
+    # Comments matter here for a real reason: the generated scene mentions <option ...> inside a comment, and a
+    # naive search patched the comment instead of the element, which MuJoCo then refused to parse.
+    def spans(t):
+        return [m.span() for m in re.finditer(r"<!--.*?-->", t, re.S)]
+
+    def find_outside(needle, start=0):
+        skip = spans(text)
+        i = text.lower().find(needle, start)
+        while i != -1 and any(a <= i < b for a, b in skip):
+            i = text.lower().find(needle, i + 1)
+        return i
+
     # gravity: make it explicit, because a scene that relies on the default cannot be read
-    opt_start = lower.find("<option")
+    opt_start = find_outside("<option")
     has_gravity = False
     if opt_start != -1:
         opt_end = text.find(">", opt_start)
@@ -35,13 +48,17 @@ def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.
         has_gravity = "gravity=" in head_opt
         zero = 'gravity="0 0 0"' in head_opt.replace("'", '"')
         if gravity and not has_gravity:
-            text = text[:opt_end] + ' gravity="0 0 -9.81"' + text[opt_end:]
+            head_txt, slash = text[:opt_end], ""
+            if head_txt.endswith("/"):            # <option .../> : the attribute goes before the slash
+                head_txt, slash = head_txt[:-1], "/"
+            text = head_txt + ' gravity="0 0 -9.81"' + slash + text[opt_end:]
             print("add_block: gravity was unset (MuJoCo's default, which is also -9.81) — written explicitly")
         elif gravity and zero:
-            text = text[:opt_start] + head_opt.replace('gravity="0 0 0"', 'gravity="0 0 -9.81"') + text[opt_end:]
+            fixed = head_opt.replace('gravity="0 0 0"', 'gravity="0 0 -9.81"')
+            text = text[:opt_start] + fixed + text[opt_end:]
             print("add_block: gravity was zero — set to 0 0 -9.81 so the block falls")
     elif gravity:
-        i = lower.find("<worldbody")
+        i = find_outside("<worldbody")
         text = text[:i] + '<option gravity="0 0 -9.81"/>\n  ' + text[i:]
         print("add_block: no <option> — added gravity 0 0 -9.81")
 
@@ -51,10 +68,10 @@ def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.
     held = text.count('gravcomp="1"')
     if held:
         print("add_block: %d body(ies) carry gravcomp (held up without actuators)" % held)
-    if 'name="block"' in text:
+    if find_outside('name="block"') != -1:
         raise SystemExit("add_block: the scene already has a body named 'block'")
 
-    wb_end = lower.rfind("</worldbody>")
+    wb_end = text.lower().rfind("</worldbody>")
     if wb_end == -1:
         raise SystemExit("add_block: the scene has no </worldbody> to insert before")
 
