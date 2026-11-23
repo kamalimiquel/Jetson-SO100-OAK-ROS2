@@ -1730,12 +1730,26 @@ The two commands, word by word:
 .\.venv312\Scripts\python.exe sim\world_server.py --model $S\scene_bench.xml --arm-port so100_cell=8004 --arm-port so100_cell_b=8005:arm2_ --viewer
 ```
 
-`--scene` is where it reads (untouched), `--out` where it writes. `--table-z 0.02` puts the table 2 cm above the
-floor. `--block 0.14 0.15` is x and y between the two arms; with two coordinates the **z is computed** so the
-block falls. In the second line, `--model` is the scene just written, `--arm-port so100_cell=8004` serves arm 1 on
-8004 (no prefix, because its joints have none) and `so100_cell_b=8005:arm2_` serves arm 2 on 8005 with the joint
-prefix `arm2_` — **attached with a colon because PowerShell eats empty arguments**. `--viewer` opens the window;
-without it there is no window, but the physics and the ports work all the same.
+**Token by token — the furnishing line:**
+
+| token | what it is |
+|---|---|
+| `.\\.venv312\\Scripts\\python.exe` | the Python of the environment that has MuJoCo installed |
+| `sim\\add_block.py` | the program that furnishes the bench |
+| `--scene $S\\scene_two_arms.xml` | **where it reads**: the original plan, which is never modified |
+| `--out $S\\scene_bench.xml` | **where it writes**: the new scene |
+| `--table-z 0.02` | the table, 2 cm above the floor |
+| `--block 0.14 0.15` | the block at x=0.14, y=0.15 — between the two arms. With only two coordinates the **z is computed**: 20 cm above the table, so it falls |
+
+**Token by token — the physics server line:**
+
+| token | what it is |
+|---|---|
+| `sim\\world_server.py` | the physics server: one world, two arms, one clock |
+| `--model $S\\scene_bench.xml` | **the scene it simulates**: the one `add_block` just wrote, block included |
+| `--arm-port so100_cell=8004` | serves **arm 1** on port **8004**. No prefix, because its joints have none in the scene |
+| `--arm-port so100_cell_b=8005:arm2_` | serves **arm 2** on **8005**, telling it its joints are called `arm2_shoulder_pan`… The prefix is **attached with a colon because PowerShell eats empty arguments** |
+| `--viewer` | opens the MuJoCo window. Without it there is no window, but the physics and the ports work all the same |
 
 With the server running, the Xavier's supervisor is started against `IP_of_the_PC:8004` and `:8005`, and then
 `park`, `move_joint`, the deadline, the journal and the MCP endpoint all work **against physics** exactly as
