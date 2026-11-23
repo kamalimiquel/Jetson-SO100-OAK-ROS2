@@ -268,9 +268,10 @@ def main(argv=None):
         viewer = getattr(mujoco, "viewer", None)
         if viewer is None or not hasattr(viewer, "launch_passive"):
             raise SystemExit(
-                "sim: this mujoco (%s) has no viewer. launch_passive arrived in 2.2 and the API is 3.x; "
-                "run 'pip install -U mujoco' (3.2 or newer) or start without --viewer, which is how a cell "
-                "normally runs." % getattr(mujoco, "__version__", "unknown"))
+                "sim: this mujoco (%s) has no viewer. The classic viewer lives in 3.x and moved to MuJoCo "
+                "Studio in 4.x, so the pin is 'pip install \"mujoco>=3,<4\"' (README 10.2). Or run without "
+                "--viewer, which is how a cell normally runs."
+                % getattr(mujoco, "__version__", "unknown"))
         handle = viewer.launch_passive(world.model, world.data)
         print("sim: viewer open — close the window or Ctrl+C to stop", flush=True)
         try:

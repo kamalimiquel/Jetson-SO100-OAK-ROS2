@@ -1684,6 +1684,10 @@ one afternoon of experiments and has been removed, with its dependencies (`glfw`
 `/opt/menagerie`: the Xavier is the body — drivers, servo buses, cameras — and adding a physics engine to it
 buys nothing and costs RAM the perception stack needs.
 
+**The version pin is the twin's, and the same one applies here:** `pip install "mujoco>=3,<4"`. MuJoCo 4.x moved
+the classic viewer into MuJoCo Studio, so `--viewer` on 4.x fails with `module 'mujoco' has no attribute
+'viewer'` — the physics still runs headless, which is the normal mode.
+
 The consequence is architectural, not cosmetic: the simulated arm is a **remote** arm. `sim/arm_server.py`
 binds `0.0.0.0` by default for that reason, and the supervisor's port map accepts `host:port`, so
 
