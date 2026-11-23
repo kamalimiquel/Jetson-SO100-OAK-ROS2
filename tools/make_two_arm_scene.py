@@ -161,8 +161,21 @@ def main():
             twin.set("joint", PREFIX + act.get("joint"))
             actuator.append(twin)
 
+    # ElementTree re-emits a comment's text verbatim, so an '&' or a '<' inside one produces a file that MuJoCo
+    # tolerates and every standard parser rejects ("not well-formed (invalid token)"). Escape the comments
+    # instead of dropping the information, and verify the result parses before declaring success.
+    for el in root.iter():
+        if el.tag is ET.Comment and el.text:
+            el.text = (el.text.replace("&", "&amp;").replace("<", "&lt;")
+                       .replace("--", "- -").replace("--", "- -"))
+
     out = args.out or os.path.join(os.path.dirname(os.path.abspath(args.model)), "scene_two_arms.xml")
     ET.ElementTree(root).write(out, encoding="utf-8", xml_declaration=True)
+    try:
+        ET.parse(out)
+    except ET.ParseError as exc:
+        print("error: the scene written to %s is not well-formed XML: %s" % (out, exc), file=sys.stderr)
+        return 1
     print("wrote %s" % out)
     print("  arm 1: unchanged, at the origin")
     print("  arm 2: %s-prefixed, at (%g, %g, %g) from %s" % (PREFIX, off_x, off_y, off_z, args.geometry))
