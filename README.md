@@ -2605,6 +2605,10 @@ On the supervisor's HTTP status port (**8097**), not through MCP:
 | `POST /stop` | latch on; empties pending; only `/resume` lifts it |
 | `POST /resume` | lifts the latch. Deliberately **not** an MCP tool: resuming is the operator's decision |
 | `POST /cancel` with `{"mission_id": …}` | cancels that mission and its pending work; without an id it returns an error |
+| `GET /` | who the supervisor is: node, owner name, TTL, arms held, mission, skills served, uptime and the last park verdict |
+| `GET /goal?mission_id=…` | that mission's last journal entry, as the page shows it |
+| `GET /journal?mission_id=…` | the last 100 journal lines, optionally for one mission |
+| `POST /skill` | the same judgement the ROS service makes, for a client with no ROS: `{skill, mission_id, args_json}` → `{accepted, reason, ticket}` |
 
 #### What a `mission_id` is
 
