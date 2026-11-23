@@ -236,6 +236,9 @@ def main(argv=None):
     ap.add_argument("--prefix", action="append", default=[], metavar="PREFIX",
                     help="alternative to the ':PREFIX' form; '-' means no prefix")
     ap.add_argument("--rate", type=float, default=250.0)
+    ap.add_argument("--viewer", action="store_true",
+                    help="open a MuJoCo window on this machine. Without it the physics runs headless: the "
+                         "ports answer and nothing is drawn, which is the normal way to run a cell")
     args = ap.parse_args(argv)
 
     pairs, inline = [], []
@@ -260,6 +263,20 @@ def main(argv=None):
         threading.Thread(target=srv.serve_forever, daemon=True).start()
     print("sim: one world, %d qpos, arms on %s"
           % (world.model.nq, ", ".join("%s:%d" % (n, arms[n][1]) for n in arms)), flush=True)
+    if args.viewer:
+        import mujoco
+        handle = mujoco.viewer.launch_passive(world.model, world.data)
+        print("sim: viewer open — close the window or Ctrl+C to stop", flush=True)
+        try:
+            while handle.is_running():
+                with world.lock:                      # the stepping thread owns the data; draw between steps
+                    handle.sync()
+                time.sleep(1.0 / 60.0)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            handle.close()
+        return 0
     try:
         while True:
             time.sleep(3600)
