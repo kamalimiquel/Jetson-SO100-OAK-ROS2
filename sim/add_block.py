@@ -22,6 +22,23 @@ import sys
 BLOCK = "block"
 
 
+def diagnose(scene_text):
+    """Say what could hold an arm up, before anything is written. Runs on every path, including --separate."""
+    low = scene_text.lower().replace("'", '"')
+    if 'flag gravity="disable"' in low:
+        print('add_block: WARNING the scene disables gravity with <flag gravity="disable"/> — nothing will fall')
+    held = low.count('gravcomp="1"')
+    if held:
+        print("add_block: %d body(ies) carry gravcomp (held up without actuators)" % held)
+    fl = low.count("frictionloss=")
+    if fl:
+        print("add_block: %d joint(s) declare frictionloss — a light arm can be held by static friction alone, "
+              "which is physics, not compensation" % fl)
+    if not held and 'flag gravity="disable"' not in low and not fl:
+        print("add_block: no gravcomp, no gravity flag, no frictionloss — if the arms do not fall, they are "
+              "already at rest or something else holds them; check /objects twice")
+
+
 def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05, gravity=False):
     """Return the new scene text. Pure: no files, so it can be tested."""
     text = scene_text
@@ -64,12 +81,6 @@ def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.
         text = text[:i] + '<option gravity="0 0 -9.81"/>\n  ' + text[i:]
         print("add_block: no <option> — added gravity 0 0 -9.81")
 
-    if 'flag gravity="disable"' in lower.replace("'", '"'):
-        print('add_block: WARNING the scene disables gravity with <flag gravity="disable"/> — the block will '
-              'not fall either until that is removed')
-    held = text.count('gravcomp="1"')
-    if held:
-        print("add_block: %d body(ies) carry gravcomp (held up without actuators)" % held)
     if find_outside('name="block"') != -1:
         raise SystemExit("add_block: the scene already has a body named 'block'")
 
@@ -131,6 +142,7 @@ def main(argv=None):
 
     with open(args.scene, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
+    diagnose(text)
     if args.separate:
         # An <include> inside <worldbody> is replaced by the fragment's elements, so the fragment must hold
         # body/geom directly — wrapping it in <mujoco><worldbody> would nest a worldbody inside a worldbody.
