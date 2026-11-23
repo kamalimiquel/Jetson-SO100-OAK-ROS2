@@ -265,7 +265,13 @@ def main(argv=None):
           % (world.model.nq, ", ".join("%s:%d" % (n, arms[n][1]) for n in arms)), flush=True)
     if args.viewer:
         import mujoco
-        handle = mujoco.viewer.launch_passive(world.model, world.data)
+        viewer = getattr(mujoco, "viewer", None)
+        if viewer is None or not hasattr(viewer, "launch_passive"):
+            raise SystemExit(
+                "sim: this mujoco (%s) has no viewer. launch_passive arrived in 2.2 and the API is 3.x; "
+                "run 'pip install -U mujoco' (3.2 or newer) or start without --viewer, which is how a cell "
+                "normally runs." % getattr(mujoco, "__version__", "unknown"))
+        handle = viewer.launch_passive(world.model, world.data)
         print("sim: viewer open — close the window or Ctrl+C to stop", flush=True)
         try:
             while handle.is_running():
