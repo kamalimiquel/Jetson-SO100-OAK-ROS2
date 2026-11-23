@@ -261,6 +261,7 @@ def main(argv=None):
         srv = ThreadingHTTPServer(("0.0.0.0", arms[name][1]), make_handler(world, name))
         servers.append(srv)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
+    print("sim: options model=%s viewer=%s rate=%.0f" % (args.model, bool(args.viewer), args.rate), flush=True)
     print("sim: one world, %d qpos, arms on %s"
           % (world.model.nq, ", ".join("%s:%d" % (n, arms[n][1]) for n in arms)), flush=True)
     if args.viewer:
@@ -277,8 +278,14 @@ def main(argv=None):
                 "Studio in 4.x, so the pin is 'pip install \"mujoco>=3,<4\"' (README 10.2). Or run without "
                 "--viewer, which is how a cell normally runs."
                 % getattr(mujoco, "__version__", "unknown"))
-        handle = viewer.launch_passive(world.model, world.data)
+        try:
+            handle = viewer.launch_passive(world.model, world.data)
+        except Exception as exc:                                   # noqa: BLE001
+            raise SystemExit("sim: the viewer could not open (%s: %s). The physics is fine without it: drop "
+                             "--viewer and use GET /objects." % (type(exc).__name__, exc))
         print("sim: viewer open — close the window or Ctrl+C to stop", flush=True)
+        print("sim: window is %s; if you cannot see it, look in the taskbar" %
+              ("running" if handle.is_running() else "already closed"), flush=True)
         try:
             while handle.is_running():
                 with world.lock:                      # the stepping thread owns the data; draw between steps
