@@ -20,12 +20,22 @@ import xml.etree.ElementTree as ET
 BLOCK = "block"
 
 
-def build(scene, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05):
+def build(scene, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05, gravity=True):
     tree = ET.parse(scene)
     root = tree.getroot()
     world = root.find("worldbody")
     if world is None:
         raise SystemExit("add_block: %s has no <worldbody>" % scene)
+    # Gravity is the whole point of "it falls": a robot scene often ships gravity="0 0 0" so the arm does not
+    # sag in the viewer, and with it the block hangs in mid-air exactly where it was placed.
+    opt = root.find("option")
+    if opt is None:
+        opt = ET.SubElement(root, "option")
+    g = (opt.get("gravity") or "").strip()
+    if gravity and g in ("", "0 0 0"):
+        opt.set("gravity", "0 0 -9.81")
+        print("add_block: gravity was %r — set to 0 0 -9.81 so the block falls" % (g or "unset"))
+
     names = {b.get("name") for b in world.findall("body")}
     if block is not None and BLOCK in names:
         raise SystemExit("add_block: the scene already has a body named %r" % BLOCK)
@@ -63,6 +73,8 @@ def main(argv=None):
                     help="with a two-value --block: how far above the table top the block starts (cm)")
     ap.add_argument("--size", type=float, default=0.015, help="half-extent of the block, metres")
     ap.add_argument("--mass", type=float, default=0.05)
+    ap.add_argument("--no-gravity", action="store_true",
+                    help="leave the scene's gravity alone (default: force 0 0 -9.81 if it is zero or unset)")
     args = ap.parse_args(argv)
 
     block = args.block
@@ -76,7 +88,8 @@ def main(argv=None):
                   % (args.drop_cm, block[2]))
         elif len(block) != 3:
             raise SystemExit("add_block: --block takes X Y (with --drop-cm) or X Y Z")
-    tree = build(args.scene, args.floor_z, args.table_z, block, args.size, args.mass)
+    tree = build(args.scene, args.floor_z, args.table_z, block, args.size, args.mass,
+                 gravity=not args.no_gravity)
     tree.write(args.out, encoding="utf-8", xml_declaration=True)
     print("add_block: wrote %s (floor%s%s)" % (
         args.out, "" if args.table_z is None else ", table",
