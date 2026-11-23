@@ -1698,6 +1698,49 @@ SUPERVISOR_PORT_MAP="so100_cell=192.168.1.50:8004,so100_cell_b=192.168.1.50:8005
 makes the real supervisor, unchanged, drive two MuJoCo models on the PC. Everything above it — skills, park,
 deadline, journal, MCP endpoint — is the same code against a simulator and against the servo bus.
 
+#### 10.2d The four pieces of a simulated bench, and the two commands
+
+**`scene_two_arms.xml` — the plan.** What `make_two_arm_scene.py` writes: the two SO-101 arms in place (arm 1 at
+the origin, arm 2 at 0.3 m) with their joints and meshes, and **nothing else** — no floor, no table, no block. It
+is the robot's plan, not the bench's.
+
+**`sim/add_block.py` — the furnishing.** Reads that plan and writes **another file** with what is missing to
+test something: a floor, a table and a block with a **free joint** (free = physics may move it). It never edits
+the original. It knows three useful things: the block is born **20 cm above the table** (`--drop-cm`, default 20,
+with the height computed as table + half block + 20 cm); three coordinates place it exactly instead; and it warns
+when the scene carries something that would stop a fall (gravity disabled, per-body gravcomp, joint friction).
+
+**`scene_bench.xml` — the result.** The same plan **with floor, table and block**: the file MuJoCo is given. Open
+it and you find the usual two arms plus a `<body name="block">` at 0.235 m (2 cm table + 1.5 half block + 20 cm
+drop).
+
+**`sim/world_server.py` — the one that turns MuJoCo into a robot.** This is the important one: it is **not a
+viewer**. It loads the scene, **steps the physics** 250 times a second, and exposes **each arm as if it were the
+real one** — ports 8004 and 8005 answer `/claim`, `/torque`, `/write` and `/read` with the same refusals as the
+hardware (423 for a foreign lease, 409 with torque off). That is why the supervisor, the skills and the MCP
+endpoint can drive it **without changing a line**: they believe they are talking to an arm. One detail that cost
+an afternoon: **physics does not start until the viewer has drawn once**, or a 20 cm fall is over during window
+creation and the block is already resting when you look.
+
+The two commands, word by word:
+
+```
+.\.venv312\Scripts\python.exe sim\add_block.py --scene $S\scene_two_arms.xml --out $S\scene_bench.xml --table-z 0.02 --block 0.14 0.15
+
+.\.venv312\Scripts\python.exe sim\world_server.py --model $S\scene_bench.xml --arm-port so100_cell=8004 --arm-port so100_cell_b=8005:arm2_ --viewer
+```
+
+`--scene` is where it reads (untouched), `--out` where it writes. `--table-z 0.02` puts the table 2 cm above the
+floor. `--block 0.14 0.15` is x and y between the two arms; with two coordinates the **z is computed** so the
+block falls. In the second line, `--model` is the scene just written, `--arm-port so100_cell=8004` serves arm 1 on
+8004 (no prefix, because its joints have none) and `so100_cell_b=8005:arm2_` serves arm 2 on 8005 with the joint
+prefix `arm2_` — **attached with a colon because PowerShell eats empty arguments**. `--viewer` opens the window;
+without it there is no window, but the physics and the ports work all the same.
+
+With the server running, the Xavier's supervisor is started against `IP_of_the_PC:8004` and `:8005`, and then
+`park`, `move_joint`, the deadline, the journal and the MCP endpoint all work **against physics** exactly as
+against the arm.
+
 ### 10.3 F710 teleop — the pad (ADR-0017, amended by ADR-0020)
 
 **Recommended path — Python over rosbridge (no ROS2 on Windows).** Two pip packages, same WebSocket the MuJoCo twin already uses:
