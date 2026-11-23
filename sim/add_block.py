@@ -109,6 +109,9 @@ def main(argv=None):
     ap.add_argument("--drop-cm", type=float, default=20.0)
     ap.add_argument("--size", type=float, default=0.015, help="half-extent of the block, metres")
     ap.add_argument("--mass", type=float, default=0.05)
+    ap.add_argument("--separate", action="store_true",
+                    help="write the props into <out>_props.xml and insert a single <include> line: the scene "
+                         "itself is then untouched apart from that one line")
     ap.add_argument("--write-gravity", action="store_true",
                     help="rewrite <option gravity> to 0 0 -9.81 if it is zero or unset. Off by default: the "
                          "default is already -9.81 and editing that tag has broken scenes before")
@@ -128,7 +131,33 @@ def main(argv=None):
 
     with open(args.scene, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
-    out = build(text, args.floor_z, args.table_z, block, args.size, args.mass, gravity=args.write_gravity)
+    if args.separate:
+        # An <include> inside <worldbody> is replaced by the fragment's elements, so the fragment must hold
+        # body/geom directly — wrapping it in <mujoco><worldbody> would nest a worldbody inside a worldbody.
+        props = []
+        if 'type="plane"' not in text.lower():
+            props.append('    <geom name="floor" type="plane" size="1 1 0.05" pos="0 0 %.4f" '
+                         'rgba="0.32 0.32 0.38 1"/>' % float(args.floor_z))
+        if args.table_z is not None:
+            props.append('    <geom name="table" type="box" size="0.30 0.30 0.01" pos="0.10 0.15 %.4f" '
+                         'rgba="0.55 0.45 0.35 1"/>' % (float(args.floor_z) + float(args.table_z)))
+        if block is not None:
+            props.append('    <body name="block" pos="%.4f %.4f %.4f">\n      <freejoint/>\n'
+                         '      <geom name="block_geom" type="box" size="%.4f %.4f %.4f" '
+                         'rgba="0.90 0.70 0.20 1" mass="%g" friction="1.5 0.02 0.001"/>\n    </body>'
+                         % (block[0], block[1], block[2], args.size, args.size, args.size, args.mass))
+        props += [""]
+        props_path = args.out.replace(".xml", "") + "_props.xml"
+        with open(props_path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(props))
+        inc = '    <include file="%s"/>\n  ' % props_path.split("\\")[-1].split("/")[-1]
+        i = text.lower().rfind("</worldbody>")
+        if i == -1:
+            raise SystemExit("add_block: the scene has no </worldbody> to insert the include before")
+        out = text[:i] + inc + text[i:]
+        print("add_block: props in %s, one <include> line added to the scene" % props_path)
+    else:
+        out = build(text, args.floor_z, args.table_z, block, args.size, args.mass, gravity=args.write_gravity)
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(out)
     print("add_block: wrote %s (floor%s%s)" % (
