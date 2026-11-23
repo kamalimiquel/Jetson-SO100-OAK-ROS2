@@ -34,7 +34,10 @@ def build(scene, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05, g
     g = (opt.get("gravity") or "").strip()
     if gravity and g in ("", "0 0 0"):
         opt.set("gravity", "0 0 -9.81")
-        print("add_block: gravity was %r — set to 0 0 -9.81 so the block falls" % (g or "unset"))
+        print("add_block: gravity was %s — written explicitly as 0 0 -9.81" %
+              ("unset (MuJoCo's default, which is also -9.81)" if not g else "zero"))
+    elif gravity:
+        print("add_block: gravity left as %r" % g)
 
     names = {b.get("name") for b in world.findall("body")}
     if block is not None and BLOCK in names:
