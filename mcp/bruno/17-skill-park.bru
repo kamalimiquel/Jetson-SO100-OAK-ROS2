@@ -1,0 +1,31 @@
+meta {
+  name: supervisor /skill park
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{supervisorUrl}}/skill
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "skill": "park",
+    "mission_id": "{{mission}}",
+    "args_json": "{\"arm\": \"{{arm}}\"}"
+  }
+}
+
+docs {
+  park is a skill, not an MCP tool: it is the same judgement the ROS service makes, reached over the
+  supervisor's HTTP port. It writes the measured parked pose for that arm (no conversion: those numbers are in
+  the degrees the arm reports), needs torque on, and the reply carries accepted, reason and ticket.
+
+  Two repeated parks land within 0.00 deg of each other — the reason the skill exists instead of folding by hand.
+}

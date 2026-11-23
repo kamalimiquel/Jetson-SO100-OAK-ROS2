@@ -1,5 +1,5 @@
 meta {
-  name: 06-solve-ik
+  name: solve_ik (fixture pose)
   type: http
   seq: 6
 }
@@ -11,7 +11,7 @@ post {
 }
 
 headers {
-  Content-Type: application/json
+  content-type: application/json
 }
 
 body:json {
@@ -25,13 +25,13 @@ body:json {
         "arm": "{{arm}}",
         "frame": "arm1_base",
         "pose": {
-          "x": 0.15,
-          "y": 0.02,
-          "z": 0.08,
-          "qx": 0.0,
-          "qy": 0.0,
-          "qz": 0.0,
-          "qw": 1.0
+          "x": {{pose_x}},
+          "y": {{pose_y}},
+          "z": {{pose_z}},
+          "qx": {{pose_qx}},
+          "qy": {{pose_qy}},
+          "qz": {{pose_qz}},
+          "qw": {{pose_qw}}
         }
       }
     }
@@ -39,5 +39,10 @@ body:json {
 }
 
 docs {
-  Report only: never writes. Use tools/ik_pose_fixture.py to get a pose that answers ok=true.
+  Report only: it never writes. To get ok=true, fill pose_* in the environment with a pose produced by
+  tools/ik_pose_fixture.py (forward kinematics from the arm's current angles), so the solver has to come back
+  to where the arm already is: expect ok true, pos_err ~0.0 mm, about 7 iterations.
+
+  Needs the IK node up (arm1_ik / arm2_ik) and the supervisor running: the supervisor waits up to 5 s for the
+  correlated answer and nothing is written on the report path either way.
 }
