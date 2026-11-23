@@ -56,17 +56,31 @@ def main(argv=None):
     ap.add_argument("--floor-z", type=float, default=0.0)
     ap.add_argument("--table-z", type=float, default=None,
                     help="height of a table top above the floor; omit for none")
-    ap.add_argument("--block", nargs=3, metavar=("X", "Y", "Z"), default=None,
-                    help="centre of the block in metres")
+    ap.add_argument("--block", nargs="+", metavar="X Y [Z]", default=None,
+                    help="centre of the block: X Y and Z, or X Y alone with --drop-cm to compute Z above the "
+                         "table so it falls when the model starts")
+    ap.add_argument("--drop-cm", type=float, default=20.0,
+                    help="with a two-value --block: how far above the table top the block starts (cm)")
     ap.add_argument("--size", type=float, default=0.015, help="half-extent of the block, metres")
     ap.add_argument("--mass", type=float, default=0.05)
     args = ap.parse_args(argv)
 
-    tree = build(args.scene, args.floor_z, args.table_z, args.block, args.size, args.mass)
+    block = args.block
+    if block is not None:
+        if len(block) == 2:
+            if args.table_z is None:
+                raise SystemExit("add_block: --drop-cm needs --table-z to know where the table top is")
+            top = float(args.floor_z) + float(args.table_z) + float(args.size)
+            block = [float(block[0]), float(block[1]), top + float(args.drop_cm) / 100.0]
+            print("add_block: block starts %.0f cm above the table top (z=%.3f), so it falls"
+                  % (args.drop_cm, block[2]))
+        elif len(block) != 3:
+            raise SystemExit("add_block: --block takes X Y (with --drop-cm) or X Y Z")
+    tree = build(args.scene, args.floor_z, args.table_z, block, args.size, args.mass)
     tree.write(args.out, encoding="utf-8", xml_declaration=True)
     print("add_block: wrote %s (floor%s%s)" % (
         args.out, "" if args.table_z is None else ", table",
-        "" if args.block is None else ", block at %.3f %.3f %.3f" % tuple(float(v) for v in args.block)))
+        "" if args.block is None else ", block at %.3f %.3f %.3f" % tuple(float(v) for v in block)))
     return 0
 
 
