@@ -265,7 +265,12 @@ def main(argv=None):
           % (world.model.nq, ", ".join("%s:%d" % (n, arms[n][1]) for n in arms)), flush=True)
     if args.viewer:
         import mujoco
-        viewer = getattr(mujoco, "viewer", None)
+        # 3.x loads the viewer lazily: `mujoco.viewer` is an AttributeError until the submodule is imported,
+        # which is why getattr(mujoco, "viewer", None) reported "no viewer" on a perfectly good 3.1.7.
+        try:
+            import mujoco.viewer as viewer                     # noqa: F401
+        except Exception:                                      # noqa: BLE001
+            viewer = None
         if viewer is None or not hasattr(viewer, "launch_passive"):
             raise SystemExit(
                 "sim: this mujoco (%s) has no viewer. The classic viewer lives in 3.x and moved to MuJoCo "
