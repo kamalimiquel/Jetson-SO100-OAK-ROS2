@@ -48,9 +48,22 @@ rather than redrawn, and the band at the bottom lists what is still to build.
 | **IP / LAN** | Internet Protocol / Local Area Network — the home network the Xavier, the PC and the browser share |
 | **Hz / fps** | hertz / frames per second — how often something happens per second (a topic at 50 Hz = 50 messages/s) |
 
+- **[Abbreviations used in this document](#abbreviations-used-in-this-document)**
+| **MCP** | Model Context Protocol — the JSON-RPC interface an AI agent speaks to ask the cell for skills (§13.7). The endpoint **asks**; it never drives |
+| **JSON-RPC 2.0** | the request/response shape over HTTP: one `method`, `params`, an `id` that comes back with the answer |
+| **tool** | one callable capability published by the MCP endpoint (`capabilities`, `move_joint_bounded`, …). Ten of them today |
+| **RPC** | remote procedure call — here, the owner process' HTTP endpoint that hands a JPEG snapshot to the MCP container, which has no cameras |
+| **lease / owner** | the write permission on one arm: `POST /claim` with an owner name and a TTL. Anyone else writing gets **423**; the supervisor holds both leases while a mission runs |
+| **TTL** | time to live — how long a lease or a command stays valid. 15 s idle, 0.5 s while a mission runs; a command older than 0.5 s is history, not intent |
+| **journal** | the append-only JSONL record of every skill call: mission, skill, verdict, reason, ticket and epoch (§13.7) |
+| **JSONL** | JSON Lines — one JSON object per line, appendable without rewriting the file |
+| **deadband** | the step below which a joint does not move and reports no error: 1.0 deg on arm 1's pan, 2.0 on arm 2's. A command under it is accepted **with a warning**, because the servo may ignore it silently |
+| **park / parked pose** | the measured pose each arm returns to, per arm, verified by `park.check_cell`: a mission is refused unless both arms are there (§10.2-area, `docker/ws/lib/park.py`) |
+| **DLS** | Damped Least Squares — the inverse-kinematics method the solver uses, with the URDF limits |
+| **epoch** | a fingerprint of (host boot, calibration revisions). A plan made under another epoch is refused: the robot it described no longer exists |
+
 ## Contents
 
-- **[Abbreviations used in this document](#abbreviations-used-in-this-document)**
 - **[1. Install path — the order to do this in](#1-install-path--the-order-to-do-this-in)**
 - **[2. Prerequisites](#2-prerequisites)**
   - [2.1 Hardware](#21-hardware)
@@ -61,6 +74,16 @@ rather than redrawn, and the band at the bottom lists what is still to build.
 - **[3. The joints — one name for every layer](#3-the-joints--one-name-for-every-layer)**
   - [3.1 How a joint is calibrated, and what proves it](#31-how-a-joint-is-calibrated-and-what-proves-it)
   - [3.2 Arm 2 — the same procedure, its own numbers](#32-arm-2--the-same-procedure-its-own-numbers)
+    - [The instruments, as they were actually used](#the-instruments-as-they-were-actually-used)
+    - [How the fit works, and what each sum is](#how-the-fit-works-and-what-each-sum-is)
+    - [shoulder_lift — 0.977](#shoulder_lift--0977)
+    - [elbow_flex — 0.953, and a sign worth writing down](#elbow_flex--0953-and-a-sign-worth-writing-down)
+    - [wrist_flex — 0.967](#wrist_flex--0967)
+    - [wrist_roll — 0.825, six points, three on each side](#wrist_roll--0825-six-points-three-on-each-side)
+    - [The jaw — a caliper curve, and not the same jaw as arm 1](#the-jaw--a-caliper-curve-and-not-the-same-jaw-as-arm-1)
+    - [Arm 2, in one table](#arm-2-in-one-table)
+    - [The two arms, side by side](#the-two-arms-side-by-side)
+    - [3.2b The other half of the same idea: how far you must ask before it moves](#32b-the-other-half-of-the-same-idea-how-far-you-must-ask-before-it-moves)
 - **[4. Arms bring-up — uv + LeRobot SDK (arm 1, then arm 2)](#4-arms-bring-up--uv--lerobot-sdk-arm-1-then-arm-2)**
   - [4.1 Re-calibrating the arm (with pose pictures)](#41-re-calibrating-the-arm-with-pose-pictures)
 - **[5. Second arm, live — calibration and the one-model RViz](#5-second-arm-live--calibration-and-the-one-model-rviz)**
@@ -72,14 +95,19 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [8.2 The arm in RViz — model, URDF and the QoS/view config](#82-the-arm-in-rviz--model-urdf-and-the-qosview-config)
 - **[9. Web interface — Terminal · Stereo & Depth · Cloud · Graph · RViz](#9-web-interface--terminal--stereo--depth--cloud--graph--rviz)**
   - [9.1 Torque switches — one per arm](#91-torque-switches--one-per-arm)
-  - [9.2 What runs inside `so100-web`](#92-what-runs-inside-so100-web)
-  - [9.3 The image: the **desktop** dusty image, no compiling](#93-the-image-the-desktop-dusty-image-no-compiling)
-  - [9.4 `entry.sh` — the container's whole startup](#94-entrysh--the-containers-whole-startup)
+  - [9.2 What runs inside so100-web](#92-what-runs-inside-so100-web)
+  - [9.3 The image: the desktop dusty image, no compiling](#93-the-image-the-desktop-dusty-image-no-compiling)
+  - [9.4 entry.sh — the container's whole startup](#94-entrysh--the-containers-whole-startup)
   - [9.5 The renderer — why Qt draws on the CPU](#95-the-renderer--why-qt-draws-on-the-cpu)
 - **[10. Operator PC — teleop + visualization](#10-operator-pc--teleop--visualization)**
   - [10.1 MuJoCo model check (ADR-0016)](#101-mujoco-model-check-adr-0016)
   - [10.2 MuJoCo twin — live mirror of the real arm (rosbridge WebSocket, ADR-0019)](#102-mujoco-twin--live-mirror-of-the-real-arm-rosbridge-websocket-adr-0019)
+    - [Two arms in the twin (Plan Phase 6)](#two-arms-in-the-twin-plan-phase-6)
+    - [10.2b The twin commanded, not just mirrored](#102b-the-twin-commanded-not-just-mirrored)
+    - [10.2c Where physics runs — and where it does not](#102c-where-physics-runs--and-where-it-does-not)
+    - [10.2d The four pieces of a simulated bench, and the two commands](#102d-the-four-pieces-of-a-simulated-bench-and-the-two-commands)
   - [10.3 F710 teleop — the pad (ADR-0017, amended by ADR-0020)](#103-f710-teleop--the-pad-adr-0017-amended-by-adr-0020)
+    - [joint-step, the default mode](#joint-step-the-default-mode)
   - [10.4 Nothing on the PC needs ROS2 — or a firewall rule](#104-nothing-on-the-pc-needs-ros2--or-a-firewall-rule)
 - **[11. Day-to-day: from cold to moving the arms](#11-day-to-day-from-cold-to-moving-the-arms)**
 - **[12. Perception — what the cloud sees, and its calibration](#12-perception--what-the-cloud-sees-and-its-calibration)**
@@ -98,17 +126,35 @@ rather than redrawn, and the band at the bottom lists what is still to build.
   - [13.4 so100-rosbridge — the WebSocket bridge (MuJoCo twin, ADR-0019)](#134-so100-rosbridge--the-websocket-bridge-mujoco-twin-adr-0019)
   - [13.5 so100-control — the IK node (ADR-0009)](#135-so100-control--the-ik-node-adr-0009)
   - [13.6 so100-control — the arbiter and the episode recorder](#136-so100-control--the-arbiter-and-the-episode-recorder)
+  - [13.7 so100-control — the MCP endpoint](#137-so100-control--the-mcp-endpoint)
+    - [The ten tools](#the-ten-tools)
+    - [Where a snapshot goes](#where-a-snapshot-goes)
+    - [solve_report — the path solve_ik takes](#solve_report--the-path-solve_ik-takes)
+    - [get_goal, cancel_goal, stop and the journal](#get_goal-cancel_goal-stop-and-the-journal)
+    - [What a journal entry is](#what-a-journal-entry-is)
+    - [POST /stop, /resume, /cancel](#post-stop-resume-cancel)
+    - [What a mission_id is](#what-a-mission_id-is)
+- **[14. Useful ROS 2 commands](#14-useful-ros-2-commands)**
+  - [14.1 Watching the robot live](#141-watching-the-robot-live)
+  - [14.2 Moving things by hand](#142-moving-things-by-hand)
+  - [14.3 Transforms](#143-transforms)
+  - [14.4 Services and parameters](#144-services-and-parameters)
+  - [14.5 When a command lies](#145-when-a-command-lies)
 - **[15. Troubleshooting](#15-troubleshooting)**
   - [15.1 The tabs](#151-the-tabs)
   - [15.2 Everything else](#152-everything-else)
 - **[16. Two-arm integration — the risks, explained](#16-two-arm-integration--the-risks-explained)**
+    - [Two alternative ways the cell could be built](#two-alternative-ways-the-cell-could-be-built)
 - **[17. Status and what is next](#17-status-and-what-is-next)**
   - [17.1 Phases](#171-phases)
   - [17.2 Implemented on the hardware](#172-implemented-on-the-hardware)
   - [17.3 Next](#173-next)
+  - [17.4 The audit's ten proposals, where each one actually stands](#174-the-audits-ten-proposals-where-each-one-actually-stands)
+  - [17.5 Chapter 2, number by number — what each proposal is](#175-chapter-2-number-by-number--what-each-proposal-is)
 - **[18. How we work](#18-how-we-work)**
 - **[19. Documentation](#19-documentation)**
 - **[20. Releases](#20-releases)**
+
 
 ## 1. Install path — the order to do this in
 

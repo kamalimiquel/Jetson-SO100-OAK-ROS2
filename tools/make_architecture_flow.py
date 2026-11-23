@@ -129,14 +129,15 @@ card(430, 306, 350, 168, "so100-cams", [
     "  /arm2/gripper/image/compressed at 10 Hz (Cams tab picks one)",
     "viewers: :8090 stereo+confidence, :8091 cloud"], "green")
 
-card(430, 490, 350, 132, "so100-control", [
-    "ik + arm2_ik: /ik/target and /arm2/ik/target (in base / arm2_base) →",
-    "/ik/solution, /arm2/ik/solution · /joint_targets if IK_APPLY=1",
+card(430, 486, 350, 152, "so100-control", [
+    "ik + arm2_ik (report-only and typing), arbiter, recorder, journal",
+    "cell_supervisor: owns both leases, serves /cell/skill, status :8097",
+    "MCP endpoint :8000 (JSON-RPC, ten tools) — it asks, never drives",
     "DLS + geometric Jacobian · 0.0 mm median round trip"], "green")
 
-card(430, 626, 350, 96, "so100-perception", [
+card(430, 650, 350, 96, "so100-perception", [
     "empty: the grasp pipeline lands here",
-    "segmentation → GraspGen request"], "grey")
+    "segmentation → GraspGen request · owner RPC :8098 snapshots"], "grey")
 
 card(430, 738, 350, 150, "so100-web", [
     "tabs page :80 (seven tabs) · ttyd :7681",
@@ -168,6 +169,11 @@ card(1230, 515, 380, 92, "GraspGen", [
     "needs the grasp pipeline and the IK node"], "grey")
 card(1230, 630, 380, 92, "Policy training (MuJoCo)", [
     "needs episode recording + LeRobot export"], "grey")
+card(1230, 745, 380, 128, "sim/ world_server + MuJoCo 3.x — physics", [
+    "one MjData, 250 steps/s, served as two arms :8004 / :8005",
+    "same /claim /torque /write /read as the hardware: the supervisor",
+    "drives physics with the same code · scene_two_arms + add_block",
+    "arms hold via frictionloss/gravcomp: the model is better than the machine"], "amber")
 
 # ----------------------------------------------------------------- arrows
 # one spine on the right of the Jetson column: every container ties into the ROS2 bus there,
