@@ -8,69 +8,73 @@ props, this writes a new scene that contains the original plus the things a benc
     python3 sim/add_block.py --scene scene_two_arms.xml --out scene_bench.xml \\
         --floor-z 0 --table-z 0.02 --block 0.14 0.02 0.10 --size 0.015
 
-Idempotent in the useful direction: it refuses to add a second block if one with the same name is already
-there, because a silent duplicate is a scene that looks right and behaves twice.
+It edits the file as **text**, not as XML: MuJoCo parses its own MJCF leniently and the generated two-arm scene is
+not well-formed XML (a stray character in a comment is enough), so an ElementTree round trip fails on a file that
+MuJoCo itself opens happily. Idempotent in the useful direction: it refuses to add a second block with the same
+name, because a silent duplicate is a scene that looks right and behaves twice.
 """
 from __future__ import annotations
 
 import argparse
 import sys
-import xml.etree.ElementTree as ET
 
 BLOCK = "block"
 
 
-def build(scene, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05, gravity=True):
-    tree = ET.parse(scene)
-    root = tree.getroot()
-    world = root.find("worldbody")
-    if world is None:
-        raise SystemExit("add_block: %s has no <worldbody>" % scene)
-    # Gravity is the whole point of "it falls": a robot scene often ships gravity="0 0 0" so the arm does not
-    # sag in the viewer, and with it the block hangs in mid-air exactly where it was placed.
-    opt = root.find("option")
-    if opt is None:
-        opt = ET.SubElement(root, "option")
-    g = (opt.get("gravity") or "").strip()
-    if gravity and g in ("", "0 0 0"):
-        opt.set("gravity", "0 0 -9.81")
-        print("add_block: gravity was %s — written explicitly as 0 0 -9.81" %
-              ("unset (MuJoCo's default, which is also -9.81)" if not g else "zero"))
+def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05, gravity=True):
+    """Return the new scene text. Pure: no files, so it can be tested."""
+    text = scene_text
+    lower = text.lower()
+
+    # gravity: make it explicit, because a scene that relies on the default cannot be read
+    opt_start = lower.find("<option")
+    has_gravity = False
+    if opt_start != -1:
+        opt_end = text.find(">", opt_start)
+        head_opt = text[opt_start:opt_end]
+        has_gravity = "gravity=" in head_opt
+        zero = 'gravity="0 0 0"' in head_opt.replace("'", '"')
+        if gravity and not has_gravity:
+            text = text[:opt_end] + ' gravity="0 0 -9.81"' + text[opt_end:]
+            print("add_block: gravity was unset (MuJoCo's default, which is also -9.81) — written explicitly")
+        elif gravity and zero:
+            text = text[:opt_start] + head_opt.replace('gravity="0 0 0"', 'gravity="0 0 -9.81"') + text[opt_end:]
+            print("add_block: gravity was zero — set to 0 0 -9.81 so the block falls")
     elif gravity:
-        print("add_block: gravity left as %r" % g)
+        i = lower.find("<worldbody")
+        text = text[:i] + '<option gravity="0 0 -9.81"/>\n  ' + text[i:]
+        print("add_block: no <option> — added gravity 0 0 -9.81")
 
-    # Two other ways a robot scene holds an arm up without gravcomp: <flag gravity="disable"/> and
-    # <body gravcomp="1">. Report both, so "the arms do not fall" stops being a mystery.
-    flag = opt.find("flag")
-    if flag is not None and (flag.get("gravity") or "").lower() == "disable":
-        print("add_block: WARNING the scene disables gravity with <flag gravity=\"disable\"/> — the block will "
-              "not fall either until that is removed")
-    held = [b.get("name") for b in world.findall(".//body") if (b.get("gravcomp") or "0") not in ("0", "")]
+    if 'flag gravity="disable"' in lower.replace("'", '"'):
+        print('add_block: WARNING the scene disables gravity with <flag gravity="disable"/> — the block will '
+              'not fall either until that is removed')
+    held = text.count('gravcomp="1"')
     if held:
-        print("add_block: %d body(ies) carry gravcomp (held up without actuators): %s"
-              % (len(held), ", ".join(held[:6]) + ("…" if len(held) > 6 else "")))
+        print("add_block: %d body(ies) carry gravcomp (held up without actuators)" % held)
+    if 'name="block"' in text:
+        raise SystemExit("add_block: the scene already has a body named 'block'")
 
-    names = {b.get("name") for b in world.findall("body")}
-    if block is not None and BLOCK in names:
-        raise SystemExit("add_block: the scene already has a body named %r" % BLOCK)
+    wb_end = lower.rfind("</worldbody>")
+    if wb_end == -1:
+        raise SystemExit("add_block: the scene has no </worldbody> to insert before")
 
-    if not any(g.get("type") == "plane" for g in world.findall("geom")):
-        ET.SubElement(world, "geom", {"name": "floor", "type": "plane", "size": "1 1 0.05",
-                                      "pos": "0 0 %.4f" % float(floor_z),
-                                      "rgba": "0.32 0.32 0.38 1"})
+    parts = []
+    if 'type="plane"' not in lower:
+        parts.append('    <geom name="floor" type="plane" size="1 1 0.05" pos="0 0 %.4f" '
+                     'rgba="0.32 0.32 0.38 1"/>' % float(floor_z))
     if table_z is not None:
-        ET.SubElement(world, "geom", {"name": "table", "type": "box", "size": "0.30 0.30 0.01",
-                                      "pos": "0.10 0.15 %.4f" % (float(floor_z) + float(table_z)),
-                                      "rgba": "0.55 0.45 0.35 1", "contype": "1", "conaffinity": "1"})
+        parts.append('    <geom name="table" type="box" size="0.30 0.30 0.01" pos="0.10 0.15 %.4f" '
+                     'rgba="0.55 0.45 0.35 1"/>' % (float(floor_z) + float(table_z)))
     if block is not None:
         x, y, z = (float(v) for v in block)
-        body = ET.SubElement(world, "body", {"name": BLOCK, "pos": "%.4f %.4f %.4f" % (x, y, z)})
-        ET.SubElement(body, "freejoint")
-        ET.SubElement(body, "geom", {"name": "block_geom", "type": "box",
-                                     "size": "%.4f %.4f %.4f" % (size, size, size),
-                                     "rgba": "0.90 0.70 0.20 1", "mass": "%g" % mass,
-                                     "friction": "1.5 0.02 0.001"})
-    return tree
+        parts.append('    <body name="block" pos="%.4f %.4f %.4f">\n'
+                     '      <freejoint/>\n'
+                     '      <geom name="block_geom" type="box" size="%.4f %.4f %.4f" '
+                     'rgba="0.90 0.70 0.20 1" mass="%g" friction="1.5 0.02 0.001"/>\n'
+                     '    </body>' % (x, y, z, size, size, size, mass))
+    if not parts:
+        return text
+    return text[:wb_end] + "\n".join(parts) + "\n  " + text[wb_end:]
 
 
 def main(argv=None):
@@ -83,12 +87,10 @@ def main(argv=None):
     ap.add_argument("--block", nargs="+", metavar="X Y [Z]", default=None,
                     help="centre of the block: X Y and Z, or X Y alone with --drop-cm to compute Z above the "
                          "table so it falls when the model starts")
-    ap.add_argument("--drop-cm", type=float, default=20.0,
-                    help="with a two-value --block: how far above the table top the block starts (cm)")
+    ap.add_argument("--drop-cm", type=float, default=20.0)
     ap.add_argument("--size", type=float, default=0.015, help="half-extent of the block, metres")
     ap.add_argument("--mass", type=float, default=0.05)
-    ap.add_argument("--no-gravity", action="store_true",
-                    help="leave the scene's gravity alone (default: force 0 0 -9.81 if it is zero or unset)")
+    ap.add_argument("--no-gravity", action="store_true")
     args = ap.parse_args(argv)
 
     block = args.block
@@ -102,12 +104,15 @@ def main(argv=None):
                   % (args.drop_cm, block[2]))
         elif len(block) != 3:
             raise SystemExit("add_block: --block takes X Y (with --drop-cm) or X Y Z")
-    tree = build(args.scene, args.floor_z, args.table_z, block, args.size, args.mass,
-                 gravity=not args.no_gravity)
-    tree.write(args.out, encoding="utf-8", xml_declaration=True)
+
+    with open(args.scene, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    out = build(text, args.floor_z, args.table_z, block, args.size, args.mass, gravity=not args.no_gravity)
+    with open(args.out, "w", encoding="utf-8") as fh:
+        fh.write(out)
     print("add_block: wrote %s (floor%s%s)" % (
         args.out, "" if args.table_z is None else ", table",
-        "" if args.block is None else ", block at %.3f %.3f %.3f" % tuple(float(v) for v in block)))
+        "" if block is None else ", block at %.3f %.3f %.3f" % tuple(float(v) for v in block)))
     return 0
 
 
