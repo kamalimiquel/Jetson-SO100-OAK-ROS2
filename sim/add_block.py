@@ -39,6 +39,17 @@ def build(scene, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05, g
     elif gravity:
         print("add_block: gravity left as %r" % g)
 
+    # Two other ways a robot scene holds an arm up without gravcomp: <flag gravity="disable"/> and
+    # <body gravcomp="1">. Report both, so "the arms do not fall" stops being a mystery.
+    flag = opt.find("flag")
+    if flag is not None and (flag.get("gravity") or "").lower() == "disable":
+        print("add_block: WARNING the scene disables gravity with <flag gravity=\"disable\"/> — the block will "
+              "not fall either until that is removed")
+    held = [b.get("name") for b in world.findall(".//body") if (b.get("gravcomp") or "0") not in ("0", "")]
+    if held:
+        print("add_block: %d body(ies) carry gravcomp (held up without actuators): %s"
+              % (len(held), ", ".join(held[:6]) + ("…" if len(held) > 6 else "")))
+
     names = {b.get("name") for b in world.findall("body")}
     if block is not None and BLOCK in names:
         raise SystemExit("add_block: the scene already has a body named %r" % BLOCK)
