@@ -37,8 +37,8 @@ def main(argv=None):
 
     print("model: %s  nq=%d nu=%d  gravity=%s  timestep=%.4f"
           % (args.model, model.nq, model.nu, list(model.opt.gravity), model.opt.timestep))
-    print("\n%-16s %9s %9s %11s %11s %s" %
-          ("joint", "qpos", "qvel", "gravity N.m", "friction", "verdict"))
+    print("\n%-16s %9s %9s %11s %11s %9s %s" %
+          ("joint", "qpos", "qvel", "gravity N.m", "friction", "spring N.m", "verdict"))
     any_should_move = False
     rows = 0
     for j in range(model.njnt):
@@ -48,6 +48,9 @@ def main(argv=None):
         dof = int(model.jnt_dofadr[j])
         adr = int(model.jnt_qposadr[j])
         loss = float(model.dof_frictionloss[dof])
+        stiffness = float(model.jnt_stiffness[j]) if hasattr(model, "jnt_stiffness") else 0.0
+        springref = float(model.qpos_spring[adr]) if hasattr(model, "qpos_spring") else 0.0
+        spring_tau = stiffness * (qpos - springref) if stiffness else 0.0
         bias = float(data.qfrc_bias[dof])
         qpos, qvel = float(data.qpos[adr]), float(data.qvel[dof])
         limited = bool(model.jnt_limited[j])
@@ -61,14 +64,16 @@ def main(argv=None):
             verdict = "GRAVCOMP"
         elif at_limit:
             verdict = "AT LIMIT"
+        elif stiffness and abs(bias + spring_tau) <= loss:
+            verdict = "HELD BY SPRING (k=%.1f N.m/rad, q_ref=%.3f)" % (stiffness, springref)
         elif abs(bias) <= loss:
             verdict = "HELD BY FRICTION"
         else:
             verdict = "SHOULD MOVE (|tau| > friction)"
             any_should_move = True
         rows += 1
-        print("%-16s %9.4f %9.4f %11.4f %11.4f %s%s" %
-              (name[len(args.prefix):], qpos, qvel, bias, loss, verdict, gravcomp))
+        print("%-16s %9.4f %9.4f %11.4f %11.4f %9.3f %s%s" %
+              (name[len(args.prefix):], qpos, qvel, bias, loss, spring_tau, verdict, gravcomp))
 
     if rows == 0:
         raise SystemExit("why_held: no joint name starts with %r — an empty table proves nothing. Drop "
