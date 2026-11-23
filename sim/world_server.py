@@ -230,16 +230,26 @@ def make_handler(world, name):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--arm-port", action="append", required=True, metavar="ARM=PORT")
+    ap.add_argument("--arm-port", action="append", required=True, metavar="ARM=PORT[:PREFIX]",
+                    help="repeatable. The prefix goes after a colon, e.g. so100_cell_b=8005:arm2_ — "
+                         "a shell that eats empty strings (PowerShell does) cannot supply '' as an argument")
     ap.add_argument("--prefix", action="append", default=[], metavar="PREFIX",
-                    help="one per --arm-port, in the same order; '' for the unprefixed arm")
+                    help="alternative to the ':PREFIX' form; '-' means no prefix")
     ap.add_argument("--rate", type=float, default=250.0)
     args = ap.parse_args(argv)
 
-    pairs = [tuple(x.split("=", 1)) for x in args.arm_port]
-    prefixes = list(args.prefix) or [""] * len(pairs)
-    if len(prefixes) != len(pairs):
-        raise SystemExit("sim: give one --prefix per --arm-port ('' for none)")
+    pairs, inline = [], []
+    for item in args.arm_port:
+        arm, _, rest = item.partition("=")
+        port, _, prefix = rest.partition(":")
+        pairs.append((arm, port))
+        inline.append(prefix)
+    if args.prefix:
+        prefixes = ["" if x == "-" else x for x in args.prefix]
+        if len(prefixes) != len(pairs):
+            raise SystemExit("sim: give one --prefix per --arm-port ('-' for none)")
+    else:
+        prefixes = inline
     arms = {arm: (prefixes[i], int(port)) for i, (arm, port) in enumerate(pairs)}
 
     world = World(args.model, arms, args.rate)
