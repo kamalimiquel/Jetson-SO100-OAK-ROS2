@@ -85,6 +85,8 @@ class World:
                                "target": {j: float(self.data.qpos[a]) for j, a in idx.items()},
                                "torque": False, "owner": None, "due": 0.0, "writes": 0}
         self.rate = rate_hz
+        self.steps = 0                  # proof that the clock is running, not just that the ports answer
+        self.loop_error = ""
         self._started = threading.Event()
         if start:
             self._started.set()
@@ -97,6 +99,15 @@ class World:
 
     # -- the clock -------------------------------------------------------------------------------
     def _loop(self):
+        try:
+            self._loop_body()
+        except Exception as exc:                                     # noqa: BLE001
+            import traceback
+            self.loop_error = "%s: %s" % (type(exc).__name__, exc)
+            print("sim: PHYSICS LOOP DIED — %s" % self.loop_error, flush=True)
+            traceback.print_exc()
+
+    def _loop_body(self):
         dt = float(self.model.opt.timestep)
         period = 1.0 / self.rate
         t0 = time.time()
@@ -111,6 +122,7 @@ class World:
                         self._apply(arm)                 # position-driven arm; a free one is left to gravity
                 self.mujoco.mj_step(self.model, self.data)
                 steps += 1
+                self.steps = steps
             target_steps = (time.time() - t0) / dt
             if steps < target_steps:                 # catch up in batches instead of sleeping per step
                 continue
@@ -190,7 +202,8 @@ def make_handler(world, name):
             if self.path == "/status":
                 return self._send(200, {"connected": True, "calibrated": True, "arm": name,
                                         "mode": "actuated" if world.actuated else "qpos (kinematic)",
-                                        "writes": arm["writes"],
+                                        "writes": arm["writes"], "steps": world.steps,
+                                        "loop_error": world.loop_error or None,
                                         "timestep": float(world.model.opt.timestep),
                                         "arms_in_world": list(world.arms)})
             if self.path == "/objects":
