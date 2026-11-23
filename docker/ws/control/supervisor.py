@@ -55,6 +55,11 @@ PORTS = {k.strip(): (v.strip() if ":" in v else "127.0.0.1:%s" % v.strip()) for 
 # The operator's page cannot see a ROS service, so the supervisor also answers one question over HTTP:
 # am I here, what do I hold, and what have I been asked. Read-only, localhost-facing, nothing to drive with.
 STATUS_PORT = int(os.environ.get("SUPERVISOR_HTTP_PORT", "8097"))
+# Idle, the supervisor holds the arms with a generous lease (an operator who comes back finds a free cell). While
+# a mission is running it renews on a short one, so an agent that dies leaves the arm free in half a second
+# instead of fifteen: the Robot_MCP document asks for 200 ms and this is the closest a 15 s design allows without
+# making the renewal itself the load.
+MOTION_TTL_S = float(os.environ.get("SUPERVISOR_MOTION_TTL_S", "0.5"))
 # cell id -> ROS namespace. Two names for the same arm (the port is per serial, the topic per namespace),
 # so the map is written once here instead of being guessed at every use.
 NS = {"so100_cell": "arm1", "so100_cell_b": "arm2"}
@@ -250,7 +255,8 @@ class Supervisor(Node):
 
     def _renew_forever(self):
         while True:
-            time.sleep(TTL / 3.0)
+            ttl = MOTION_TTL_S if self.mission else TTL
+            time.sleep(max(0.15, ttl / 3.0))
             try:
                 self.renew()
             except Exception as exc:                                     # noqa: BLE001
@@ -258,8 +264,9 @@ class Supervisor(Node):
 
     # -- ownership ---------------------------------------------------------------------------------
     def renew(self):
+        ttl = MOTION_TTL_S if self.mission else TTL
         for arm, port in PORTS.items():
-            r = http(port, "/claim", {"owner": OWNER, "ttl_s": TTL})
+            r = http(port, "/claim", {"owner": OWNER, "ttl_s": ttl})
             if r.get("owner") == OWNER and arm not in self.owned:
                 self.owned.append(arm)
                 self.get_logger().info("supervisor: claimed %s" % arm)
