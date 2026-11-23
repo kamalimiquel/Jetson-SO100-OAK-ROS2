@@ -22,7 +22,7 @@ import sys
 BLOCK = "block"
 
 
-def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05, gravity=True):
+def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.05, gravity=False):
     """Return the new scene text. Pure: no files, so it can be tested."""
     text = scene_text
     lower = text.lower()
@@ -39,7 +39,9 @@ def build(scene_text, floor_z=0.0, table_z=None, block=None, size=0.015, mass=0.
             i = text.lower().find(needle, i + 1)
         return i
 
-    # gravity: make it explicit, because a scene that relies on the default cannot be read
+    # Gravity is NOT rewritten by default: MuJoCo's default is already 0 0 -9.81, and patching an attribute in
+    # someone else's file is how two runs in a row produced an unparseable scene. It is reported, and only
+    # rewritten with --write-gravity.
     opt_start = find_outside("<option")
     has_gravity = False
     if opt_start != -1:
@@ -107,7 +109,9 @@ def main(argv=None):
     ap.add_argument("--drop-cm", type=float, default=20.0)
     ap.add_argument("--size", type=float, default=0.015, help="half-extent of the block, metres")
     ap.add_argument("--mass", type=float, default=0.05)
-    ap.add_argument("--no-gravity", action="store_true")
+    ap.add_argument("--write-gravity", action="store_true",
+                    help="rewrite <option gravity> to 0 0 -9.81 if it is zero or unset. Off by default: the "
+                         "default is already -9.81 and editing that tag has broken scenes before")
     args = ap.parse_args(argv)
 
     block = args.block
@@ -124,7 +128,7 @@ def main(argv=None):
 
     with open(args.scene, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
-    out = build(text, args.floor_z, args.table_z, block, args.size, args.mass, gravity=not args.no_gravity)
+    out = build(text, args.floor_z, args.table_z, block, args.size, args.mass, gravity=args.write_gravity)
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(out)
     print("add_block: wrote %s (floor%s%s)" % (
